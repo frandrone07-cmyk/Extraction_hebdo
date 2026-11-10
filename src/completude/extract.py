@@ -20,9 +20,18 @@ from .periodes import MOIS_FR, code_periode, fenetre_mois, norm, parse_periode
 logger = logging.getLogger(__name__)
 
 
-def cols_districts_periode(df: pd.DataFrame) -> tuple[str | None, str | None]:
+def cols_districts_periode(
+    df: pd.DataFrame, repli_positionnel: bool = False
+) -> tuple[str | None, str | None]:
     """Devine quelle colonne du gabarit est « Districts » et laquelle est « Période »,
-    en tolérant les variantes/fautes de frappe d'en-tête."""
+    en tolérant les variantes/fautes de frappe d'en-tête.
+
+    `repli_positionnel` : si aucune colonne ne correspond par son nom (en-têtes
+    totalement différents comme "organisationunitname"/"DRS/DISTRICTS" dans de
+    vieux exports), utilise la position (colonne 0 = districts, colonne 1 =
+    période) en dernier recours. Réservé à l'import de fichiers historiques
+    hétérogènes — jamais utilisé sur le gabarit en production, pour ne jamais
+    risquer de mal interpréter sa structure."""
     df.columns = df.columns.astype(str).str.strip()
     col_districts = next((c for c in df.columns if c.lower().startswith("dis")), None)
     col_periode = next(
@@ -32,6 +41,11 @@ def cols_districts_periode(df: pd.DataFrame) -> tuple[str | None, str | None]:
         col_periode = next(
             (c for c in df.columns if "p" in c.lower() and "ri" in c.lower()), None
         )
+    if repli_positionnel and len(df.columns) >= 2:
+        if not col_districts:
+            col_districts = df.columns[0]
+        if not col_periode:
+            col_periode = df.columns[1]
     return col_districts, col_periode
 
 

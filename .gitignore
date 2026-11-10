@@ -24,3 +24,9 @@ Thumbs.db
 
 # Sorties locales ponctuelles
 *.xlsx.tmp
+
+# Etat interne de l'outillage (pas du contenu projet)
+.claude/
+
+# Fichiers sources bruts (deja convertis/nettoyes dans data/exports/)
+/Extraction_ulterieure_mis_à_jour/

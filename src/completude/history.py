@@ -16,6 +16,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
+from .extract import cols_districts_periode
 from .periodes import libelle_periode, parse_periode
 
 logger = logging.getLogger(__name__)
@@ -182,9 +183,13 @@ def importer_anciennes(
             for feuille in xl.sheet_names:
                 df = pd.read_excel(xl, sheet_name=feuille)
                 df.columns = [str(c).strip() for c in df.columns]
-                if "Districts" in df.columns and "Période" in df.columns:
+                col_districts, col_periode = cols_districts_periode(df, repli_positionnel=True)
+                if col_districts is not None and col_periode is not None:
+                    df = df.rename(columns={col_districts: "Districts", col_periode: "Période"})
                     df["Districts"] = df["Districts"].ffill()
                     par_region[feuille] = df.dropna(subset=["Districts"])
+                else:
+                    logger.warning("%s/%s : colonnes Districts/Période introuvables, feuille ignorée", nom, feuille)
             date_obj = date.fromisoformat(date_fichier)
             lignes = construire_lignes(par_region, uid_district, date_obj) if par_region else None
         except Exception:

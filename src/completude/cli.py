@@ -5,6 +5,7 @@ import argparse
 import json
 import logging
 import os
+import shutil
 from datetime import datetime
 
 from .config import charger_config
@@ -57,10 +58,16 @@ def _commande_extract(args: argparse.Namespace) -> int:
     )
 
     os.makedirs(config.chemin_sortie_dir, exist_ok=True)
-    nom_fichier = f"Situation_completude_par_region_{date_reference.strftime('%Y-%m-%d')}.xlsx"
+    # Format JJ_MM_AAAA : doit rester identique à celui attendu par
+    # history.fichiers_datees() pour que les anciens exports (et ceux produits
+    # ici chaque semaine) soient tous reconnaissables par l'import automatique.
+    nom_fichier = f"Situation_completude_par_region_{date_reference.strftime('%d_%m_%Y')}.xlsx"
     chemin_sortie = os.path.join(config.chemin_sortie_dir, nom_fichier)
     ecrire_excel(resultat.par_region, chemin_sortie, config.seuils.critique, config.seuils.conforme)
     logger.info("Excel écrit : %s", chemin_sortie)
+
+    chemin_dernier = os.path.join(config.chemin_sortie_dir, "dernier_export.xlsx")
+    shutil.copy(chemin_sortie, chemin_dernier)
 
     if resultat.formulaires_non_resolus:
         logger.warning("Formulaires sans correspondance DHIS2 : %s", sorted(resultat.formulaires_non_resolus))

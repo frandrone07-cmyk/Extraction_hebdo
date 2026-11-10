@@ -5,6 +5,7 @@ import pandas as pd
 from completude.history import (
     construire_lignes,
     fichiers_datees,
+    importer_anciennes,
     iso_monday,
     migrer_historique_legacy,
     nettoyer_hist,
@@ -115,3 +116,29 @@ def test_nettoyer_hist_ecarte_les_lignes_sans_periode_exploitable():
     ])
     nettoye = nettoyer_hist(hist)
     assert len(nettoye) == 0
+
+
+def test_importer_anciennes_tolere_des_entetes_completement_differents(tmp_path):
+    # Reproduit un vieil export DHIS2 reel : en-tetes "organisationunitname" /
+    # "periodname" au lieu de "Districts" / "Periode" -> doit quand meme
+    # s'importer grace au repli positionnel (colonne 0 = districts).
+    import openpyxl
+
+    chemin = tmp_path / "Situation_completude_par_region_21_09_2026.xlsx"
+    classeur = openpyxl.Workbook()
+    feuille = classeur.active
+    feuille.title = "DRS Dakar"
+    feuille.append(["organisationunitname", "periodname", "Paludisme - Reporting rate"])
+    feuille.append(["Dakar Centre", pd.Timestamp("2026-06-01"), 88.89])
+    classeur.save(chemin)
+
+    hist_vide = pd.DataFrame(columns=[
+        "date_extraction", "semaine_cle", "region", "district", "uid_district",
+        "periode_code", "periode", "formulaire", "valeur",
+    ])
+    resultat = importer_anciennes(hist_vide, str(tmp_path), {}, date_courante="2026-11-10")
+
+    assert len(resultat) == 1
+    assert resultat.iloc[0]["district"] == "Dakar Centre"
+    assert resultat.iloc[0]["date_extraction"] == "2026-09-21"
+    assert float(resultat.iloc[0]["valeur"]) == 88.89

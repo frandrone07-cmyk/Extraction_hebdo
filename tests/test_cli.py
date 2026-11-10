@@ -3,7 +3,17 @@ from datetime import date
 import pandas as pd
 
 from completude.cli import construire_parser
-from completude.history import upsert_week
+from completude.history import fichiers_datees, upsert_week
+
+
+def test_nom_fichier_extract_reconnu_par_fichiers_datees(tmp_path):
+    # Regression : extract écrivait autrefois en AAAA-MM-JJ (ISO) alors que
+    # fichiers_datees() n'attend que JJ_MM_AAAA -> les exports produits
+    # chaque semaine n'étaient jamais ré-importables automatiquement.
+    nom = f"Situation_completude_par_region_{date(2026, 11, 10):%d_%m_%Y}.xlsx"
+    (tmp_path / nom).write_bytes(b"")
+    trouves = fichiers_datees(str(tmp_path))
+    assert trouves == [(str(tmp_path / nom), "2026-11-10")]
 
 
 def _config_minimal(tmp_path, chemin_historique):
