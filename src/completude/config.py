@@ -23,6 +23,9 @@ class Config:
     chemin_historique: str
     chemin_geo_cache: str
     chemin_geo_local: str
+    chemin_geo_final: str
+    chemin_latest_json: str
+    chemin_evolution_json: str
     seuils: ConfigSeuils
     nb_mois_fenetre: int
     nb_extractions_detail: int
@@ -66,6 +69,9 @@ def charger_config(chemin_yaml: str) -> Config:
         chemin_historique=brut["chemins"]["historique"],
         chemin_geo_cache=brut["chemins"]["geo_cache"],
         chemin_geo_local=brut["chemins"]["geo_local"],
+        chemin_geo_final=brut["chemins"]["geo_final"],
+        chemin_latest_json=brut["chemins"]["latest_json"],
+        chemin_evolution_json=brut["chemins"]["evolution_json"],
         seuils=ConfigSeuils(**brut["seuils"]),
         nb_mois_fenetre=int(brut["extraction"]["nb_mois_fenetre"]),
         nb_extractions_detail=int(brut["dashboard"]["nb_extractions_detail"]),

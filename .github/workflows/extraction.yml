@@ -72,6 +72,11 @@ jobs:
           if [ -n "${{ inputs.mois }}" ]; then ARGS="--mois ${{ inputs.mois }}"; fi
           python -m completude.cli extract $ARGS
 
+      - name: Regenerer les JSON du dashboard
+        env:
+          PYTHONPATH: src
+        run: python -m completude.cli build-json
+
       - name: Committer les donnees mises a jour
         run: |
           git config user.name "github-actions[bot]"

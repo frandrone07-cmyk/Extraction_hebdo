@@ -1,0 +1,52 @@
+name: Construire les contours des districts
+
+# Ponctuel, manuel : contrairement a l'extraction (chaque lundi), la geometrie
+# des districts change rarement. A relancer seulement si des districts
+# manquent de contour sur la carte, ou si --recharger est force.
+on:
+  workflow_dispatch:
+    inputs:
+      recharger:
+        description: "Forcer le retelechargement des contours meme si un cache existe"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-geo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - name: Construire data/geo/districts.geojson
+        env:
+          PYTHONPATH: src
+          DHIS2_USER: ${{ secrets.DHIS2_USER }}
+          DHIS2_PASSWORD: ${{ secrets.DHIS2_PASSWORD }}
+        run: |
+          ARGS=""
+          if [ "${{ inputs.recharger }}" = "true" ]; then ARGS="--recharger"; fi
+          python -m completude.cli build-geo $ARGS
+
+      - name: Committer les contours
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/geo/
+          if git diff --cached --quiet; then
+            echo "Rien a committer."
+          else
+            git commit -m "chore(data): mise a jour des contours des districts"
+            git push
+          fi

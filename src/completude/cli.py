@@ -2,14 +2,17 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 from datetime import datetime
 
 from .config import charger_config
+from .dashboarddata import construire_evolution, construire_latest
 from .dhis2 import Dhis2Client
 from .excel import ecrire_excel
-from .extract import extraire
+from .extract import detecter_niveau_organisation_unit, extraire
+from .geo import charger_contours
 from .history import (
     importer_anciennes,
     iso_monday,
@@ -96,6 +99,67 @@ def _commande_check_week(args: argparse.Namespace) -> int:
     return 1
 
 
+def _commande_build_json(args: argparse.Namespace) -> int:
+    config = charger_config(args.config)
+    hist = lire_historique(config.chemin_historique)
+
+    latest = construire_latest(hist, config.seuils)
+    evolution = construire_evolution(hist)
+
+    for chemin, payload in ((config.chemin_latest_json, latest), (config.chemin_evolution_json, evolution)):
+        os.makedirs(os.path.dirname(chemin) or ".", exist_ok=True)
+        with open(chemin, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
+
+    logger.info(
+        "data/latest.json (semaine %s, %d region(s)) et data/evolution.json (%d semaine(s)) ecrits",
+        latest["semaine_cle"], len(latest["regions"]), len(evolution["semaines"]),
+    )
+    return 0
+
+
+def _commande_build_geo(args: argparse.Namespace) -> int:
+    config = charger_config(args.config)
+    hist = lire_historique(config.chemin_historique)
+    if hist.empty:
+        logger.error(
+            "Historique vide (%s) : lancer `extract` au moins une fois avant build-geo.",
+            config.chemin_historique,
+        )
+        return 1
+
+    client = Dhis2Client.connecter(
+        urls_candidates=config.dhis2_urls_candidates,
+        username=config.dhis2_username,
+        password=config.dhis2_password,
+        verify_ssl=config.dhis2_verify_ssl,
+    )
+    niveau, _ = detecter_niveau_organisation_unit(client, set(hist["district"].unique()))
+    contours = charger_contours(
+        client, niveau, hist, config.chemin_geo_cache, config.chemin_geo_local,
+        forcer_rechargement=args.recharger,
+    )
+
+    os.makedirs(os.path.dirname(config.chemin_geo_final) or ".", exist_ok=True)
+    districts_enrichis = contours.districts.to_dict("records")
+    features = []
+    for feature in contours.features:
+        d = districts_enrichis[feature["properties"]["d"]]
+        features.append({
+            "type": "Feature",
+            "properties": {"region": d["region"], "district": d["district"], "uid_district": d["uid_district"]},
+            "geometry": feature["geometry"],
+        })
+    with open(config.chemin_geo_final, "w", encoding="utf-8") as fh:
+        json.dump({"type": "FeatureCollection", "features": features}, fh, ensure_ascii=False, separators=(",", ":"))
+
+    logger.info(
+        "%s écrit : %d/%d districts avec contour (%d sans contour)",
+        config.chemin_geo_final, len(features), len(contours.districts), len(contours.districts_sans_contour),
+    )
+    return 0
+
+
 def _commande_migrate_history(args: argparse.Namespace) -> int:
     migre = migrer_historique_legacy(args.input)
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
@@ -127,6 +191,21 @@ def construire_parser() -> argparse.ArgumentParser:
     )
     _ajouter_argument_config(cmd_check_week)
     cmd_check_week.set_defaults(func=_commande_check_week)
+
+    cmd_build_json = sous_commandes.add_parser(
+        "build-json", help="Génère data/latest.json et data/evolution.json depuis l'historique (pas de réseau)"
+    )
+    _ajouter_argument_config(cmd_build_json)
+    cmd_build_json.set_defaults(func=_commande_build_json)
+
+    cmd_build_geo = sous_commandes.add_parser(
+        "build-geo", help="Génère data/geo/districts.geojson (contours), ponctuel, nécessite DHIS2"
+    )
+    _ajouter_argument_config(cmd_build_geo)
+    cmd_build_geo.add_argument(
+        "--recharger", action="store_true", help="Force le retéléchargement des contours même si un cache existe"
+    )
+    cmd_build_geo.set_defaults(func=_commande_build_geo)
 
     cmd_migrate = sous_commandes.add_parser(
         "migrate-history", help="Convertit un Historique_extractions.csv legacy vers le format semaine_cle"

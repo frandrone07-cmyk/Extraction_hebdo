@@ -19,6 +19,9 @@ chemins:
   historique: "{chemin_historique.as_posix()}"
   geo_cache: "{(tmp_path / 'geo_cache.geojson').as_posix()}"
   geo_local: "{(tmp_path / 'geo_local.geojson').as_posix()}"
+  geo_final: "{(tmp_path / 'districts.geojson').as_posix()}"
+  latest_json: "{(tmp_path / 'latest.json').as_posix()}"
+  evolution_json: "{(tmp_path / 'evolution.json').as_posix()}"
 seuils:
   critique: 70
   conforme: 90

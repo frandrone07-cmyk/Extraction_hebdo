@@ -10,6 +10,9 @@ chemins:
   historique: "data/history.csv"
   geo_cache: "data/geo/cache_dhis2.geojson"
   geo_local: "data/geo/districts_local.geojson"
+  geo_final: "data/geo/districts.geojson"
+  latest_json: "data/latest.json"
+  evolution_json: "data/evolution.json"
 
 seuils:
   critique: 70

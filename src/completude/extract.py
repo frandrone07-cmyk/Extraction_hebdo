@@ -35,6 +35,27 @@ def cols_districts_periode(df: pd.DataFrame) -> tuple[str | None, str | None]:
     return col_districts, col_periode
 
 
+def detecter_niveau_organisation_unit(
+    client: Dhis2Client, noms_districts_connus: set[str]
+) -> tuple[int, dict[str, str]]:
+    """Essaie les niveaux DHIS2 2/3/4 et garde celui qui reconnaît le plus de noms
+    de districts du gabarit (correspondance exacte après normalisation)."""
+    meilleur_score, meilleure_table, meilleur_niveau = -1, {}, 0
+    for niveau in (2, 3, 4):
+        unites = client.api(
+            "organisationUnits.json", fields="id,displayName", paging="false", level=niveau
+        )["organisationUnits"]
+        table = {norm(u["displayName"]): u["id"] for u in unites}
+        score = sum(1 for d in noms_districts_connus if norm(d) in table)
+        if score > meilleur_score:
+            meilleur_score, meilleure_table, meilleur_niveau = score, table, niveau
+    logger.info(
+        "Niveau des districts détecté : %s (%d/%d reconnus)",
+        meilleur_niveau, meilleur_score, len(noms_districts_connus),
+    )
+    return meilleur_niveau, meilleure_table
+
+
 @dataclass
 class UidResolver:
     """Résout dynamiquement les en-têtes de colonnes (formulaires) et les noms de
@@ -50,21 +71,8 @@ class UidResolver:
             norm(d["displayName"]): d["id"]
             for d in client.api("dataSets.json", fields="id,displayName", paging="false")["dataSets"]
         }
-
-        meilleur_score, meilleure_table, meilleur_niveau = -1, {}, None
-        for niveau in (2, 3, 4):
-            unites = client.api(
-                "organisationUnits.json", fields="id,displayName", paging="false", level=niveau
-            )["organisationUnits"]
-            table = {norm(u["displayName"]): u["id"] for u in unites}
-            score = sum(1 for d in noms_districts_connus if norm(d) in table)
-            if score > meilleur_score:
-                meilleur_score, meilleure_table, meilleur_niveau = score, table, niveau
-        logger.info(
-            "Niveau des districts détecté : %s (%d/%d reconnus)",
-            meilleur_niveau, meilleur_score, len(noms_districts_connus),
-        )
-        return cls(datasets, meilleure_table, meilleur_niveau or 0)
+        niveau, table = detecter_niveau_organisation_unit(client, noms_districts_connus)
+        return cls(datasets, table, niveau)
 
     def resoudre_formulaire(self, nom_colonne: str) -> str | None:
         nom = re.sub(r"\s*-\s*reporting rate\s*$", "", nom_colonne, flags=re.I).strip()
@@ -101,6 +109,7 @@ class ResultatExtraction:
     formulaires_non_resolus: set[str] = field(default_factory=set)
     districts_non_resolus: set[str] = field(default_factory=set)
     diagnostics: list[DiagnosticRegion] = field(default_factory=list)
+    niveau_organisation_unit: int = 0
 
 
 def _lire_gabarit(chemin_gabarit: str) -> dict[str, pd.DataFrame]:
@@ -150,7 +159,7 @@ def extraire(
     resolveur = UidResolver.depuis_client(client, tous_districts)
     mois_fenetre = fenetre_mois(date_reference, nb_mois_fenetre)
 
-    resultat = ResultatExtraction()
+    resultat = ResultatExtraction(niveau_organisation_unit=resolveur.niveau_organisation_unit)
 
     for region, df_orig in feuilles.items():
         col_districts, col_periode = cols_districts_periode(df_orig)
