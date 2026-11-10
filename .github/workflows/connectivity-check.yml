@@ -49,3 +49,4 @@ jobs:
             echo "**Aucune combinaison ne repond 200.** Probable blocage reseau/pare-feu cote DHIS2 depuis les IP GitHub-hosted — envisager un runner auto-heberge." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+
