@@ -73,25 +73,45 @@ def construire_latest(hist: pd.DataFrame, seuils: ConfigSeuils) -> dict:
     }
 
 
+def _serie_par_semaine(valeurs_par_semaine: dict, semaines: list[str]) -> list[float | None]:
+    return [None if pd.isna(valeurs_par_semaine.get(s)) else valeurs_par_semaine.get(s) for s in semaines]
+
+
 def construire_evolution(hist: pd.DataFrame) -> dict:
     """Séries pour les graphiques d'évolution par lundi :
     - `moyenne_generale` : taux moyen tous indicateurs confondus, par semaine
       (la courbe "évolution du taux moyen" de la vue d'ensemble).
+    - `taux_remplissage` : % de cases (district x période x formulaire) avec
+      une valeur non vide, par semaine — sert à l'onglet Qualité pour
+      détecter une extraction partielle (ex. DHIS2 indisponible pour
+      certaines régions ce jour-là).
+    - `par_region` : une série par région (moyenne tous formulaires/périodes
+      confondus), pour le graphique "Évolution par région".
     - `par_region_formulaire_periode` : une série par (région, formulaire,
       période) — jamais deux mois différents mélangés dans une même série,
       sinon la tendance affichée n'aurait aucun sens.
     """
     if hist.empty:
-        return {"semaines": [], "moyenne_generale": [], "par_region_formulaire_periode": []}
+        return {
+            "semaines": [], "moyenne_generale": [], "taux_remplissage": [],
+            "par_region": [], "par_region_formulaire_periode": [],
+        }
 
     hist = hist.copy()
     hist["valeur_num"] = pd.to_numeric(hist["valeur"], errors="coerce")
     semaines = sorted(hist["semaine_cle"].unique())
 
     moyenne_par_semaine = hist.groupby("semaine_cle")["valeur_num"].mean().round(1)
-    moyenne_generale = [
-        None if pd.isna(moyenne_par_semaine.get(s)) else moyenne_par_semaine.get(s) for s in semaines
-    ]
+    moyenne_generale = _serie_par_semaine(moyenne_par_semaine, semaines)
+
+    remplissage_par_semaine = (hist.groupby("semaine_cle")["valeur_num"].apply(lambda s: s.notna().mean() * 100).round(1))
+    taux_remplissage = _serie_par_semaine(remplissage_par_semaine, semaines)
+
+    agrege_region = hist.groupby(["region", "semaine_cle"])["valeur_num"].mean().round(1).reset_index()
+    par_region = []
+    for region, groupe in agrege_region.groupby("region"):
+        serie = dict(zip(groupe["semaine_cle"], groupe["valeur_num"]))
+        par_region.append({"region": region, "valeurs": _serie_par_semaine(serie, semaines)})
 
     agrege = (
         hist.groupby(["region", "formulaire", "periode_code", "periode", "semaine_cle"])["valeur_num"]
@@ -99,22 +119,23 @@ def construire_evolution(hist: pd.DataFrame) -> dict:
         .round(1)
         .reset_index()
     )
-
     par_region_formulaire_periode = []
     for (region, formulaire, periode_code, periode), groupe in agrege.groupby(
         ["region", "formulaire", "periode_code", "periode"]
     ):
-        serie = {row["semaine_cle"]: row["valeur_num"] for _, row in groupe.iterrows()}
+        serie = dict(zip(groupe["semaine_cle"], groupe["valeur_num"]))
         par_region_formulaire_periode.append({
             "region": region,
             "formulaire": formulaire,
             "periode_code": periode_code,
             "periode": periode,
-            "valeurs": [None if pd.isna(serie.get(s)) else serie.get(s) for s in semaines],
+            "valeurs": _serie_par_semaine(serie, semaines),
         })
 
     return {
         "semaines": semaines,
         "moyenne_generale": moyenne_generale,
+        "taux_remplissage": taux_remplissage,
+        "par_region": par_region,
         "par_region_formulaire_periode": par_region_formulaire_periode,
     }

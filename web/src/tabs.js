@@ -1,5 +1,6 @@
-import { grapheBarres, grapheDoughnut, grapheLigne, couleurStatut } from "./charts.js";
+import { grapheBarres, grapheBarresEmpilees, grapheDoughnut, grapheLigne, couleurStatut } from "./charts.js";
 import { afficherDistricts, initCarte } from "./map.js";
+import { ouvrirFicheDistrict } from "./drawer.js";
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -13,13 +14,45 @@ function puceStatut(statut) {
   return `<span class="statut-puce statut-${statut}" aria-hidden="true"></span>`;
 }
 
+// Tri générique par en-tête cliquable : réutilisé par les tableaux Districts,
+// Synthèse par région et Synthèse par formulaire.
+function attacherTriTable(tableId) {
+  let triColonne = null;
+  let triAsc = true;
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  table.querySelectorAll("th").forEach((th, idx) => {
+    th.addEventListener("click", () => {
+      const tbody = table.querySelector("tbody");
+      const toutes = Array.from(tbody.querySelectorAll("tr"));
+      triAsc = triColonne === idx ? !triAsc : true;
+      triColonne = idx;
+      table.querySelectorAll("th").forEach((t) => t.removeAttribute("aria-sort"));
+      th.setAttribute("aria-sort", triAsc ? "ascending" : "descending");
+      toutes.sort((a, b) => {
+        const va = a.children[idx].textContent.replace(/[^0-9.,-]/g, "");
+        const vb = b.children[idx].textContent.replace(/[^0-9.,-]/g, "");
+        const na = parseFloat(va);
+        const nb = parseFloat(vb);
+        const cmp = !isNaN(na) && !isNaN(nb) ? na - nb : a.children[idx].textContent.localeCompare(b.children[idx].textContent);
+        return triAsc ? cmp : -cmp;
+      });
+      toutes.forEach((tr) => tbody.appendChild(tr));
+    });
+  });
+}
+
+function tauxGlobalDe(districts) {
+  const valides = districts.filter((d) => d.tauxMoyen !== null);
+  if (!valides.length) return null;
+  return Math.round((valides.reduce((a, d) => a + d.tauxMoyen, 0) / valides.length) * 10) / 10;
+}
+
 // --------------------------- Vue d'ensemble ---------------------------
 
 function genererSynthese(modele) {
   const { regions, districts, seuils } = modele;
-  const tauxGlobal = Math.round(
-    (districts.reduce((a, d) => a + (d.tauxMoyen || 0), 0) / districts.filter((d) => d.tauxMoyen !== null).length) * 10
-  ) / 10;
+  const tauxGlobal = tauxGlobalDe(districts);
   const critiques = districts.filter((d) => d.statut === "critique");
   const meilleure = regions.reduce((a, b) => ((b.tauxMoyen ?? -1) > (a.tauxMoyen ?? -1) ? b : a));
   const plusFaible = regions.reduce((a, b) => ((b.tauxMoyen ?? 101) < (a.tauxMoyen ?? 101) ? b : a));
@@ -36,14 +69,23 @@ function genererSynthese(modele) {
   } else {
     phrases.push(`${critiques.length} districts sont sous le seuil critique de ${seuils.critique}%.`);
   }
+  if (modele.evolution.semaines.length >= 2) {
+    const n = modele.evolution.moyenne_generale.length;
+    const actuel = modele.evolution.moyenne_generale[n - 1];
+    const precedent = modele.evolution.moyenne_generale[n - 2];
+    if (actuel !== null && precedent !== null) {
+      const ecart = Math.round((actuel - precedent) * 10) / 10;
+      if (Math.abs(ecart) >= seuils.baisse) {
+        phrases.push(ecart > 0 ? `Progression de ${ecart} points par rapport au lundi précédent.` : `Baisse de ${Math.abs(ecart)} points par rapport au lundi précédent.`);
+      }
+    }
+  }
   return phrases.join(" ");
 }
 
 export function renderVue(modele) {
-  const { regions, districts, evolution } = modele;
-  const tauxGlobal = Math.round(
-    (districts.reduce((a, d) => a + (d.tauxMoyen || 0), 0) / districts.filter((d) => d.tauxMoyen !== null).length) * 10
-  ) / 10;
+  const { regions, districts } = modele;
+  const tauxGlobal = tauxGlobalDe(districts);
   const repartition = {
     conforme: districts.filter((d) => d.statut === "conforme").length,
     surveiller: districts.filter((d) => d.statut === "surveiller").length,
@@ -85,13 +127,12 @@ export function renderVue(modele) {
       <h2>Priorités d'action (districts sous le seuil critique)</h2>
       ${alertes.length === 0
         ? '<p class="note">Aucun district en dessous du seuil critique.</p>'
-        : `<ul>${alertes.map((d) => `<li>${puceStatut(d.statut)} <strong>${escapeHtml(d.nom)}</strong> (${libelleRegion(d.region)}) — ${d.tauxMoyen}%</li>`).join("")}</ul>`}
+        : `<ul id="liste-alertes">${alertes.map((d) => `<li data-idx="${districts.indexOf(d)}" tabindex="0" role="button">${puceStatut(d.statut)} <strong>${escapeHtml(d.nom)}</strong> (${libelleRegion(d.region)}) — ${d.tauxMoyen}%</li>`).join("")}</ul>`}
     </div>
   `;
 }
 
 export function apresRenduVue(modele, theme) {
-  if (!document.getElementById("carte")) return;
   const districts = modele.districts;
   const repartition = {
     conforme: districts.filter((d) => d.statut === "conforme").length,
@@ -105,14 +146,19 @@ export function apresRenduVue(modele, theme) {
     initCarte("carte", theme);
     document.getElementById("carte").dataset.init = "1";
   }
-  afficherDistricts(districts);
+  afficherDistricts(districts, { onClicDistrict: ouvrirFicheDistrict });
+
+  document.querySelectorAll("#liste-alertes li").forEach((li) => {
+    const ouvrir = () => ouvrirFicheDistrict(districts[Number(li.dataset.idx)]);
+    li.addEventListener("click", ouvrir);
+    li.addEventListener("keydown", (ev) => (ev.key === "Enter" || ev.key === " ") && (ev.preventDefault(), ouvrir()));
+  });
 }
 
 // --------------------------- Régions et formulaires ---------------------------
 
 export function renderRegions(modele) {
-  const { regions, formulaires, districts } = modele;
-  const formulairesTries = [...formulaires].sort((a, b) => (a.tauxMoyen ?? 0) - (b.tauxMoyen ?? 0));
+  const { regions, formulaires, districts, seuils } = modele;
 
   const lignesHeatmap = regions
     .map((r) => {
@@ -120,13 +166,18 @@ export function renderRegions(modele) {
         .map((f) => {
           const vals = r.districts.flatMap((d) => d.formulaires.filter((df) => df.nom === f.nom).map((df) => df.valeur)).filter((v) => v !== null);
           const moy = vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
-          const statut = moy === null ? "inconnu" : moy < modele.seuils.critique ? "critique" : moy < modele.seuils.conforme ? "surveiller" : "conforme";
+          const statut = moy === null ? "inconnu" : moy < seuils.critique ? "critique" : moy < seuils.conforme ? "surveiller" : "conforme";
           return `<td class="heatmap-cell" style="background:${couleurStatut(statut)}">${moy ?? "—"}</td>`;
         })
         .join("");
       return `<tr><th scope="row">${libelleRegion(r.nom)}</th>${cellules}</tr>`;
     })
     .join("");
+
+  const districtsTries = [...districts].filter((d) => d.tauxMoyen !== null).sort((a, b) => b.tauxMoyen - a.tauxMoyen);
+  const top10 = districtsTries.slice(0, 10);
+  const flop10 = districtsTries.slice(-10).reverse();
+  const ligneClassement = (d) => `<tr data-idx="${districts.indexOf(d)}" class="ligne-district"><td>${escapeHtml(d.nom)}</td><td>${libelleRegion(d.region)}</td><td class="cell-statut cell-${d.statut}">${d.tauxMoyen}%</td></tr>`;
 
   return `
     <div class="grid grid2">
@@ -139,6 +190,16 @@ export function renderRegions(modele) {
         <div style="height:320px"><canvas id="ch-formulaires"></canvas></div>
       </div>
     </div>
+    <div class="grid grid2" style="margin-top:16px">
+      <div class="card">
+        <h2>Statuts des districts par région</h2>
+        <div style="height:340px"><canvas id="ch-stats-region"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Taux moyen par période (semaine courante)</h2>
+        <div style="height:340px"><canvas id="ch-periodes"></canvas></div>
+      </div>
+    </div>
     <div class="card" style="margin-top:16px">
       <h2>Carte thermique régions × formulaires</h2>
       <div class="table-scroll">
@@ -148,20 +209,41 @@ export function renderRegions(modele) {
         </table>
       </div>
     </div>
-    <div class="card" style="margin-top:16px">
-      <h2>Formulaires les plus en difficulté</h2>
-      <div class="table-scroll">
-        <table>
-          <thead><tr><th>Formulaire</th><th>Taux moyen national</th></tr></thead>
-          <tbody>${formulairesTries.slice(0, 10).map((f) => `<tr><td>${escapeHtml(f.nom)}</td><td class="cell-statut">${f.tauxMoyen ?? "—"}%</td></tr>`).join("")}</tbody>
-        </table>
+    <div class="grid grid2" style="margin-top:16px">
+      <div class="card">
+        <h2>10 districts les plus performants</h2>
+        <div class="table-scroll"><table><tbody>${top10.map(ligneClassement).join("")}</tbody></table></div>
+      </div>
+      <div class="card">
+        <h2>10 districts les plus en difficulté</h2>
+        <div class="table-scroll"><table><tbody>${flop10.map(ligneClassement).join("")}</tbody></table></div>
+      </div>
+    </div>
+    <div class="grid grid2" style="margin-top:16px">
+      <div class="card">
+        <h2>Synthèse par région</h2>
+        <div class="table-scroll">
+          <table id="table-synthese-region">
+            <thead><tr><th>Région</th><th>Taux moyen</th><th>Districts</th><th>Critiques</th></tr></thead>
+            <tbody>${regions.map((r) => `<tr><td>${libelleRegion(r.nom)}</td><td>${r.tauxMoyen ?? "—"}%</td><td>${r.districts.length}</td><td class="cell-critique">${r.nbCritique}</td></tr>`).join("")}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Synthèse par formulaire</h2>
+        <div class="table-scroll">
+          <table id="table-synthese-formulaire">
+            <thead><tr><th>Formulaire</th><th>Taux moyen national</th></tr></thead>
+            <tbody>${[...formulaires].sort((a, b) => (a.tauxMoyen ?? 0) - (b.tauxMoyen ?? 0)).map((f) => `<tr><td>${escapeHtml(f.nom)}</td><td class="cell-statut">${f.tauxMoyen ?? "—"}%</td></tr>`).join("")}</tbody>
+          </table>
+        </div>
       </div>
     </div>
   `;
 }
 
 export function apresRenduRegions(modele) {
-  const { regions, formulaires } = modele;
+  const { regions, formulaires, districts } = modele;
   grapheBarres(
     "ch-regions",
     regions.map((r) => libelleRegion(r.nom)),
@@ -175,6 +257,39 @@ export function apresRenduRegions(modele) {
     formulairesTries.map((f) => f.tauxMoyen ?? 0),
     { horizontal: true }
   );
+
+  grapheBarresEmpilees(
+    "ch-stats-region",
+    regions.map((r) => libelleRegion(r.nom)),
+    [
+      { label: "Conforme", data: regions.map((r) => r.nbConforme), couleur: couleurStatut("conforme") },
+      { label: "À surveiller", data: regions.map((r) => r.nbSurveiller), couleur: couleurStatut("surveiller") },
+      { label: "Critique", data: regions.map((r) => r.nbCritique), couleur: couleurStatut("critique") },
+    ]
+  );
+
+  const parPeriode = new Map();
+  for (const d of districts) {
+    for (const f of d.formulaires) {
+      for (const p of f.historiquePeriodes) {
+        if (p.valeur === null) continue;
+        if (!parPeriode.has(p.periode_code)) parPeriode.set(p.periode_code, { periode: p.periode, valeurs: [] });
+        parPeriode.get(p.periode_code).valeurs.push(p.valeur);
+      }
+    }
+  }
+  const periodesTriees = [...parPeriode.entries()].sort(([a], [b]) => a.localeCompare(b));
+  grapheBarres(
+    "ch-periodes",
+    periodesTriees.map(([, v]) => v.periode),
+    periodesTriees.map(([, v]) => Math.round((v.valeurs.reduce((a, b) => a + b, 0) / v.valeurs.length) * 10) / 10)
+  );
+
+  attacherTriTable("table-synthese-region");
+  attacherTriTable("table-synthese-formulaire");
+  document.querySelectorAll(".ligne-district").forEach((tr) => {
+    tr.addEventListener("click", () => ouvrirFicheDistrict(districts[Number(tr.dataset.idx)]));
+  });
 }
 
 // --------------------------- Évolution ---------------------------
@@ -185,6 +300,11 @@ export function renderEvolution(modele) {
     <div class="card">
       <h2>Évolution du taux moyen national (par lundi)</h2>
       <div style="height:320px"><canvas id="ch-evo-detail"></canvas></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>Évolution par région</h2>
+      <p class="note">Cliquez une région dans la légende pour l'isoler ou la masquer.</p>
+      <div style="height:380px"><canvas id="ch-evo-regions"></canvas></div>
     </div>
     <div class="card" style="margin-top:16px">
       <h2>Historique des extractions</h2>
@@ -203,7 +323,13 @@ export function renderEvolution(modele) {
 }
 
 export function apresRenduEvolution(modele) {
-  grapheLigne("ch-evo-detail", modele.evolution.semaines, [{ label: "Taux moyen national", data: modele.evolution.moyenne_generale }]);
+  const { evolution } = modele;
+  grapheLigne("ch-evo-detail", evolution.semaines, [{ label: "Taux moyen national", data: evolution.moyenne_generale }]);
+  grapheLigne(
+    "ch-evo-regions",
+    evolution.semaines,
+    evolution.par_region.map((s) => ({ label: libelleRegion(s.region), data: s.valeurs }))
+  );
 }
 
 // --------------------------- Districts ---------------------------
@@ -212,8 +338,8 @@ export function renderDistricts(modele) {
   const { districts } = modele;
   const lignes = districts
     .map(
-      (d) => `
-      <tr data-region="${escapeHtml(d.region)}" data-statut="${d.statut}">
+      (d, i) => `
+      <tr data-region="${escapeHtml(d.region)}" data-statut="${d.statut}" data-idx="${i}" class="ligne-district">
         <td>${escapeHtml(d.nom)}</td>
         <td>${libelleRegion(d.region)}</td>
         <td class="cell-statut cell-${d.statut}">${puceStatut(d.statut)}${d.tauxMoyen ?? "—"}%</td>
@@ -238,6 +364,7 @@ export function renderDistricts(modele) {
         </select>
         <button class="btn" id="btn-export-csv" type="button">⬇ Export CSV</button>
       </div>
+      <p class="note">Cliquez une ligne pour voir la fiche détaillée (toutes les périodes de la semaine).</p>
       <div class="table-scroll">
         <table id="table-districts">
           <thead><tr><th data-col="nom">District</th><th data-col="region">Région</th><th data-col="taux">Taux moyen</th></tr></thead>
@@ -282,35 +409,24 @@ export function apresRenduDistricts(modele) {
     URL.revokeObjectURL(url);
   });
 
-  let triColonne = null;
-  let triAsc = true;
-  document.querySelectorAll("#table-districts th").forEach((th, idx) => {
-    th.addEventListener("click", () => {
-      const tbody = document.querySelector("#table-districts tbody");
-      const toutes = Array.from(tbody.querySelectorAll("tr"));
-      triAsc = triColonne === idx ? !triAsc : true;
-      triColonne = idx;
-      document.querySelectorAll("#table-districts th").forEach((t) => t.removeAttribute("aria-sort"));
-      th.setAttribute("aria-sort", triAsc ? "ascending" : "descending");
-      toutes.sort((a, b) => {
-        const va = a.children[idx].textContent.replace(/[^0-9.,-]/g, "");
-        const vb = b.children[idx].textContent.replace(/[^0-9.,-]/g, "");
-        const na = parseFloat(va);
-        const nb = parseFloat(vb);
-        const cmp = !isNaN(na) && !isNaN(nb) ? na - nb : a.children[idx].textContent.localeCompare(b.children[idx].textContent);
-        return triAsc ? cmp : -cmp;
-      });
-      toutes.forEach((tr) => tbody.appendChild(tr));
-    });
+  attacherTriTable("table-districts");
+  document.querySelectorAll("#table-districts .ligne-district").forEach((tr) => {
+    tr.addEventListener("click", () => ouvrirFicheDistrict(modele.districts[Number(tr.dataset.idx)]));
   });
 }
 
 // --------------------------- Qualité et méthode ---------------------------
 
 export function renderQualite(modele) {
-  const { districtsNonResolus, seuils } = modele;
+  const { districtsNonResolus, seuils, evolution } = modele;
   return `
     <div class="card">
+      <h2>Cases renseignées par extraction (%)</h2>
+      <p class="note">Part des cases district × période × formulaire effectivement remplies par DHIS2, par semaine.</p>
+      <div style="height:260px"><canvas id="ch-qualite"></canvas></div>
+      ${evolution.semaines.length <= 1 ? '<p class="note">Une seule semaine en mémoire pour l\'instant.</p>' : ""}
+    </div>
+    <div class="card" style="margin-top:16px">
       <h2>Diagnostic de la dernière extraction</h2>
       ${districtsNonResolus.length === 0
         ? '<p class="note">Tous les districts du gabarit ont été reconnus par DHIS2.</p>'
@@ -327,4 +443,8 @@ export function renderQualite(modele) {
       <p>Chaque extraction (chaque lundi) couvre le mois en cours et les mois précédents : un même formulaire peut donc afficher plusieurs valeurs (une par période/mois) au sein d'une même semaine.</p>
     </div>
   `;
+}
+
+export function apresRenduQualite(modele) {
+  grapheLigne("ch-qualite", modele.evolution.semaines, [{ label: "Cases renseignées", data: modele.evolution.taux_remplissage }]);
 }

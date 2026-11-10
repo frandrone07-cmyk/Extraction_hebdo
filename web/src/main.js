@@ -1,12 +1,13 @@
 import { chargerDonnees } from "./data.js";
 import { ecrireEtatHash, lireEtatHash, lireTheme, appliquerTheme, basculerTheme } from "./state.js";
 import { basculerThemeCarte } from "./map.js";
+import { initDrawer } from "./drawer.js";
 import {
   renderVue, apresRenduVue,
   renderRegions, apresRenduRegions,
   renderEvolution, apresRenduEvolution,
   renderDistricts, apresRenduDistricts,
-  renderQualite,
+  renderQualite, apresRenduQualite,
 } from "./tabs.js";
 
 const RENDUS = {
@@ -14,7 +15,7 @@ const RENDUS = {
   regions: { render: renderRegions, apres: apresRenduRegions },
   evolution: { render: renderEvolution, apres: apresRenduEvolution },
   districts: { render: renderDistricts, apres: apresRenduDistricts },
-  qualite: { render: renderQualite, apres: null },
+  qualite: { render: renderQualite, apres: apresRenduQualite },
 };
 
 let modeleCourant = null;
@@ -45,6 +46,7 @@ function verifierFraicheur(modele) {
 
 async function init() {
   themeCourant = appliquerTheme(lireTheme());
+  initDrawer();
 
   document.getElementById("btn-theme").addEventListener("click", () => {
     themeCourant = basculerTheme();

@@ -118,4 +118,32 @@ def test_construire_evolution_semaine_sans_donnee_pour_une_serie_est_none():
 
 def test_construire_evolution_historique_vide():
     evolution = construire_evolution(_hist([]))
-    assert evolution == {"semaines": [], "moyenne_generale": [], "par_region_formulaire_periode": []}
+    assert evolution == {
+        "semaines": [], "moyenne_generale": [], "taux_remplissage": [],
+        "par_region": [], "par_region_formulaire_periode": [],
+    }
+
+
+def test_construire_evolution_taux_remplissage():
+    hist = _hist([
+        {"date_extraction": "2026-11-09", "semaine_cle": "2026-11-09", "region": "Dakar", "district": "Pikine",
+         "uid_district": "OUA", "periode_code": "202610", "periode": "Octobre 2026", "formulaire": "PEV", "valeur": 50.0},
+        {"date_extraction": "2026-11-09", "semaine_cle": "2026-11-09", "region": "Dakar", "district": "Pikine",
+         "uid_district": "OUA", "periode_code": "202610", "periode": "Octobre 2026", "formulaire": "Paludisme", "valeur": None},
+    ])
+    evolution = construire_evolution(hist)
+    assert evolution["taux_remplissage"] == [50.0]  # 1 valeur renseignee sur 2 cases
+
+
+def test_construire_evolution_par_region():
+    hist = _hist([
+        {"date_extraction": "2026-11-09", "semaine_cle": "2026-11-09", "region": "Dakar", "district": "Pikine",
+         "uid_district": "OUA", "periode_code": "202610", "periode": "Octobre 2026", "formulaire": "PEV", "valeur": 50.0},
+        {"date_extraction": "2026-11-09", "semaine_cle": "2026-11-09", "region": "Dakar", "district": "Guediawaye",
+         "uid_district": "OUB", "periode_code": "202610", "periode": "Octobre 2026", "formulaire": "Paludisme", "valeur": 90.0},
+        {"date_extraction": "2026-11-09", "semaine_cle": "2026-11-09", "region": "Thies", "district": "Mbour",
+         "uid_district": "OUC", "periode_code": "202610", "periode": "Octobre 2026", "formulaire": "PEV", "valeur": 30.0},
+    ])
+    evolution = construire_evolution(hist)
+    par_region = {s["region"]: s["valeurs"][0] for s in evolution["par_region"]}
+    assert par_region == {"Dakar": 70.0, "Thies": 30.0}

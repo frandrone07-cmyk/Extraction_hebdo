@@ -76,6 +76,29 @@ export function grapheLigne(id, labels, series) {
   );
 }
 
+export function grapheBarresEmpilees(id, labels, series) {
+  if (!disponible()) return;
+  detruire(id);
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  instances.set(
+    id,
+    new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: series.map((s) => ({ label: s.label, data: s.data, backgroundColor: s.couleur })),
+      },
+      options: {
+        plugins: { legend: { position: "bottom" } },
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+        responsive: true,
+        maintainAspectRatio: false,
+      },
+    })
+  );
+}
+
 export function grapheDoughnut(id, repartition) {
   if (!disponible()) return;
   detruire(id);
