@@ -49,7 +49,7 @@ def _commande_extract(args: argparse.Namespace) -> int:
     resultat = extraire(
         client=client,
         chemin_gabarit=config.chemin_gabarit,
-        nb_mois_fenetre=config.nb_mois_fenetre,
+        nb_mois_fenetre=args.mois or config.nb_mois_fenetre,
         date_reference=date_reference,
     )
 
@@ -116,6 +116,10 @@ def construire_parser() -> argparse.ArgumentParser:
     )
     _ajouter_argument_config(cmd_extract)
     cmd_extract.add_argument("--dry-run", action="store_true", help="N'effectue aucun appel réseau réel")
+    cmd_extract.add_argument(
+        "--mois", type=int, default=None,
+        help="Nombre de mois a extraire (mois courant + precedents), surcharge nb_mois_fenetre de la config",
+    )
     cmd_extract.set_defaults(func=_commande_extract)
 
     cmd_check_week = sous_commandes.add_parser(

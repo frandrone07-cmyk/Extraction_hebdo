@@ -1,0 +1,85 @@
+name: Extraction hebdomadaire DHIS2
+
+# Lundi 06:00 Africa/Dakar (= 06:00 UTC, Dakar n'a pas d'heure d'ete) + rattrapage
+# mardi si la semaine du lundi manque + declenchement manuel.
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # lundi 06:00 UTC
+    - cron: "0 6 * * 2"   # mardi 06:00 UTC, rattrapage conditionnel (voir job check-week)
+  workflow_dispatch:
+    inputs:
+      mois:
+        description: "Nombre de mois a extraire (mois courant + precedents). Vide = valeur de config/config.yml"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: extraction-dhis2
+  cancel-in-progress: false
+
+jobs:
+  check-week:
+    runs-on: ubuntu-latest
+    outputs:
+      necessaire: ${{ steps.verif.outputs.necessaire }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - id: verif
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ] || [ "${{ github.event.schedule }}" = "0 6 * * 1" ]; then
+            echo "necessaire=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if python -m completude.cli check-week; then
+            echo "Semaine deja presente dans l'historique : rattrapage du mardi inutile."
+            echo "necessaire=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Semaine absente de l'historique : rattrapage du mardi necessaire."
+            echo "necessaire=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          PYTHONPATH: src
+
+  extraire:
+    needs: check-week
+    if: needs.check-week.outputs.necessaire == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - name: Lancer l'extraction
+        env:
+          PYTHONPATH: src
+          DHIS2_USER: ${{ secrets.DHIS2_USER }}
+          DHIS2_PASSWORD: ${{ secrets.DHIS2_PASSWORD }}
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.mois }}" ]; then ARGS="--mois ${{ inputs.mois }}"; fi
+          python -m completude.cli extract $ARGS
+
+      - name: Committer les donnees mises a jour
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "Rien a committer (aucune donnee modifiee)."
+          else
+            git commit -m "chore(data): extraction automatique du $(date -u +%Y-%m-%d)"
+            git push
+          fi
