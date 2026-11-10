@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr" data-theme="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard de complétude DHIS2 — Sénégal</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="tricolore" aria-hidden="true"></div>
+
+<header class="masthead">
+  <div class="republique">
+    <svg class="flag" viewBox="0 0 30 20" role="img" aria-label="Drapeau du Sénégal" xmlns="http://www.w3.org/2000/svg">
+      <rect width="10" height="20" fill="#00853F"/><rect x="10" width="10" height="20" fill="#FDEF42"/>
+      <rect x="20" width="10" height="20" fill="#E31B23"/>
+      <polygon fill="#00853F" points="15,6.4 15.81,8.89 18.42,8.89 16.31,10.42 17.12,12.91 15,11.375 12.88,12.91 13.69,10.42 11.58,8.89 14.19,8.89"/>
+    </svg>
+    <div class="rep-t"><b>République du Sénégal</b><small>Un Peuple, Un But, Une Foi</small></div>
+  </div>
+  <div class="orgs">
+    <div class="org1">Ministère de la Santé et de l'Hygiène publique</div>
+    <div>Direction de la Planification, de la Recherche et des Statistiques</div>
+    <div>Division du Système d'Information Sanitaire et Sociale</div>
+  </div>
+  <div class="brand">
+    <h1>Complétude des rapports DHIS2</h1>
+    <div class="sous-titre" id="sous-titre">Chargement…</div>
+  </div>
+  <div class="masthead-actions">
+    <button class="btn" id="btn-theme" type="button" aria-label="Changer de thème clair/sombre">🌓 Thème</button>
+    <button class="btn" id="btn-imprimer" type="button">🖨️ Imprimer</button>
+    <button class="btn" id="btn-lien" type="button">🔗 Copier le lien</button>
+  </div>
+</header>
+
+<p class="banniere alerte" id="banniere-fraicheur" hidden role="status"></p>
+
+<nav class="tabs" role="tablist" aria-label="Sections du dashboard">
+  <button role="tab" id="tab-btn-vue" aria-controls="tab-vue" aria-selected="true" data-tab="vue">Vue d'ensemble</button>
+  <button role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false" data-tab="regions">Régions et formulaires</button>
+  <button role="tab" id="tab-btn-evolution" aria-controls="tab-evolution" aria-selected="false" data-tab="evolution">Évolution</button>
+  <button role="tab" id="tab-btn-districts" aria-controls="tab-districts" aria-selected="false" data-tab="districts">Districts</button>
+  <button role="tab" id="tab-btn-qualite" aria-controls="tab-qualite" aria-selected="false" data-tab="qualite">Qualité et méthode</button>
+</nav>
+
+<main id="contenu" aria-live="polite">
+  <p class="note">Chargement des données…</p>
+</main>
+
+<footer>
+  Généré automatiquement — <span id="footer-genere"></span>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
