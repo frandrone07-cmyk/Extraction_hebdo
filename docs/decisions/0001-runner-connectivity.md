@@ -1,6 +1,6 @@
 # 0001 — Connectivité des runners GitHub Actions vers DHIS2
 
-**Statut : en attente d'exécution.**
+**Statut : tranché — runners cloud GitHub-hosted retenus.**
 
 ## Contexte
 
@@ -34,5 +34,22 @@ DHIS2 limité à des IP connues bloquerait silencieusement ces appels.
 
 ## Décision
 
-*(à compléter après exécution du test — résultat obtenu, date, choix final
-runner cloud vs auto-hébergé)*
+**Testé le 10/11/2026** (run `42826849306`, dépôt `frandrone07-cmyk/Extraction_hebdo`) :
+
+| URL | SSL | Code HTTP | Latence |
+|---|---|---|---|
+| `https://senegal.dhis2.org/dhis` | stricte | **200** | 0,61 s |
+| `https://senegal.dhis2.org/dhis` | désactivée | 200 | 0,55 s |
+| `https://senegal.dhis2.org` | stricte | 404 | 0,37 s |
+| `https://senegal.dhis2.org` | désactivée | 404 | 0,37 s |
+
+Les runners `ubuntu-latest` GitHub-hosted joignent DHIS2 sans aucun blocage
+réseau, en vérification SSL **stricte**, via l'URL de base
+`https://senegal.dhis2.org/dhis` (le second candidat sans `/dhis` renvoie
+404 : routes API non exposées à cette racine, confirme juste qu'il faut
+garder `/dhis`).
+
+**Décision : architecture 100% cloud retenue.** Aucun runner auto-hébergé
+nécessaire. `DHIS2_VERIFY_SSL=true` reste la valeur par défaut en
+production — la désactivation SSL n'a montré aucun avantage ici et ne doit
+pas être activée sans raison concrète.
