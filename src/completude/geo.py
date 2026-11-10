@@ -119,6 +119,7 @@ def charger_contours(
         if brut:
             for b in brut:
                 b["geometry"]["coordinates"] = _arrondir(b["geometry"]["coordinates"])
+            os.makedirs(os.path.dirname(chemin_cache) or ".", exist_ok=True)
             with open(chemin_cache, "w", encoding="utf-8") as fh:
                 json.dump(
                     {
