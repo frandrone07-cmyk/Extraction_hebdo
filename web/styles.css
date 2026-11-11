@@ -211,9 +211,12 @@ main { max-width: 1404px; min-height: 50vh; margin: 0 auto; padding: 22px 0 52px
 .chartbox.tall { height: 315px; }
 .chartbox.xl { height: 360px; }
 #carte { width: 100%; height: 420px; overflow: hidden; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-soft); }
+.map-card #carte { height: 640px; }
 .map-legend, .legende { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; color: var(--muted); font-size: 10px; }
+.map-card .map-legend { margin-top: 13px; font-size: 12px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .legend-swatch { width: 9px; height: 9px; border-radius: 3px; }
+.map-card .legend-swatch { width: 11px; height: 11px; }
 .statut-puce { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; }
 .statut-critique { background: var(--critique); }
 .statut-surveiller { background: var(--surveiller); }
@@ -342,6 +345,8 @@ body.tv .tv-bar { position: fixed; top: 0; right: 0; left: 0; z-index: 2500; dis
 .tv-chart-large { height: min(65vh, 620px); }
 .tv-chart-card { padding: 18px 24px !important; }
 .tv-slide #tv-map { height: min(63vh, 590px); border-radius: 12px; }
+.tv-map-legend { margin-top: 12px; font-size: 13px; }
+.tv-map-legend .legend-swatch { width: 12px; height: 12px; }
 .tv-priorities, .tv-ranking { display: grid; gap: 5px; margin-top: 10px; }
 .tv-priority, .tv-ranking-row { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; align-items: center; gap: 9px; padding: 8px; border: 0; border-bottom: 1px solid #e6ece7; border-radius: 8px; background: transparent; color: #172822; text-align: left; }
 .tv-priority { cursor: pointer; }
@@ -465,6 +470,7 @@ body.tv .goorgui-widget { display: none; }
   .insight-icon { width: 29px; height: 29px; }
   .insight-sparkline { display: none; }
   #carte { height: 330px; }
+  .map-card #carte { height: 380px; }
   .chartbox { height: 220px; }
   .chartbox.tall, .chartbox.xl { height: 260px; }
   .site-footer { flex-direction: column; margin: 0 14px; }
