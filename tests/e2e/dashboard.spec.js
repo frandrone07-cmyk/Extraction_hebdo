@@ -61,6 +61,7 @@ test("colore les taux des listes selon le statut et les affiche à une décimale
       : [{ status, text: item.textContent.trim(), color: getComputedStyle(item).color, expectedColor }];
   }));
   expect(invalidRates).toEqual([]);
+  expect(await page.locator(".map-card #carte").evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThan(500);
 });
 
 test("permet le thème et le mode TV au clavier", async ({ page }) => {
@@ -72,29 +73,45 @@ test("permet le thème et le mode TV au clavier", async ({ page }) => {
   await expect(page.locator("body")).not.toHaveClass(/tv/);
 });
 
-test("agrandit la carte TV et fait défiler les régions", async ({ page }) => {
+test("parle avec le personnage bébé animé", async ({ page }) => {
+  const avatar = page.locator(".sokhnaci-svg");
+  await expect(avatar).toHaveAttribute("aria-label", "Bébé Sokhnaci, guide du tableau de bord");
+  await page.evaluate(() => {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak = (utterance) => utterance.onstart?.();
+  });
+  await page.locator(".sokhnaci-speak").click();
+  await expect(page.locator(".sokhnaci-widget")).toHaveClass(/speaking/);
+  await expect.poll(() => avatar.locator(".baby-arm-left").evaluate((arm) => getComputedStyle(arm).animationName)).toBe("baby-gesture");
+  await expect.poll(() => avatar.locator(".baby-mouth-open").evaluate((mouth) => getComputedStyle(mouth).display)).toBe("block");
+});
+
+test("montre toute la carte TV puis visite tous les districts", async ({ page }) => {
+  const contours = Number((await page.locator(".map-card .card-aside").textContent()).split("/")[0]);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.clock.install();
   await page.locator("#btn-tv").click();
   await page.locator("#tv-next").click();
 
   const map = page.locator("#tv-map");
-  const region = page.locator("#tv-map-region");
+  const progress = page.locator("#tv-map-progress");
   await expect(map).toBeVisible();
-  const firstRegion = await region.textContent();
+  await expect(progress).toContainText("Vue complète");
   const mapHeight = await map.evaluate((element) => element.getBoundingClientRect().height);
   expect(mapHeight).toBeGreaterThan(500);
-  await expect.poll(() => region.textContent(), { timeout: 8000 }).not.toBe(firstRegion);
-  await expect.poll(() => page.locator(".tv-slide .carte-etiquette-nom").count(), { timeout: 4000 }).toBeGreaterThan(0);
-  const mismatchedLabels = await page.locator(".tv-slide .carte-etiquette-nom").evaluateAll((labels) => labels.flatMap((label) => {
-    const text = label.querySelector("small")?.textContent?.replace("%", "").replace(",", ".");
-    const rate = Number(text);
-    const paletteIndex = rate < 70 ? 0 : rate < 90 ? 1 : 2;
-    const expectedColor = getComputedStyle(document.querySelectorAll(".tv-map-legend .legend-swatch")[paletteIndex]).backgroundColor;
-    const actualColor = label.querySelector("span").style.backgroundColor;
-    return actualColor !== expectedColor
-      ? [{ rate, actualColor, expectedColor }]
-      : [];
-  }));
-  expect(mismatchedLabels).toEqual([]);
+  await page.evaluate(() => {
+    window.__tvTourHistory = [];
+    new MutationObserver(() => window.__tvTourHistory.push(document.getElementById("tv-map-progress").textContent))
+      .observe(document.getElementById("tv-map-progress"), { childList: true });
+  });
+  await page.clock.fastForward(3200);
+  await expect(progress).toHaveText(new RegExp(`^District 1/${contours} ·`));
+  const firstDistrict = (await progress.textContent()).split(" · ")[1].split(" — ")[0];
+  await expect(page.locator("#tv-map .leaflet-tooltip")).toContainText(firstDistrict);
+  await page.clock.runFor(contours * 1800);
+  const visited = await page.evaluate(() => window.__tvTourHistory.filter((item) => item.startsWith("District ")));
+  expect(visited).toHaveLength(contours);
+  expect(visited.map((item) => Number(item.match(/^District (\d+)\//)[1]))).toEqual(Array.from({ length: contours }, (_, index) => index + 1));
   const priorityRates = await page.locator(".tv-priority b").evaluateAll((items) => items.map((item) => ({
     status: item.classList.contains("critique") ? "critique" : "autre",
     decimal: /^\d+,\d%$/.test(item.textContent.trim()),

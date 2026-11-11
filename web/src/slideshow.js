@@ -1,5 +1,5 @@
 import { grapheBarres, grapheBarresEmpilees, grapheDoughnut, grapheLigne, couleurStatut } from "./charts.js";
-import { afficherDistricts, centrerRegion, detruireCarte, initCarte } from "./map.js";
+import { afficherDistricts, afficherVueComplete, centrerDistrict, detruireCarte, initCarte } from "./map.js";
 import { ouvrirFicheDistrict } from "./drawer.js";
 
 const DEFINITIONS = [
@@ -27,9 +27,10 @@ let refreshTimer = null;
 let wakeLock = null;
 let pointerStart = null;
 let active = false;
-let mapRegionTimer = null;
-let mapRegionIndex = 0;
-const REGION_DWELL = 2200;
+let mapTourTimer = null;
+let mapTourIndex = 0;
+const MAP_OVERVIEW_DURATION = 3200;
+const DISTRICT_DWELL = 1800;
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
 const labelRegion = (value) => value.replace(/^DRS[_ ]/, "");
@@ -42,20 +43,31 @@ function header(index) {
 }
 
 function activeModel() { return model; }
-function regionsAvecContours(data) {
-  return data.regions.filter((region) => region.districts.some((district) => district.feature));
+function districtsAvecContours(data) {
+  return data.districts.filter((district) => district.feature);
 }
-function afficherRegionSuivante(regions) {
-  const index = mapRegionIndex % regions.length;
-  const region = regions[index];
-  const label = document.getElementById("tv-map-region");
-  if (label) label.textContent = `Région ${index + 1}/${regions.length} · ${labelRegion(region.nom)}`;
-  centrerRegion(region.nom);
-  mapRegionIndex = (index + 1) % regions.length;
+function afficherDistrictSuivant(districts) {
+  if (mapTourIndex >= districts.length) {
+    clearInterval(mapTourTimer);
+    mapTourTimer = null;
+    return;
+  }
+  const index = mapTourIndex;
+  const district = districts[index];
+  const label = document.getElementById("tv-map-progress");
+  if (label) label.textContent = `District ${index + 1}/${districts.length} · ${district.nom} — ${labelRegion(district.region)}`;
+  centrerDistrict(district.region, district.nom);
+  mapTourIndex += 1;
 }
 function dureeDiapositive() {
   if (selectedSlides[current]?.id !== "carte") return duration;
-  return Math.max(duration, regionsAvecContours(activeModel()).length * REGION_DWELL);
+  return Math.max(duration, MAP_OVERVIEW_DURATION + (districtsAvecContours(activeModel()).length + 1) * DISTRICT_DWELL);
+}
+function demarrerTourDistricts(districts) {
+  afficherDistrictSuivant(districts);
+  mapTourTimer = setInterval(() => {
+    if (!paused) afficherDistrictSuivant(districts);
+  }, DISTRICT_DWELL);
 }
 function kpisMarkup() {
   const data = activeModel();
@@ -67,7 +79,7 @@ function slideMarkup(id) {
   const data = activeModel();
   const titles = {
     synth: `<div class="tv-slide-head"><span class="eyebrow">POINT HEBDOMADAIRE</span><h1>Repères nationaux</h1><p>${escapeHtml(data.semaineLibelle)} · ${escapeHtml(data.selection.periode)}</p></div>${kpisMarkup()}<div class="tv-layout tv-half"><article class="card"><h2>Évolution du taux moyen</h2><div class="chartbox tv-chart"><canvas id="tv-chart-national"></canvas></div></article><article class="card"><h2>Répartition des districts</h2><div class="chartbox tv-chart tv-chart-status"><canvas id="tv-chart-status"></canvas></div></article></div>`,
-    carte: `<div class="tv-slide-head"><span class="eyebrow">CARTE & PRIORITÉS</span><h1>Où concentrer l’appui ?</h1><p>${data.districts.filter((district) => district.statut === "critique").length} district(s) sous le seuil de ${data.seuils.critique}%.</p></div><div class="tv-layout tv-map-layout"><article class="card"><p class="tv-map-region" id="tv-map-region" aria-live="polite"></p><div id="tv-map" role="group" aria-label="Carte des districts selon leur statut"></div><div class="map-legend tv-map-legend"><span class="legend-item"><i class="legend-swatch" style="background:var(--critique)"></i>Critique &lt; ${data.seuils.critique}%</span><span class="legend-item"><i class="legend-swatch" style="background:var(--surveiller)"></i>À surveiller</span><span class="legend-item"><i class="legend-swatch" style="background:var(--conforme)"></i>Conforme ≥ ${data.seuils.conforme}%</span></div></article><article class="card"><h2>Priorités de suivi</h2><p class="tv-priority-caption">Dist. classés par taux moyen croissant.</p><div class="tv-priorities">${[...data.districts].filter((district) => district.statut === "critique").sort((a, b) => (a.tauxMoyen ?? 100) - (b.tauxMoyen ?? 100)).slice(0, 8).map((district, index) => `<button type="button" class="tv-priority" data-district="${escapeHtml(district.region)}||${escapeHtml(district.nom)}"><i>${index + 1}</i><span><strong>${escapeHtml(district.nom)}</strong><small>${escapeHtml(labelRegion(district.region))}</small></span><b class="${district.statut}">${pct(district.tauxMoyen)}</b></button>`).join("") || `<p class="empty-state">Aucun district critique pour cette sélection.</p>`}</div></article></div>`,
+    carte: `<div class="tv-slide-head"><span class="eyebrow">CARTE & PRIORITÉS</span><h1>Où concentrer l’appui ?</h1><p>${data.districts.filter((district) => district.statut === "critique").length} district(s) sous le seuil de ${data.seuils.critique}%.</p></div><div class="tv-layout tv-map-layout"><article class="card"><p class="tv-map-region" id="tv-map-progress" aria-live="polite">Vue complète · ${districtsAvecContours(data).length} districts à parcourir</p><div id="tv-map" role="group" aria-label="Carte des districts selon leur statut"></div><div class="map-legend tv-map-legend"><span class="legend-item"><i class="legend-swatch" style="background:var(--critique)"></i>Critique &lt; ${data.seuils.critique}%</span><span class="legend-item"><i class="legend-swatch" style="background:var(--surveiller)"></i>À surveiller</span><span class="legend-item"><i class="legend-swatch" style="background:var(--conforme)"></i>Conforme ≥ ${data.seuils.conforme}%</span></div></article><article class="card"><h2>Priorités de suivi</h2><p class="tv-priority-caption">Dist. classés par taux moyen croissant.</p><div class="tv-priorities">${[...data.districts].filter((district) => district.statut === "critique").sort((a, b) => (a.tauxMoyen ?? 100) - (b.tauxMoyen ?? 100)).slice(0, 8).map((district, index) => `<button type="button" class="tv-priority" data-district="${escapeHtml(district.region)}||${escapeHtml(district.nom)}"><i>${index + 1}</i><span><strong>${escapeHtml(district.nom)}</strong><small>${escapeHtml(labelRegion(district.region))}</small></span><b class="${district.statut}">${pct(district.tauxMoyen)}</b></button>`).join("") || `<p class="empty-state">Aucun district critique pour cette sélection.</p>`}</div></article></div>`,
     reg: `<div class="tv-slide-head"><span class="eyebrow">COMPARAISON TERRITORIALE</span><h1>Taux moyen par région</h1><p>La barre indique le taux moyen des districts affichés.</p></div><article class="card tv-chart-card"><div class="chartbox tv-chart-large"><canvas id="tv-chart-region"></canvas></div></article>`,
     form: `<div class="tv-slide-head"><span class="eyebrow">LECTURE PAR INDICATEUR</span><h1>Résultats par formulaire</h1><p>${data.formulaires.length} formulaire(s) dans le périmètre sélectionné.</p></div><article class="card tv-chart-card"><div class="chartbox tv-chart-large"><canvas id="tv-chart-form"></canvas></div></article>`,
     heat: `<div class="tv-slide-head"><span class="eyebrow">CROISEMENT TERRITORIAL</span><h1>Régions × formulaires</h1><p>Les écarts de couleur suivent les seuils configurés dans DHIS2.</p></div><article class="card"><div class="table-scroll"><table class="heatmap"><thead><tr><th>Région</th>${data.formulaires.map((form) => `<th title="${escapeHtml(form.nom)}">${escapeHtml(form.nom)}</th>`).join("")}</tr></thead><tbody>${data.regions.map((region) => `<tr><th scope="row">${escapeHtml(labelRegion(region.nom))}</th>${data.formulaires.map((form) => { const value = average(region.districts.flatMap((district) => district.formulaires.filter((item) => item.nom === form.nom).map((item) => item.valeur))); const color = value === null ? "inconnu" : value < data.seuils.critique ? "critique" : value < data.seuils.conforme ? "surveiller" : "conforme"; return `<td class="heatmap-cell" style="background:${couleurStatut(color)}">${value ?? "—"}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div></article>`,
@@ -97,12 +109,23 @@ function drawSlide(id) {
     detruireCarte();
     initCarte("tv-map", document.documentElement.dataset.theme);
     afficherDistricts(data.districts, { onClicDistrict: ouvrirFicheDistrict, etiquettes: true, nomsEtiquettes: true, seuils: data.seuils });
-    const regions = regionsAvecContours(data);
-    if (regions.length) {
-      afficherRegionSuivante(regions);
-      mapRegionTimer = setInterval(() => {
-        if (!paused) afficherRegionSuivante(regions);
-      }, REGION_DWELL);
+    const districts = districtsAvecContours(data);
+    if (districts.length) {
+      mapTourIndex = 0;
+      afficherVueComplete();
+      const commencer = () => demarrerTourDistricts(districts);
+      mapTourTimer = setTimeout(() => {
+        if (paused) {
+          mapTourTimer = setInterval(() => {
+            if (!paused) {
+              clearInterval(mapTourTimer);
+              commencer();
+            }
+          }, 250);
+        } else {
+          commencer();
+        }
+      }, MAP_OVERVIEW_DURATION);
     }
   } else if (id === "reg") {
     grapheBarres("tv-chart-region", data.regions.map((region) => labelRegion(region.nom)), data.regions.map((region) => region.tauxMoyen), { statut: true, seuils: data.seuils, etiquettes: true });
@@ -146,8 +169,9 @@ function schedule() {
 }
 function show(index) {
   if (!active) return;
-  clearInterval(mapRegionTimer);
-  mapRegionTimer = null;
+  clearTimeout(mapTourTimer);
+  clearInterval(mapTourTimer);
+  mapTourTimer = null;
   current = (index + selectedSlides.length) % selectedSlides.length;
   const stage = document.getElementById("tv-stage");
   const slide = selectedSlides[current];
@@ -191,8 +215,9 @@ function close() {
   active = false;
   clearTimeout(timer);
   clearInterval(progressTimer);
-  clearInterval(mapRegionTimer);
-  mapRegionTimer = null;
+  clearTimeout(mapTourTimer);
+  clearInterval(mapTourTimer);
+  mapTourTimer = null;
   clearInterval(refreshTimer);
   document.removeEventListener("keydown", onKeydown);
   document.removeEventListener("visibilitychange", onVisibilityChange);

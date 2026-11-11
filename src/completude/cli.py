@@ -204,7 +204,7 @@ def construire_parser() -> argparse.ArgumentParser:
     cmd_extract.add_argument("--dry-run", action="store_true", help="N'effectue aucun appel réseau réel")
     cmd_extract.add_argument(
         "--mois", type=_valider_nombre_mois, default=None,
-        help="Nombre de mois a extraire (mois courant + precedents), surcharge nb_mois_fenetre de la config",
+        help="Mois a extraire pour un gabarit sans periodes (defaut config; periode courante a partir du 15)",
     )
     cmd_extract.set_defaults(func=_commande_extract)
 

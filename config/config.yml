@@ -21,7 +21,7 @@ seuils:
   baisse: 5
 
 extraction:
-  nb_mois_fenetre: 3   # mois courant + 2 précédents
+  nb_mois_fenetre: 3   # gabarit sans périodes : 3 dernières périodes disponibles
   dates_a_exclure: []  # format AAAA-MM-JJ, usage ponctuel seulement
 
 dashboard:

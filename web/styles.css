@@ -212,7 +212,7 @@ main { max-width: 1404px; min-height: 50vh; margin: 0 auto; padding: 22px 0 52px
 .chartbox.tall { height: 315px; }
 .chartbox.xl { height: 360px; }
 #carte { width: 100%; height: 420px; overflow: hidden; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-soft); }
-.map-card #carte { height: 520px; }
+.map-card #carte { height: clamp(560px, 68vh, 720px); }
 .map-legend, .legende { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; color: var(--muted); font-size: 10px; }
 .map-card .map-legend { margin-top: 13px; font-size: 12px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
@@ -384,40 +384,40 @@ body.tv .leaflet-container { height: 100%; }
 .sokhnaci-top strong { display: block; font-family: Manrope, sans-serif; font-size: 14px; }
 .sokhnaci-state { display: inline-block; margin-left: 7px; padding: 3px 6px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-strong); font-size: 8px; font-weight: 700; vertical-align: 2px; }
 .sokhnaci-collapse { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); color: var(--muted); font-size: 17px; cursor: pointer; }
-.sokhnaci-content { display: grid; grid-template-columns: 80px minmax(0, 1fr); align-items: center; gap: 9px; margin-top: 6px; }
-.sokhnaci-character { display: grid; width: 80px; height: 78px; place-items: center; border-radius: 15px; background: var(--primary-soft); }
-.sokhnaci-svg { width: 76px; height: 76px; overflow: visible; }
-.sokhnaci-svg .tree-trunk { fill: #815a38; }
-.sokhnaci-svg .canopy { fill: #11805b; transform-box: fill-box; transform-origin: center; animation: canopy-sway 4.6s ease-in-out infinite; }
-.sokhnaci-svg .canopy-b { fill: #15956a; animation-delay: -.8s; }
-.sokhnaci-svg .canopy-c { fill: #0d7552; animation-delay: -1.5s; }
-.sokhnaci-svg .canopy-d { fill: #159163; animation-delay: -2.3s; }
-.sokhnaci-svg .canopy-e { fill: #0b8059; animation-delay: -3s; }
-.sokhnaci-svg .leaf-line { fill: none; stroke: #8ed0a5; stroke-width: 1.4; stroke-linecap: round; opacity: .6; }
-.sokhnaci-svg .face { fill: #f8dcaa; }
-.sokhnaci-svg .eye { fill: #17352b; transform-box: fill-box; transform-origin: center; animation: sokhnaci-blink 4.2s infinite; }
-.sokhnaci-svg .eye:nth-of-type(2) { animation-delay: .05s; }
-.sokhnaci-svg .brow { fill: none; stroke: #4a3825; stroke-width: 1.8; stroke-linecap: round; }
-.sokhnaci-svg .mouth-smile, .sokhnaci-svg .mouth-flat { fill: none; stroke: #8b4d37; stroke-width: 1.8; stroke-linecap: round; }
-.sokhnaci-svg .mouth-oh { display: none; fill: #8b4d37; }
-.sokhnaci-svg[data-mood="alerte"] .mouth-smile, .sokhnaci-svg[data-mood="attentif"] .mouth-smile, .sokhnaci-svg[data-mood="vigilant"] .mouth-smile { display: none; }
-.sokhnaci-svg[data-mood="alerte"] .mouth-oh { display: block; }
-.sokhnaci-svg[data-mood="vigilant"] .mouth-flat { display: block; }
-.sokhnaci-svg[data-mood="attentif"] .mouth-flat { display: block; }
-.sokhnaci-svg .mouth-flat { display: none; }
-.sokhnaci-svg .root { fill: #b38b55; }
-.sokhnaci-svg .tiny-flag-green { stroke: #486e59; stroke-width: 1.5; }
-.sokhnaci-svg .tiny-flag { fill: #00853f; }
-.sokhnaci-svg[data-mood="content"] .canopy-b, .sokhnaci-svg[data-mood="serein"] .canopy-b { animation-duration: 2.7s; }
-.sokhnaci-widget.speaking .mouth-smile { display: none; }
-.sokhnaci-widget.speaking .mouth-oh { display: block; transform-origin: center; animation: speaking-mouth .28s ease-in-out infinite alternate; }
+.sokhnaci-content { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 9px; margin-top: 6px; }
+.sokhnaci-character { display: grid; width: 94px; height: 92px; place-items: center; border-radius: 18px; background: var(--primary-soft); }
+.sokhnaci-svg { width: 90px; height: 90px; overflow: visible; }
+.sokhnaci-svg .baby-shadow { fill: rgba(15, 39, 30, .12); }
+.sokhnaci-svg .baby-skin { fill: #f2bf91; }
+.sokhnaci-svg .baby-shirt { fill: #11805b; }
+.sokhnaci-svg .baby-shirt-collar { fill: none; stroke: #d3f0dd; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sokhnaci-svg .baby-shirt-mark { fill: none; stroke: #b5f1cf; stroke-width: 1.7; stroke-linecap: round; }
+.sokhnaci-svg .baby-face { stroke: #df9c6e; stroke-width: .8; }
+.sokhnaci-svg .baby-hair, .sokhnaci-svg .baby-tuft { fill: #493328; }
+.sokhnaci-svg .baby-brow { fill: none; stroke: #493328; stroke-width: 1.7; stroke-linecap: round; }
+.sokhnaci-svg .baby-eye { fill: #17352b; transform-box: fill-box; transform-origin: center; animation: sokhnaci-blink 4.2s infinite; }
+.sokhnaci-svg .baby-cheek { fill: #df8d79; opacity: .65; }
+.sokhnaci-svg .baby-mouth-smile, .sokhnaci-svg .baby-mouth-flat { fill: none; stroke: #8b4d37; stroke-width: 1.9; stroke-linecap: round; }
+.sokhnaci-svg .baby-mouth-open { display: none; fill: #8b4d37; }
+.sokhnaci-svg .baby-mouth-flat { display: none; }
+.sokhnaci-svg[data-mood="alerte"] .baby-mouth-smile, .sokhnaci-svg[data-mood="attentif"] .baby-mouth-smile, .sokhnaci-svg[data-mood="vigilant"] .baby-mouth-smile { display: none; }
+.sokhnaci-svg[data-mood="alerte"] .baby-mouth-open { display: block; }
+.sokhnaci-svg[data-mood="vigilant"] .baby-mouth-flat, .sokhnaci-svg[data-mood="attentif"] .baby-mouth-flat { display: block; }
+.sokhnaci-svg .baby-arm { transform-box: view-box; }
+.sokhnaci-svg .baby-arm-left { transform-origin: 40px 72px; animation: baby-wave 3s ease-in-out infinite; }
+.sokhnaci-svg .baby-arm-right { transform-origin: 72px 72px; animation: baby-wave 3s ease-in-out -1.5s infinite; }
+.sokhnaci-widget.speaking .baby-mouth-smile { display: none; }
+.sokhnaci-widget.speaking .baby-mouth-open { display: block; transform-origin: center; animation: speaking-mouth .28s ease-in-out infinite alternate; }
+.sokhnaci-widget.speaking .baby-arm-left { animation: baby-gesture .46s ease-in-out infinite alternate; }
+.sokhnaci-widget.speaking .baby-arm-right { animation: baby-gesture .46s ease-in-out -.23s infinite alternate; }
+.sokhnaci-widget.speaking .baby-shirt { animation: baby-bounce .7s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
 .sokhnaci-bubble { max-height: 114px; margin: 0; overflow: auto; color: var(--text); font-size: 10px; line-height: 1.55; scrollbar-width: thin; }
 .sokhnaci-actions { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 7px; margin-top: 2px; }
 .sokhnaci-actions button { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); color: var(--muted); font-size: 9px; font-weight: 700; cursor: pointer; }
 .sokhnaci-actions .sokhnaci-speak { border-color: var(--primary); background: var(--primary); color: var(--primary-contrast); }
 .sokhnaci-launcher { display: flex; align-items: center; gap: 8px; margin-left: auto; padding: 8px 12px 8px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); font-size: 10px; font-weight: 750; cursor: pointer; }
 .sokhnaci-mini { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 50%; background: var(--primary); color: var(--primary-contrast); font-family: Manrope, sans-serif; }
-.sokhnaci-mini::before { content: "G"; }
+.sokhnaci-mini::before { content: "👶"; font-size: 15px; }
 .sokhnaci-widget.collapsed .sokhnaci-card { display: none; }
 body.tv .sokhnaci-widget { display: none; }
 .trigger-dialog { width: min(440px, calc(100vw - 28px)); padding: 20px; border: 1px solid var(--border); border-radius: 19px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); }
@@ -434,7 +434,9 @@ body.tv .sokhnaci-widget { display: none; }
 .trigger-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; }
 .trigger-button { border-color: var(--primary); background: var(--primary); color: var(--primary-contrast); }
 .trigger-button > span:first-child { color: inherit; }
-@keyframes canopy-sway { 0%, 100% { transform: rotate(0deg) translateY(0); } 50% { transform: rotate(1.6deg) translateY(-1px); } }
+@keyframes baby-wave { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(4deg); } }
+@keyframes baby-gesture { from { transform: rotate(-12deg); } to { transform: rotate(28deg); } }
+@keyframes baby-bounce { from { transform: translateY(0); } to { transform: translateY(-1.5px); } }
 @keyframes sokhnaci-blink { 0%, 43%, 47%, 100% { transform: scaleY(1); } 45% { transform: scaleY(.12); } }
 @keyframes speaking-mouth { from { transform: scaleY(.75); } to { transform: scaleY(1.3); } }
 
@@ -490,7 +492,7 @@ body.tv .sokhnaci-widget { display: none; }
   .insight-icon { width: 29px; height: 29px; }
   .insight-sparkline { display: none; }
   #carte { height: 330px; }
-  .map-card #carte { height: 380px; }
+  .map-card #carte { height: 440px; }
   .chartbox { height: 220px; }
   .chartbox.tall, .chartbox.xl { height: 260px; }
   .site-footer { flex-direction: column; margin: 0 14px; }

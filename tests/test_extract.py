@@ -98,6 +98,16 @@ def _ecrire_gabarit(chemin):
     classeur.save(chemin)
 
 
+def _ecrire_gabarit_periodes(chemin, periodes):
+    classeur = openpyxl.Workbook()
+    feuille = classeur.active
+    feuille.title = "Dakar"
+    feuille.append(["Districts", "Période", "Paludisme - Reporting rate"])
+    for periode in periodes:
+        feuille.append(["District de Pikine", periode, None])
+    classeur.save(chemin)
+
+
 def test_extraire_remplit_les_valeurs_et_signale_les_cases_manquantes(tmp_path):
     chemin_gabarit = tmp_path / "gabarit.xlsx"
     _ecrire_gabarit(chemin_gabarit)
@@ -125,6 +135,45 @@ def test_extraire_remplit_les_valeurs_et_signale_les_cases_manquantes(tmp_path):
     assert resultat.uid_district[("Dakar", "District de Pikine")] == "OUA"
     assert len(resultat.diagnostics) == 1
     assert resultat.diagnostics[0].valeurs_recuperees == 3
+
+
+def test_extraire_ajoute_la_periode_courante_a_partir_du_15(tmp_path):
+    chemin_gabarit = tmp_path / "gabarit.xlsx"
+    _ecrire_gabarit_periodes(chemin_gabarit, ["Septembre 2026", "Octobre 2026"])
+
+    avant_le_15 = extraire(
+        client=FakeDhis2Client(),
+        chemin_gabarit=str(chemin_gabarit),
+        nb_mois_fenetre=3,
+        date_reference=date(2026, 10, 14),
+    )
+    a_partir_du_15 = extraire(
+        client=FakeDhis2Client(),
+        chemin_gabarit=str(chemin_gabarit),
+        nb_mois_fenetre=3,
+        date_reference=date(2026, 10, 15),
+    )
+
+    periodes_avant = set(avant_le_15.par_region["Dakar"]["Période"])
+    periodes_apres = set(a_partir_du_15.par_region["Dakar"]["Période"])
+    assert periodes_avant == {"Septembre 2026"}
+    assert periodes_apres == {"Septembre 2026", "Octobre 2026"}
+
+
+def test_extraire_rattrape_les_mois_disponibles_absents_du_gabarit(tmp_path):
+    chemin_gabarit = tmp_path / "gabarit.xlsx"
+    _ecrire_gabarit_periodes(chemin_gabarit, ["Septembre 2026", "Novembre 2026"])
+
+    resultat = extraire(
+        client=FakeDhis2Client(),
+        chemin_gabarit=str(chemin_gabarit),
+        nb_mois_fenetre=3,
+        date_reference=date(2026, 12, 15),
+    )
+
+    assert set(resultat.par_region["Dakar"]["Période"]) == {
+        "Septembre 2026", "Octobre 2026", "Novembre 2026", "Décembre 2026",
+    }
 
 
 def test_extraire_colonne_sans_formulaire_correspondant_est_signalee(tmp_path):

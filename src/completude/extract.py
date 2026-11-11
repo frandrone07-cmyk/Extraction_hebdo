@@ -15,7 +15,7 @@ from datetime import date
 import pandas as pd
 
 from .dhis2 import Dhis2Client
-from .periodes import MOIS_FR, code_periode, fenetre_mois, norm, parse_periode
+from .periodes import MOIS_FR, code_periode, derniere_periode_disponible, fenetre_mois, norm, parse_periode
 
 logger = logging.getLogger(__name__)
 
@@ -139,11 +139,12 @@ def _lignes_generees(
     col_districts: str,
     mois_fenetre: list[tuple[int, int]],
     annee_ref: int,
+    col_periode: str | None = None,
 ) -> pd.DataFrame:
-    """Le gabarit n'a pas de période exploitable : génère une ligne par district x mois
-    de la fenêtre configurée, valeurs vides (seront remplies si DHIS2 répond)."""
+    """Génère une ligne par district et période, valeurs vides à remplir depuis DHIS2."""
     cols_indicateurs = [
-        c for c in df_orig.columns if c not in (col_districts,) and not c.startswith("Unnamed:")
+        c for c in df_orig.columns
+        if c not in (col_districts, col_periode) and not c.startswith("Unnamed:")
     ]
     districts_uniques = df_orig[col_districts].ffill().dropna().unique()
     lignes = []
@@ -154,6 +155,32 @@ def _lignes_generees(
                 ligne[col] = None
             lignes.append(ligne)
     return pd.DataFrame(lignes)
+
+
+def _periodes_du_gabarit(
+    df: pd.DataFrame,
+    col_periode: str,
+    date_reference: date,
+) -> list[tuple[int, int]]:
+    dernier_mois = derniere_periode_disponible(date_reference)
+    periodes = sorted({
+        periode for valeur in df[col_periode]
+        if (periode := parse_periode(valeur)) is not None and periode <= dernier_mois
+    })
+    if not periodes:
+        return []
+
+    debut_annee, debut_mois = periodes[0]
+    periodes_existantes = set(periodes)
+    periodes_completes = []
+    annee, mois = debut_annee, debut_mois
+    while (annee, mois) <= dernier_mois:
+        if (annee, mois) not in periodes_existantes:
+            periodes_completes.append((annee, mois))
+        mois += 1
+        if mois == 13:
+            annee, mois = annee + 1, 1
+    return sorted(periodes_existantes | set(periodes_completes))
 
 
 def extraire(
@@ -181,11 +208,18 @@ def extraire(
             logger.warning("%s : colonne Districts introuvable, région ignorée", region)
             continue
 
-        if not col_periode or col_periode not in df_orig.columns or df_orig[col_periode].isna().all():
+        if not col_periode or col_periode not in df_orig.columns:
             df = _lignes_generees(df_orig, col_districts, mois_fenetre, date_reference.year)
         else:
-            df = df_orig.rename(columns={col_districts: "Districts", col_periode: "Période"})
-            df["Districts"] = df["Districts"].ffill()
+            periodes_gabarit = [parse_periode(value) for value in df_orig[col_periode]]
+            if not any(periode is not None for periode in periodes_gabarit):
+                df = _lignes_generees(df_orig, col_districts, mois_fenetre, date_reference.year, col_periode)
+            else:
+                periodes = _periodes_du_gabarit(df_orig, col_periode, date_reference)
+                if not periodes:
+                    logger.warning("%s : aucune période du gabarit n'est encore disponible", region)
+                    continue
+                df = _lignes_generees(df_orig, col_districts, periodes, date_reference.year, col_periode)
 
         periodes = [parse_periode(v) for v in df["Période"]]
         valides = [p is not None for p in periodes]

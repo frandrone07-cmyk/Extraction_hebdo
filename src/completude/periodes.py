@@ -55,11 +55,20 @@ def libelle_periode(code) -> str:
     return ""
 
 
-def fenetre_mois(date_ref: date, nb_mois: int) -> list[tuple[int, int]]:
-    """Les `nb_mois` derniers mois jusqu'à date_ref inclus (mois courant + précédents),
-    du plus ancien au plus récent."""
-    mois_fenetre = []
+def derniere_periode_disponible(date_ref: date) -> tuple[int, int]:
+    """Dernière période mensuelle à extraire : mois courant à partir du 15, sinon le précédent."""
     annee, mois = date_ref.year, date_ref.month
+    if date_ref.day < 15:
+        mois -= 1
+        if mois == 0:
+            mois, annee = 12, annee - 1
+    return annee, mois
+
+
+def fenetre_mois(date_ref: date, nb_mois: int) -> list[tuple[int, int]]:
+    """Les derniers mois disponibles, du plus ancien au plus récent."""
+    mois_fenetre = []
+    annee, mois = derniere_periode_disponible(date_ref)
     for _ in range(nb_mois):
         mois_fenetre.append((annee, mois))
         mois -= 1

@@ -3,7 +3,11 @@ let coucheDistricts = null;
 let coucheEtiquettes = null;
 let gererZoomEtiquettes = null;
 let limitesRegions = new Map();
+let limitesDistricts = new Map();
+let couchesParDistrict = new Map();
 let regionEtiquettes = null;
+let limitesCarte = null;
+let districtActif = null;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -27,14 +31,17 @@ function appliquerTheme(theme) {
 }
 
 export function detruireCarte() {
-  if (!carte) return;
-  carte.remove();
+  if (carte) carte.remove();
   carte = null;
   coucheDistricts = null;
   coucheEtiquettes = null;
   gererZoomEtiquettes = null;
   limitesRegions = new Map();
+  limitesDistricts = new Map();
+  couchesParDistrict = new Map();
   regionEtiquettes = null;
+  limitesCarte = null;
+  districtActif = null;
 }
 
 export function initCarte(elementId, theme) {
@@ -62,13 +69,52 @@ export function centrerRegion(region) {
   return true;
 }
 
+export function afficherVueComplete() {
+  if (!carte || !limitesCarte) return false;
+  if (districtActif) coucheDistricts.resetStyle(districtActif);
+  districtActif?.closeTooltip();
+  districtActif = null;
+  regionEtiquettes = null;
+  carte.fitBounds(limitesCarte, { padding: [28, 28], maxZoom: 8 });
+  gererZoomEtiquettes?.();
+  return true;
+}
+
+export function centrerDistrict(region, nom) {
+  if (!carte) return false;
+  const key = `${region}||${nom}`;
+  const bounds = limitesDistricts.get(key);
+  const layer = couchesParDistrict.get(key);
+  if (!bounds || !layer) return false;
+  if (districtActif && districtActif !== layer) {
+    coucheDistricts.resetStyle(districtActif);
+    districtActif.closeTooltip();
+  }
+  districtActif = layer;
+  layer.setStyle({ color: "#fff", weight: 3, fillOpacity: 1, opacity: 1 });
+  layer.bringToFront();
+  regionEtiquettes = region;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    carte.fitBounds(bounds, { padding: [48, 48], maxZoom: 11 });
+  } else {
+    carte.flyToBounds(bounds, { padding: [48, 48], maxZoom: 11, duration: .8 });
+  }
+  layer.openTooltip();
+  gererZoomEtiquettes?.();
+  return true;
+}
+
 export function afficherDistricts(districts, { onClicDistrict, etiquettes = false, nomsEtiquettes = false, seuils = null } = {}) {
   if (!carte) return;
   if (coucheDistricts) carte.removeLayer(coucheDistricts);
   if (coucheEtiquettes) carte.removeLayer(coucheEtiquettes);
-  if (gererZoomEtiquettes) { carte.off("zoomend", gererZoomEtiquettes); gererZoomEtiquettes = null; }
+  if (gererZoomEtiquettes) { carte.off("zoomend moveend", gererZoomEtiquettes); gererZoomEtiquettes = null; }
   limitesRegions = new Map();
+  limitesDistricts = new Map();
+  couchesParDistrict = new Map();
   regionEtiquettes = null;
+  limitesCarte = null;
+  districtActif = null;
   const withContour = districts.filter((district) => district.feature);
   if (!withContour.length) return;
   const byFeature = new Map(withContour.map((district) => [district.feature, district]));
@@ -83,6 +129,9 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
       if (!district) return;
       try {
         const bounds = layer.getBounds();
+        const key = `${district.region}||${district.nom}`;
+        limitesDistricts.set(key, bounds);
+        couchesParDistrict.set(key, layer);
         if (limitesRegions.has(district.region)) limitesRegions.get(district.region).extend(bounds);
         else limitesRegions.set(district.region, bounds);
       } catch { /* contour incomplet */ }
@@ -149,10 +198,13 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         }
       }
     };
-    carte.on("zoomend", gererZoomEtiquettes);
+    carte.on("zoomend moveend", gererZoomEtiquettes);
   }
 
-  try { carte.fitBounds(coucheDistricts.getBounds(), { padding: [16, 16], maxZoom: 9 }); } catch { /* contours partiels */ }
+  try {
+    limitesCarte = coucheDistricts.getBounds();
+    carte.fitBounds(limitesCarte, { padding: [16, 16], maxZoom: 8 });
+  } catch { /* contours partiels */ }
   requestAnimationFrame(() => {
     carte?.invalidateSize();
     gererZoomEtiquettes?.();
