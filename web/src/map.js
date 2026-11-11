@@ -1,5 +1,8 @@
+const ZOOM_MIN_ETIQUETTES = 9;
 let carte = null;
 let coucheDistricts = null;
+let coucheEtiquettes = null;
+let gererZoomEtiquettes = null;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -18,6 +21,8 @@ export function detruireCarte() {
   carte.remove();
   carte = null;
   coucheDistricts = null;
+  coucheEtiquettes = null;
+  gererZoomEtiquettes = null;
 }
 
 export function initCarte(elementId, theme) {
@@ -37,9 +42,11 @@ export function initCarte(elementId, theme) {
 
 export function basculerThemeCarte(theme) { appliquerTheme(theme); }
 
-export function afficherDistricts(districts, { onClicDistrict } = {}) {
+export function afficherDistricts(districts, { onClicDistrict, etiquettes = false } = {}) {
   if (!carte) return;
   if (coucheDistricts) carte.removeLayer(coucheDistricts);
+  if (coucheEtiquettes) carte.removeLayer(coucheEtiquettes);
+  if (gererZoomEtiquettes) { carte.off("zoomend", gererZoomEtiquettes); gererZoomEtiquettes = null; }
   const withContour = districts.filter((district) => district.feature);
   if (!withContour.length) return;
   const byFeature = new Map(withContour.map((district) => [district.feature, district]));
@@ -56,6 +63,39 @@ export function afficherDistricts(districts, { onClicDistrict } = {}) {
       if (onClicDistrict) layer.on("click", () => onClicDistrict(district));
     },
   }).addTo(carte);
+
+  if (etiquettes) {
+    coucheEtiquettes = L.layerGroup();
+    coucheDistricts.eachLayer((layer) => {
+      const district = byFeature.get(layer.feature);
+      if (!district || district.tauxMoyen === null || district.tauxMoyen === undefined) return;
+      let centre;
+      try { centre = layer.getBounds().getCenter(); } catch { return; }
+      L.marker(centre, {
+        interactive: false,
+        icon: L.divIcon({
+          className: "carte-etiquette",
+          html: `<span style="background:${couleur(district.statut)}">${Math.round(district.tauxMoyen)}%</span>`,
+          iconSize: null,
+        }),
+      }).addTo(coucheEtiquettes);
+    });
+    // Chevauchement illisible en zone dense (Dakar) au niveau pays : les
+    // etiquettes n'apparaissent qu'une fois suffisamment zoome.
+    gererZoomEtiquettes = () => {
+      if (!carte || !coucheEtiquettes) return;
+      const visible = carte.getZoom() >= ZOOM_MIN_ETIQUETTES;
+      const presente = carte.hasLayer(coucheEtiquettes);
+      if (visible && !presente) coucheEtiquettes.addTo(carte);
+      else if (!visible && presente) carte.removeLayer(coucheEtiquettes);
+    };
+    carte.on("zoomend", gererZoomEtiquettes);
+    if (carte.getZoom() >= ZOOM_MIN_ETIQUETTES) coucheEtiquettes.addTo(carte);
+  }
+
   try { carte.fitBounds(coucheDistricts.getBounds(), { padding: [16, 16], maxZoom: 9 }); } catch { /* contours partiels */ }
-  requestAnimationFrame(() => carte?.invalidateSize());
+  requestAnimationFrame(() => {
+    carte?.invalidateSize();
+    gererZoomEtiquettes?.();
+  });
 }

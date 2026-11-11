@@ -69,21 +69,21 @@ function drawSlide(id) {
   const data = activeModel();
   const weeks = data.evolution.semaines.map((week) => new Date(`${week}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }));
   if (id === "synth") {
-    grapheLigne("tv-chart-national", weeks, [{ label: "Taux moyen", data: data.evolution.moyenne_generale }], { filled: true });
+    grapheLigne("tv-chart-national", weeks, [{ label: "Taux moyen", data: data.evolution.moyenne_generale }], { filled: true, etiquettes: true });
     grapheDoughnut("tv-chart-status", {
       conforme: data.districts.filter((district) => district.statut === "conforme").length,
       surveiller: data.districts.filter((district) => district.statut === "surveiller").length,
       critique: data.districts.filter((district) => district.statut === "critique").length,
-    });
+    }, { etiquettes: true });
   } else if (id === "carte") {
     detruireCarte();
     initCarte("tv-map", document.documentElement.dataset.theme);
-    afficherDistricts(data.districts, { onClicDistrict: ouvrirFicheDistrict });
+    afficherDistricts(data.districts, { onClicDistrict: ouvrirFicheDistrict, etiquettes: true });
   } else if (id === "reg") {
-    grapheBarres("tv-chart-region", data.regions.map((region) => labelRegion(region.nom)), data.regions.map((region) => region.tauxMoyen), { statut: true, seuils: data.seuils });
+    grapheBarres("tv-chart-region", data.regions.map((region) => labelRegion(region.nom)), data.regions.map((region) => region.tauxMoyen), { statut: true, seuils: data.seuils, etiquettes: true });
   } else if (id === "form") {
     const forms = [...data.formulaires].sort((a, b) => (a.tauxMoyen ?? 0) - (b.tauxMoyen ?? 0));
-    grapheBarres("tv-chart-form", forms.map((form) => form.nom), forms.map((form) => form.tauxMoyen), { horizontal: true, statut: true, seuils: data.seuils });
+    grapheBarres("tv-chart-form", forms.map((form) => form.nom), forms.map((form) => form.tauxMoyen), { horizontal: true, statut: true, seuils: data.seuils, etiquettes: true });
   } else if (id === "tabreg") {
     const periods = new Map();
     for (const district of data.districts) for (const form of district.formulaires) for (const period of form.historiquePeriodes) {
@@ -91,9 +91,9 @@ function drawSlide(id) {
       periods.get(period.periode_code).values.push(period.valeur);
     }
     const ordered = [...periods.entries()].sort(([a], [b]) => a.localeCompare(b));
-    grapheBarres("tv-chart-period", ordered.map(([, item]) => item.label), ordered.map(([, item]) => average(item.values)), { statut: true, seuils: data.seuils });
+    grapheBarres("tv-chart-period", ordered.map(([, item]) => item.label), ordered.map(([, item]) => average(item.values)), { statut: true, seuils: data.seuils, etiquettes: true });
   } else if (id === "evo") {
-    grapheLigne("tv-chart-evolution", weeks, data.evolution.par_region.map((series) => ({ label: labelRegion(series.region), data: series.valeurs })));
+    grapheLigne("tv-chart-evolution", weeks, data.evolution.par_region.map((series) => ({ label: labelRegion(series.region), data: series.valeurs })), { etiquettes: true });
   }
   document.querySelectorAll("[data-district]").forEach((button) => button.addEventListener("click", () => {
     const district = data.districts.find((item) => `${item.region}||${item.nom}` === button.dataset.district);

@@ -15,6 +15,25 @@ function detruire(id) {
   INSTANCES.delete(id);
 }
 function disponible() { return typeof Chart !== "undefined"; }
+let datalabelsEnregistre = false;
+function enregistrerDatalabels() {
+  if (datalabelsEnregistre || typeof ChartDataLabels === "undefined") return;
+  Chart.register(ChartDataLabels);
+  datalabelsEnregistre = true;
+}
+// Desactive par defaut (plugin enregistre globalement) : seul le mode TV
+// active l'affichage des etiquettes de pourcentage directement sur les
+// graphiques, pour rester lisible sans survol possible sur un ecran.
+function datalabelsOptions(actif, formatter) {
+  if (!actif) return { display: false };
+  enregistrerDatalabels();
+  return {
+    display: true,
+    color: color("--text"),
+    font: { family: "Manrope", size: 11, weight: "700" },
+    formatter: formatter || ((value) => (value === null || value === undefined ? "" : `${value}%`)),
+  };
+}
 function axisOptions() {
   const muted = color("--muted");
   const border = color("--border");
@@ -41,6 +60,7 @@ function commonOptions() {
         displayColors: true,
         callbacks: { label: (context) => `${context.dataset.label ? `${context.dataset.label} : ` : ""}${context.parsed.y ?? context.parsed.x ?? context.raw}%` },
       },
+      datalabels: { display: false },
     },
   };
 }
@@ -51,7 +71,7 @@ function valueColor(value, thresholds) {
   return color("conforme");
 }
 
-export function grapheBarres(id, labels, values, { horizontal = false, couleurParValeur = null, statut = false, seuils = { critique: 70, conforme: 90 }, onSelect = null } = {}) {
+export function grapheBarres(id, labels, values, { horizontal = false, couleurParValeur = null, statut = false, seuils = { critique: 70, conforme: 90 }, onSelect = null, etiquettes = false } = {}) {
   if (!disponible()) return;
   detruire(id);
   const canvas = document.getElementById(id);
@@ -62,6 +82,9 @@ export function grapheBarres(id, labels, values, { horizontal = false, couleurPa
     : statut ? values.map((value) => valueColor(value, seuils)) : color("primaire");
   options.indexAxis = horizontal ? "y" : "x";
   options.plugins.legend.display = false;
+  options.plugins.datalabels = datalabelsOptions(etiquettes, (value) => (value === null || value === undefined ? "" : `${value}%`));
+  options.plugins.datalabels.anchor = horizontal ? "end" : "end";
+  options.plugins.datalabels.align = horizontal ? "end" : "end";
   options.scales = horizontal
     ? { x: { ...axisOptions(), beginAtZero: true, max: 100, ticks: { ...axisOptions().ticks, callback: (value) => `${value}%` } }, y: { ...axisOptions(), grid: { display: false } } }
     : { x: { ...axisOptions(), grid: { display: false } }, y: { ...axisOptions(), beginAtZero: true, max: 100, ticks: { ...axisOptions().ticks, callback: (value) => `${value}%` } } };
@@ -77,7 +100,7 @@ export function grapheBarres(id, labels, values, { horizontal = false, couleurPa
   }));
 }
 
-export function grapheLigne(id, labels, series, { filled = false, percent = true } = {}) {
+export function grapheLigne(id, labels, series, { filled = false, percent = true, etiquettes = false } = {}) {
   if (!disponible()) return;
   detruire(id);
   const canvas = document.getElementById(id);
@@ -85,6 +108,12 @@ export function grapheLigne(id, labels, series, { filled = false, percent = true
   const palette = [color("primaire"), color("secondaire"), color("conforme"), color("surveiller"), color("critique"), "#7b71d1", "#e48644", "#4ba7ad"];
   const options = commonOptions();
   options.plugins.legend.display = series.length > 1;
+  // Une seule serie : etiquette possible sans surcharger le graphe. Avec
+  // plusieurs series (ex. evolution par region), les etiquettes se
+  // chevaucheraient trop pour rester lisibles - on les desactive alors.
+  options.plugins.datalabels = datalabelsOptions(etiquettes && series.length === 1, (value) => (value === null || value === undefined ? "" : `${value}%`));
+  options.plugins.datalabels.align = "top";
+  options.plugins.datalabels.anchor = "end";
   options.scales = {
     x: { ...axisOptions(), grid: { display: false } },
     y: { ...axisOptions(), beginAtZero: true, max: percent ? 100 : undefined, ticks: { ...axisOptions().ticks, callback: (value) => percent ? `${value}%` : value } },
@@ -112,7 +141,7 @@ export function grapheLigne(id, labels, series, { filled = false, percent = true
   }));
 }
 
-export function grapheBarresEmpilees(id, labels, series) {
+export function grapheBarresEmpilees(id, labels, series, { etiquettes = false } = {}) {
   if (!disponible()) return;
   detruire(id);
   const canvas = document.getElementById(id);
@@ -120,6 +149,8 @@ export function grapheBarresEmpilees(id, labels, series) {
   const options = commonOptions();
   options.plugins.legend.position = "bottom";
   options.plugins.tooltip.callbacks.label = (context) => ` ${context.dataset.label} : ${context.raw}`;
+  options.plugins.datalabels = datalabelsOptions(etiquettes, (value) => (value ? String(value) : ""));
+  if (etiquettes) options.plugins.datalabels.color = "#fff";
   options.scales = {
     x: { ...axisOptions(), stacked: true, grid: { display: false } },
     y: { ...axisOptions(), stacked: true, beginAtZero: true },
@@ -131,7 +162,7 @@ export function grapheBarresEmpilees(id, labels, series) {
   }));
 }
 
-export function grapheDoughnut(id, distribution) {
+export function grapheDoughnut(id, distribution, { etiquettes = false } = {}) {
   if (!disponible()) return;
   detruire(id);
   const canvas = document.getElementById(id);
@@ -140,6 +171,8 @@ export function grapheDoughnut(id, distribution) {
   options.cutout = "72%";
   options.plugins.legend.position = "bottom";
   options.plugins.tooltip.callbacks.label = (context) => ` ${context.label} : ${context.raw}`;
+  options.plugins.datalabels = datalabelsOptions(etiquettes, (value) => (value ? String(value) : ""));
+  if (etiquettes) options.plugins.datalabels.color = "#fff";
   INSTANCES.set(id, new Chart(canvas, {
     type: "doughnut",
     data: {

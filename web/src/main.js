@@ -3,7 +3,7 @@ import { ecrireEtatHash, lireEtatHash, lireTheme, appliquerTheme, basculerTheme 
 import { basculerThemeCarte } from "./map.js";
 import { initDrawer } from "./drawer.js";
 import { demarrerDiaporama } from "./slideshow.js";
-import { initGoorgui, mettreAJourGoorgui, replierGoorgui } from "./goorgui.js";
+import { initSokhnaci, mettreAJourSokhnaci, replierSokhnaci } from "./sokhnaci.js";
 import { initTrigger } from "./trigger.js";
 import {
   renderVue, apresRenduVue,
@@ -34,7 +34,7 @@ let themeCourant = null;
 let ongletCourant = "vue";
 let stateCourant = {};
 let toastTimer = null;
-let goorguiInitialise = false;
+let sokhnaciInitialise = false;
 
 function echapper(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -80,7 +80,7 @@ function afficherOnglet(name) {
   ongletCourant = RENDUS[name] ? name : "vue";
   content.innerHTML = definition.render(modeleCourant);
   if (definition.apres) definition.apres(modeleCourant, themeCourant);
-  if (ongletCourant !== "vue") replierGoorgui();
+  if (ongletCourant !== "vue") replierSokhnaci();
   content.setAttribute("aria-busy", "false");
   document.querySelectorAll('[role="tab"][data-tab]').forEach((button) => {
     const active = button.dataset.tab === ongletCourant;
@@ -130,7 +130,7 @@ function rafraichir(filters, { writeHash = true } = {}) {
   }, donnees.evolution, donnees.geo);
   stateCourant = { ...stateCourant, ...selected };
   mettreAJourEntete();
-  if (goorguiInitialise) mettreAJourGoorgui(modeleCourant);
+  if (sokhnaciInitialise) mettreAJourSokhnaci(modeleCourant);
   if (writeHash) ecrireEtatHash({ ...selected, tab: ongletCourant });
   afficherOnglet(ongletCourant);
 }
@@ -222,7 +222,7 @@ async function actualiserPendantDiaporama() {
     formulaire: selected.formulaire,
   }, donnees.evolution, donnees.geo);
   mettreAJourEntete();
-  if (goorguiInitialise) mettreAJourGoorgui(modeleCourant);
+  if (sokhnaciInitialise) mettreAJourSokhnaci(modeleCourant);
   ecrireEtatHash({ ...selected, tab: ongletCourant });
   return modeleCourant;
 }
@@ -247,9 +247,9 @@ async function init() {
   initFilters();
   selectionInitiale();
   verifierDependances();
-  initGoorgui(modeleCourant);
-  goorguiInitialise = true;
-  if (ongletCourant !== "vue") replierGoorgui();
+  initSokhnaci(modeleCourant);
+  sokhnaciInitialise = true;
+  if (ongletCourant !== "vue") replierSokhnaci();
   const tvParams = new URLSearchParams(location.hash.slice(1));
   if (tvParams.has("tv")) {
     demarrerDiaporama(modeleCourant, {

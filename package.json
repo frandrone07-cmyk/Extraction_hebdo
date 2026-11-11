@@ -10,6 +10,7 @@
     "@axe-core/playwright": "^4.10.1",
     "@playwright/test": "^1.49.1",
     "chart.js": "4.4.1",
+    "chartjs-plugin-datalabels": "2.2.0",
     "leaflet": "1.9.4"
   }
 }

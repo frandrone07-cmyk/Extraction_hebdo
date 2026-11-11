@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 const leafletCss = await readFile(require.resolve("leaflet/dist/leaflet.css"));
 const leafletJs = await readFile(require.resolve("leaflet/dist/leaflet.js"));
 const chartJs = await readFile(resolve(dirname(require.resolve("chart.js")), "chart.umd.js"));
+const chartDataLabelsJs = await readFile(require.resolve("chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js"));
 
 test.beforeEach(async ({ page }) => {
   await page.route("https://cdnjs.cloudflare.com/**", async (route) => {
@@ -15,6 +16,7 @@ test.beforeEach(async ({ page }) => {
     if (url.pathname.endsWith("/leaflet.css")) return route.fulfill({ status: 200, contentType: "text/css", body: leafletCss });
     if (url.pathname.endsWith("/leaflet.js")) return route.fulfill({ status: 200, contentType: "text/javascript", body: leafletJs });
     if (url.pathname.endsWith("/chart.umd.min.js")) return route.fulfill({ status: 200, contentType: "text/javascript", body: chartJs });
+    if (url.pathname.endsWith("/chartjs-plugin-datalabels.min.js")) return route.fulfill({ status: 200, contentType: "text/javascript", body: chartDataLabelsJs });
     return route.abort();
   });
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
