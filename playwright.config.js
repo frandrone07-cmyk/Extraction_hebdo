@@ -12,6 +12,11 @@ export default defineConfig({
     browserName: "chromium",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // Le CSS respecte prefers-reduced-motion (transitions/animations ramenees
+    // a .01ms) : on s'en sert ici pour que les captures axe-core ne tombent
+    // jamais au milieu du fondu d'entree .page-enter rejoue a chaque onglet,
+    // ce qui faussait aleatoirement la mesure de contraste des couleurs.
+    reducedMotion: "reduce",
   },
   webServer: {
     command: "node tests/e2e/server.mjs",

@@ -20,6 +20,11 @@ test.beforeEach(async ({ page }) => {
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
   await page.goto("/");
   await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false");
+  // Attendre le chargement effectif des polices web (DM Sans/Manrope) avant toute
+  // capture ou analyse axe-core : sur un runner CI sans cache, le fallback
+  // systeme s'affiche parfois assez longtemps pour fausser la mesure de
+  // contraste calculee sur les pixels rendus.
+  await page.evaluate(() => document.fonts.ready);
 });
 
 test("charge les données, relie les filtres à l’URL et ouvre une fiche district", async ({ page }) => {
