@@ -73,6 +73,81 @@ def construire_latest(hist: pd.DataFrame, seuils: ConfigSeuils) -> dict:
     }
 
 
+def construire_snapshots(hist: pd.DataFrame) -> dict:
+    """Encode l'historique détaillé en tables compactes pour les filtres web.
+
+    Les libellés sont stockés une seule fois et chaque valeur référence les
+    semaines, districts, formulaires et périodes par index. Cela permet au
+    tableau de bord de comparer deux lundis sans embarquer un gros JSON répété.
+    """
+    if hist.empty:
+        return {"semaines": [], "regions": [], "districts": [], "formulaires": [], "periodes": [], "lignes": []}
+
+    semaines = sorted(hist["semaine_cle"].dropna().astype(str).unique())
+    regions = sorted(hist["region"].dropna().astype(str).unique())
+    formulaires = sorted(hist["formulaire"].dropna().astype(str).unique())
+    periodes = (
+        hist[["periode_code", "periode"]]
+        .dropna(subset=["periode_code"])
+        .astype({"periode_code": str, "periode": str})
+        .drop_duplicates()
+        .sort_values("periode_code")
+    )
+    districts_source = hist[["region", "district", "uid_district"]].dropna(subset=["region", "district"]).copy()
+    districts_source["region"] = districts_source["region"].astype(str)
+    districts_source["district"] = districts_source["district"].astype(str)
+    districts_source["uid_district"] = districts_source["uid_district"].fillna("").astype(str)
+    districts_source = districts_source.sort_values(["region", "district", "uid_district"])
+    districts = []
+    district_index = {}
+    for region, district, uid in districts_source.itertuples(index=False, name=None):
+        key = (region, district)
+        if key not in district_index:
+            district_index[key] = len(districts)
+            districts.append([regions.index(region), district, uid or None])
+        elif uid and not districts[district_index[key]][2]:
+            districts[district_index[key]][2] = uid
+
+    semaine_index = {value: i for i, value in enumerate(semaines)}
+    formulaire_index = {value: i for i, value in enumerate(formulaires)}
+    periode_index = {value: i for i, value in enumerate(periodes["periode_code"].tolist())}
+    region_index = {value: i for i, value in enumerate(regions)}
+    district_index = {(regions[item[0]], item[1]): i for i, item in enumerate(districts)}
+    lignes = []
+    for row in hist.itertuples(index=False):
+        semaine = str(getattr(row, "semaine_cle"))
+        region = str(getattr(row, "region"))
+        district = str(getattr(row, "district"))
+        formulaire = str(getattr(row, "formulaire"))
+        periode_code = str(getattr(row, "periode_code"))
+        if any((
+            semaine not in semaine_index,
+            region not in region_index,
+            formulaire not in formulaire_index,
+            periode_code not in periode_index,
+        )):
+            continue
+        raw_value = getattr(row, "valeur")
+        valeur = None if raw_value == "" or pd.isna(raw_value) else float(raw_value)
+        lignes.append([
+            semaine_index[semaine],
+            district_index[(region, district)],
+            formulaire_index[formulaire],
+            periode_index[periode_code],
+            valeur,
+        ])
+
+    return {
+        "genere_le": datetime.now(UTC).isoformat(),
+        "semaines": semaines,
+        "regions": regions,
+        "districts": districts,
+        "formulaires": formulaires,
+        "periodes": periodes[["periode_code", "periode"]].values.tolist(),
+        "lignes": lignes,
+    }
+
+
 def _serie_par_semaine(valeurs_par_semaine: dict, semaines: list[str]) -> list[float | None]:
     return [None if pd.isna(valeurs_par_semaine.get(s)) else valeurs_par_semaine.get(s) for s in semaines]
 

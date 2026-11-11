@@ -1,125 +1,153 @@
-// Wrappers Chart.js 4.4.1 (chargé en CDN, voir index.html). Palette reprise
-// des couleurs de statut (styles.css) pour rester cohérent partout.
-
-const COULEURS = {
-  critique: "#c0392b",
-  surveiller: "#b8860b",
-  conforme: "#1e8449",
-  inconnu: "#95a5a6",
-  primaire: "#1F4E78",
-  secondaire: "#6fb1ea",
+// Chart.js wrappers partageant la palette et les seuils visuels du dashboard.
+const INSTANCES = new Map();
+const CSS = {
+  critique: "--critique", surveiller: "--surveiller", conforme: "--conforme",
+  inconnu: "--inconnu", primaire: "--primary", secondaire: "--navy-soft",
 };
 
-const instances = new Map();
-
+function color(name) {
+  const variable = CSS[name] || name;
+  return getComputedStyle(document.documentElement).getPropertyValue(variable).trim() || "#087f5b";
+}
 function detruire(id) {
-  if (instances.has(id)) {
-    instances.get(id).destroy();
-    instances.delete(id);
-  }
+  if (!INSTANCES.has(id)) return;
+  INSTANCES.get(id).destroy();
+  INSTANCES.delete(id);
+}
+function disponible() { return typeof Chart !== "undefined"; }
+function axisOptions() {
+  const muted = color("--muted");
+  const border = color("--border");
+  return {
+    ticks: { color: muted, font: { family: "DM Sans", size: 10 } },
+    grid: { color: border, drawTicks: false },
+    border: { display: false },
+  };
+}
+function commonOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 450 },
+    interaction: { intersect: false, mode: "index" },
+    plugins: {
+      legend: { labels: { color: color("--muted"), usePointStyle: true, pointStyle: "circle", boxWidth: 8, boxHeight: 8, padding: 14, font: { family: "DM Sans", size: 10 } } },
+      tooltip: {
+        backgroundColor: color("--navy"),
+        titleFont: { family: "DM Sans", weight: "700", size: 11 },
+        bodyFont: { family: "DM Sans", size: 10 },
+        padding: 10,
+        cornerRadius: 9,
+        displayColors: true,
+        callbacks: { label: (context) => `${context.dataset.label ? `${context.dataset.label} : ` : ""}${context.parsed.y ?? context.parsed.x ?? context.raw}%` },
+      },
+    },
+  };
+}
+function valueColor(value, thresholds) {
+  if (value === null || value === undefined) return color("inconnu");
+  if (value < thresholds.critique) return color("critique");
+  if (value < thresholds.conforme) return color("surveiller");
+  return color("conforme");
 }
 
-function disponible() {
-  return typeof Chart !== "undefined";
-}
-
-export function grapheBarres(id, labels, valeurs, { horizontal = false, couleurParValeur = null } = {}) {
+export function grapheBarres(id, labels, values, { horizontal = false, couleurParValeur = null, statut = false, seuils = { critique: 70, conforme: 90 }, onSelect = null } = {}) {
   if (!disponible()) return;
   detruire(id);
-  const ctx = document.getElementById(id);
-  if (!ctx) return;
-  const couleurs = couleurParValeur ? valeurs.map(couleurParValeur) : COULEURS.primaire;
-  instances.set(
-    id,
-    new Chart(ctx, {
-      type: "bar",
-      data: { labels, datasets: [{ data: valeurs, backgroundColor: couleurs, borderRadius: 4 }] },
-      options: {
-        indexAxis: horizontal ? "y" : "x",
-        plugins: { legend: { display: false } },
-        scales: { x: { beginAtZero: true, max: horizontal ? 100 : undefined }, y: { beginAtZero: true, max: !horizontal ? 100 : undefined } },
-        responsive: true,
-        maintainAspectRatio: false,
-      },
-    })
-  );
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const options = commonOptions();
+  const barColors = couleurParValeur
+    ? values.map((value) => couleurParValeur(value))
+    : statut ? values.map((value) => valueColor(value, seuils)) : color("primaire");
+  options.indexAxis = horizontal ? "y" : "x";
+  options.plugins.legend.display = false;
+  options.scales = horizontal
+    ? { x: { ...axisOptions(), beginAtZero: true, max: 100, ticks: { ...axisOptions().ticks, callback: (value) => `${value}%` } }, y: { ...axisOptions(), grid: { display: false } } }
+    : { x: { ...axisOptions(), grid: { display: false } }, y: { ...axisOptions(), beginAtZero: true, max: 100, ticks: { ...axisOptions().ticks, callback: (value) => `${value}%` } } };
+  INSTANCES.set(id, new Chart(canvas, {
+    type: "bar",
+    data: { labels, datasets: [{ data: values, backgroundColor: barColors, borderRadius: 5, borderSkipped: false, maxBarThickness: horizontal ? 18 : 32 }] },
+    options: {
+      ...options,
+      onClick: onSelect ? (_event, elements) => {
+        if (elements.length) onSelect(labels[elements[0].index]);
+      } : undefined,
+    },
+  }));
 }
 
-export function grapheLigne(id, labels, series) {
+export function grapheLigne(id, labels, series, { filled = false, percent = true } = {}) {
   if (!disponible()) return;
   detruire(id);
-  const ctx = document.getElementById(id);
-  if (!ctx) return;
-  const palette = [COULEURS.primaire, COULEURS.secondaire, COULEURS.conforme, COULEURS.surveiller, COULEURS.critique];
-  instances.set(
-    id,
-    new Chart(ctx, {
-      type: "line",
-      data: {
-        labels,
-        datasets: series.map((s, i) => ({
-          label: s.label,
-          data: s.data,
-          borderColor: palette[i % palette.length],
-          backgroundColor: "transparent",
-          tension: 0.25,
-          spanGaps: true,
-        })),
-      },
-      options: {
-        plugins: { legend: { display: series.length > 1 } },
-        scales: { y: { beginAtZero: true, max: 100 } },
-        responsive: true,
-        maintainAspectRatio: false,
-      },
-    })
-  );
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const palette = [color("primaire"), color("secondaire"), color("conforme"), color("surveiller"), color("critique"), "#7b71d1", "#e48644", "#4ba7ad"];
+  const options = commonOptions();
+  options.plugins.legend.display = series.length > 1;
+  options.scales = {
+    x: { ...axisOptions(), grid: { display: false } },
+    y: { ...axisOptions(), beginAtZero: true, max: percent ? 100 : undefined, ticks: { ...axisOptions().ticks, callback: (value) => percent ? `${value}%` : value } },
+  };
+  INSTANCES.set(id, new Chart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: series.map((item, index) => ({
+        label: item.label,
+        data: item.data,
+        borderColor: palette[index % palette.length],
+        backgroundColor: palette[index % palette.length],
+        fill: filled && index === 0 ? { target: "origin", above: "rgba(8,127,91,.08)" } : false,
+        tension: .32,
+        spanGaps: false,
+        borderWidth: 2.2,
+        pointRadius: labels.length > 14 ? 0 : 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: color("--surface"),
+        pointBorderWidth: 2,
+      })),
+    },
+    options,
+  }));
 }
 
 export function grapheBarresEmpilees(id, labels, series) {
   if (!disponible()) return;
   detruire(id);
-  const ctx = document.getElementById(id);
-  if (!ctx) return;
-  instances.set(
-    id,
-    new Chart(ctx, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: series.map((s) => ({ label: s.label, data: s.data, backgroundColor: s.couleur })),
-      },
-      options: {
-        plugins: { legend: { position: "bottom" } },
-        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
-        responsive: true,
-        maintainAspectRatio: false,
-      },
-    })
-  );
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const options = commonOptions();
+  options.plugins.legend.position = "bottom";
+  options.plugins.tooltip.callbacks.label = (context) => ` ${context.dataset.label} : ${context.raw}`;
+  options.scales = {
+    x: { ...axisOptions(), stacked: true, grid: { display: false } },
+    y: { ...axisOptions(), stacked: true, beginAtZero: true },
+  };
+  INSTANCES.set(id, new Chart(canvas, {
+    type: "bar",
+    data: { labels, datasets: series.map((item) => ({ label: item.label, data: item.data, backgroundColor: item.couleur, borderRadius: 4, borderSkipped: false, maxBarThickness: 28 })) },
+    options,
+  }));
 }
 
-export function grapheDoughnut(id, repartition) {
+export function grapheDoughnut(id, distribution) {
   if (!disponible()) return;
   detruire(id);
-  const ctx = document.getElementById(id);
-  if (!ctx) return;
-  instances.set(
-    id,
-    new Chart(ctx, {
-      type: "doughnut",
-      data: {
-        labels: ["Conforme", "À surveiller", "Critique"],
-        datasets: [{
-          data: [repartition.conforme, repartition.surveiller, repartition.critique],
-          backgroundColor: [COULEURS.conforme, COULEURS.surveiller, COULEURS.critique],
-        }],
-      },
-      options: { plugins: { legend: { position: "bottom" } }, responsive: true, maintainAspectRatio: false },
-    })
-  );
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const options = commonOptions();
+  options.cutout = "72%";
+  options.plugins.legend.position = "bottom";
+  options.plugins.tooltip.callbacks.label = (context) => ` ${context.label} : ${context.raw}`;
+  INSTANCES.set(id, new Chart(canvas, {
+    type: "doughnut",
+    data: {
+      labels: ["Conforme", "À surveiller", "Critique"],
+      datasets: [{ data: [distribution.conforme, distribution.surveiller, distribution.critique], backgroundColor: [color("conforme"), color("surveiller"), color("critique")], borderWidth: 0, hoverOffset: 5, spacing: 3 }],
+    },
+    options,
+  }));
 }
 
-export function couleurStatut(statut) {
-  return COULEURS[statut] || COULEURS.inconnu;
-}
+export function couleurStatut(statut) { return color(statut); }

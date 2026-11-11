@@ -1,0 +1,19 @@
+name = "senegal-completude-trigger"
+main = "index.js"
+compatibility_date = "2026-11-10"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGIN = "https://frandrone07-cmyk.github.io"
+GITHUB_OWNER = "frandrone07-cmyk"
+GITHUB_REPO = "Extraction_hebdo"
+GITHUB_WORKFLOW = "extraction.yml"
+GITHUB_REF = "master"
+
+[[ratelimits]]
+name = "TRIGGER_RATE_LIMIT"
+namespace_id = "2026111001"
+
+[ratelimits.simple]
+limit = 5
+period = 60

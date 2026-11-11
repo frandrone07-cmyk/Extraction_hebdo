@@ -1,67 +1,119 @@
 <!doctype html>
-<html lang="fr" data-theme="">
+<html lang="fr" data-theme="light">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dashboard de complétude DHIS2 — Sénégal</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
-<link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f4">
+  <meta name="description" content="Suivi hebdomadaire de la complétude des rapports DHIS2 au Sénégal.">
+  <title>Complétude DHIS2 — Sénégal</title>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="tricolore" aria-hidden="true"></div>
+  <a class="skip-link" href="#contenu">Aller au contenu principal</a>
+  <div class="tricolore" aria-hidden="true"></div>
 
-<header class="masthead">
-  <div class="republique">
-    <svg class="flag" viewBox="0 0 30 20" role="img" aria-label="Drapeau du Sénégal" xmlns="http://www.w3.org/2000/svg">
-      <rect width="10" height="20" fill="#00853F"/><rect x="10" width="10" height="20" fill="#FDEF42"/>
-      <rect x="20" width="10" height="20" fill="#E31B23"/>
-      <polygon fill="#00853F" points="15,6.4 15.81,8.89 18.42,8.89 16.31,10.42 17.12,12.91 15,11.375 12.88,12.91 13.69,10.42 11.58,8.89 14.19,8.89"/>
-    </svg>
-    <div class="rep-t"><b>République du Sénégal</b><small>Un Peuple, Un But, Une Foi</small></div>
-  </div>
-  <div class="orgs">
-    <div class="org1">Ministère de la Santé et de l'Hygiène publique</div>
-    <div>Direction de la Planification, de la Recherche et des Statistiques</div>
-    <div>Division du Système d'Information Sanitaire et Sociale</div>
-  </div>
-  <div class="brand">
-    <h1>Complétude des rapports DHIS2</h1>
-    <div class="sous-titre" id="sous-titre">Chargement…</div>
-  </div>
-  <div class="masthead-actions">
-    <a class="btn" href="https://raw.githubusercontent.com/frandrone07-cmyk/Extraction_hebdo/master/data/exports/dernier_export.xlsx" download>⬇ Excel de la semaine</a>
-    <button class="btn" id="btn-theme" type="button" aria-label="Changer de thème clair/sombre">🌓 Thème</button>
-    <button class="btn" id="btn-imprimer" type="button">🖨️ Imprimer</button>
-    <button class="btn" id="btn-lien" type="button">🔗 Copier le lien</button>
-  </div>
-</header>
+  <header class="masthead">
+    <div class="institution">
+      <svg class="flag" viewBox="0 0 30 20" role="img" aria-label="Drapeau du Sénégal" xmlns="http://www.w3.org/2000/svg">
+        <rect width="10" height="20" fill="#00853F"/><rect x="10" width="10" height="20" fill="#FDEF42"/><rect x="20" width="10" height="20" fill="#E31B23"/>
+        <polygon fill="#00853F" points="15,6.4 15.81,8.89 18.42,8.89 16.31,10.42 17.12,12.91 15,11.375 12.88,12.91 13.69,10.42 11.58,8.89 14.19,8.89"/>
+      </svg>
+      <div class="institution-copy"><strong>République du Sénégal</strong><span>Un Peuple · Un But · Une Foi</span></div>
+      <span class="institution-divider" aria-hidden="true"></span>
+      <div class="orgs">
+        <strong>Ministère de la Santé et de l’Hygiène publique</strong>
+        <span>Direction de la Planification, de la Recherche et des Statistiques</span>
+        <span>Division du Système d’Information Sanitaire et Sociale</span>
+      </div>
+    </div>
+    <div class="masthead-actions" aria-label="Actions du tableau de bord">
+      <span class="publication-status"><i aria-hidden="true"></i> Suivi hebdomadaire</span>
+      <a class="icon-button export-link" href="https://raw.githubusercontent.com/frandrone07-cmyk/Extraction_hebdo/master/data/exports/dernier_export.xlsx" download aria-label="Excel de la semaine — télécharger la dernière extraction" title="Télécharger l’Excel de la dernière extraction">
+        <span aria-hidden="true">↓</span><span class="button-text">Excel de la semaine</span>
+      </a>
+      <button class="icon-button" id="btn-theme" type="button" aria-label="Activer le thème sombre" title="Changer de thème"><span aria-hidden="true">◐</span><span class="button-text">Thème</span></button>
+      <button class="icon-button" id="btn-lien" type="button" title="Copier un lien avec les filtres actuels"><span aria-hidden="true">↗</span><span class="button-text">Partager</span></button>
+      <button class="icon-button" id="btn-imprimer" type="button" title="Imprimer ou enregistrer en PDF"><span aria-hidden="true">⎙</span><span class="button-text">Imprimer</span></button>
+      <button class="icon-button tv-button" id="btn-tv" type="button" title="Lancer le mode diaporama"><span aria-hidden="true">▣</span><span class="button-text">Mode TV</span></button>
+      <button class="icon-button trigger-button" id="btn-lancer-extraction" type="button" title="Lancer une extraction DHIS2 protégée par code PIN" hidden><span aria-hidden="true">▶</span><span class="button-text">Lancer l’extraction</span></button>
+    </div>
+  </header>
 
-<p class="banniere alerte" id="banniere-fraicheur" hidden role="status"></p>
+  <section class="intro" aria-labelledby="titre-principal">
+    <div class="intro-copy">
+      <p class="eyebrow"><span class="eyebrow-mark" aria-hidden="true"></span> OBSERVATOIRE HEBDOMADAIRE · DHIS2</p>
+      <h1 id="titre-principal">Complétude des rapports</h1>
+      <p class="intro-subtitle">Une lecture claire des déclarations sanitaires, région par région.</p>
+    </div>
+    <div class="intro-meta">
+      <span class="meta-label">Extraction sélectionnée</span>
+      <strong id="sous-titre">Chargement des données…</strong>
+      <span class="meta-updated"><span aria-hidden="true">●</span> Actualisation chaque lundi</span>
+    </div>
+  </section>
 
-<nav class="tabs" role="tablist" aria-label="Sections du dashboard">
-  <button role="tab" id="tab-btn-vue" aria-controls="tab-vue" aria-selected="true" data-tab="vue">Vue d'ensemble</button>
-  <button role="tab" id="tab-btn-regions" aria-controls="tab-regions" aria-selected="false" data-tab="regions">Régions et formulaires</button>
-  <button role="tab" id="tab-btn-evolution" aria-controls="tab-evolution" aria-selected="false" data-tab="evolution">Évolution</button>
-  <button role="tab" id="tab-btn-districts" aria-controls="tab-districts" aria-selected="false" data-tab="districts">Districts</button>
-  <button role="tab" id="tab-btn-qualite" aria-controls="tab-qualite" aria-selected="false" data-tab="qualite">Qualité et méthode</button>
-</nav>
+  <p class="banniere alerte" id="banniere-fraicheur" hidden role="status"></p>
+  <p class="banniere info" id="banniere-dependances" hidden role="status"></p>
 
-<main id="contenu" aria-live="polite">
-  <p class="note">Chargement des données…</p>
-</main>
+  <section class="filter-panel" aria-labelledby="titre-filtres">
+    <div class="filter-heading">
+      <div><p class="eyebrow">Explorer les données</p><h2 id="titre-filtres">Choisir une période d’analyse</h2></div>
+      <button class="text-button" id="btn-reset" type="button">Réinitialiser les filtres <span aria-hidden="true">↺</span></button>
+    </div>
+    <div class="filters" role="group" aria-label="Filtres du tableau de bord">
+      <label><span>Extraction</span><select id="sel-extraction" aria-label="Semaine d’extraction"></select></label>
+      <label><span>Comparer à</span><select id="sel-comparaison" aria-label="Extraction de comparaison"></select></label>
+      <label><span>Région</span><select id="sel-region" aria-label="Région"></select></label>
+      <label><span>Période DHIS2</span><select id="sel-periode" aria-label="Période des rapports"></select></label>
+      <label class="filter-form"><span>Formulaire</span><select id="sel-formulaire" aria-label="Formulaire"></select></label>
+    </div>
+  </section>
 
-<div id="drawer-overlay" class="drawer-overlay" hidden></div>
-<aside id="drawer" class="drawer" hidden role="dialog" aria-label="Fiche district" aria-modal="true">
-  <button class="btn" id="btn-fermer-drawer" type="button" aria-label="Fermer la fiche district">✕ Fermer</button>
-  <div id="drawer-contenu"></div>
-</aside>
+  <nav class="tabs-wrap" aria-label="Sections du tableau de bord">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-btn-vue" aria-controls="contenu" aria-selected="true" data-tab="vue" type="button"><span aria-hidden="true">◫</span> Vue d’ensemble</button>
+      <button role="tab" id="tab-btn-regions" aria-controls="contenu" aria-selected="false" data-tab="regions" type="button"><span aria-hidden="true">⌖</span> Régions et formulaires</button>
+      <button role="tab" id="tab-btn-evolution" aria-controls="contenu" aria-selected="false" data-tab="evolution" type="button"><span aria-hidden="true">↗</span> Évolution</button>
+      <button role="tab" id="tab-btn-districts" aria-controls="contenu" aria-selected="false" data-tab="districts" type="button"><span aria-hidden="true">▤</span> Districts</button>
+      <button role="tab" id="tab-btn-qualite" aria-controls="contenu" aria-selected="false" data-tab="qualite" type="button"><span aria-hidden="true">✓</span> Qualité et méthode</button>
+    </div>
+  </nav>
 
-<footer>
-  Généré automatiquement — <span id="footer-genere"></span>
-</footer>
+  <main id="contenu" aria-live="polite" aria-busy="true">
+    <p class="loading-state"><span class="spinner" aria-hidden="true"></span> Chargement des données…</p>
+  </main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script type="module" src="src/main.js"></script>
+  <div id="drawer-overlay" class="drawer-overlay" hidden></div>
+  <aside id="drawer" class="drawer" hidden role="dialog" aria-label="Fiche détaillée du district" aria-modal="true" aria-labelledby="drawer-titre">
+    <div class="drawer-top"><span class="eyebrow">FICHE DISTRICT</span><button class="icon-button close-button" id="btn-fermer-drawer" type="button" aria-label="Fermer la fiche district">×</button></div>
+    <div id="drawer-contenu"></div>
+  </aside>
+
+  <footer class="site-footer">
+    <div class="footer-mark"><span class="footer-dot" aria-hidden="true"></span><span>Ministère de la Santé et de l’Hygiène publique · Sénégal</span></div>
+    <span>Généré automatiquement <span aria-hidden="true">·</span> <time id="footer-genere"></time></span>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="trigger-dialog" class="trigger-dialog" aria-labelledby="trigger-title">
+    <form id="trigger-form" class="trigger-form">
+      <div class="trigger-head"><span class="eyebrow">MISE À JOUR DHIS2</span><button class="icon-button close-button" id="trigger-close" type="button" aria-label="Fermer">×</button></div>
+      <h2 id="trigger-title">Lancer une extraction</h2>
+      <p class="note">Le code PIN est envoyé uniquement au service sécurisé de déclenchement. Il n’est pas enregistré dans le navigateur.</p>
+      <label for="trigger-months">Nombre de mois à extraire (1 à 12)</label><input id="trigger-months" type="number" min="1" max="12" value="3" required>
+      <label for="trigger-pin">Code PIN partagé</label><input id="trigger-pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required minlength="4" maxlength="32">
+      <p class="trigger-status" id="trigger-status" role="status" aria-live="polite"></p>
+      <div class="trigger-result" id="trigger-result" hidden><a id="trigger-run-link" target="_blank" rel="noopener">Voir l’exécution GitHub ↗</a><button class="button-primary" id="trigger-refresh" type="button">Actualiser les données</button></div>
+      <div class="trigger-actions"><button class="icon-button" id="trigger-cancel" type="button">Annuler</button><button class="button-primary" id="trigger-submit" type="submit">Démarrer</button></div>
+    </form>
+  </dialog>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>

@@ -13,6 +13,7 @@ chemins:
   geo_final: "data/geo/districts.geojson"
   latest_json: "data/latest.json"
   evolution_json: "data/evolution.json"
+  snapshots_json: "data/snapshots.json"
 
 seuils:
   critique: 70

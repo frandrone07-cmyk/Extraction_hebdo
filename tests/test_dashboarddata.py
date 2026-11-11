@@ -1,7 +1,7 @@
 import pandas as pd
 
 from completude.config import ConfigSeuils
-from completude.dashboarddata import construire_evolution, construire_latest
+from completude.dashboarddata import construire_evolution, construire_latest, construire_snapshots
 
 SEUILS = ConfigSeuils(critique=70, conforme=90, baisse=5)
 
@@ -147,3 +147,27 @@ def test_construire_evolution_par_region():
     evolution = construire_evolution(hist)
     par_region = {s["region"]: s["valeurs"][0] for s in evolution["par_region"]}
     assert par_region == {"Dakar": 70.0, "Thies": 30.0}
+
+
+def test_construire_snapshots_indexe_valeurs_et_garde_les_valeurs_manquantes():
+    hist = _hist([
+        {"date_extraction": "2026-11-02", "semaine_cle": "2026-11-02", "region": "Dakar", "district": "Pikine",
+         "uid_district": "OUA", "periode_code": "202610", "periode": "Octobre 2026", "formulaire": "PEV", "valeur": 75.0},
+        {"date_extraction": "2026-11-09", "semaine_cle": "2026-11-09", "region": "Dakar", "district": "Pikine",
+         "uid_district": "OUA", "periode_code": "202610", "periode": "Octobre 2026", "formulaire": "PEV", "valeur": None},
+    ])
+
+    snapshots = construire_snapshots(hist)
+
+    assert snapshots["semaines"] == ["2026-11-02", "2026-11-09"]
+    assert snapshots["regions"] == ["Dakar"]
+    assert snapshots["districts"] == [[0, "Pikine", "OUA"]]
+    assert snapshots["formulaires"] == ["PEV"]
+    assert snapshots["periodes"] == [["202610", "Octobre 2026"]]
+    assert snapshots["lignes"] == [[0, 0, 0, 0, 75.0], [1, 0, 0, 0, None]]
+
+
+def test_construire_snapshots_historique_vide():
+    assert construire_snapshots(_hist([])) == {
+        "semaines": [], "regions": [], "districts": [], "formulaires": [], "periodes": [], "lignes": [],
+    }

@@ -7,12 +7,15 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.pytest-tmp/
 .ruff_cache/
 .mypy_cache/
 
 # Node / front-end
 node_modules/
 dist/
+playwright-report/
+test-results/
 
 # Verrous SIG (QGIS/ArcGIS) laissés par erreur
 *.sr.lock
@@ -27,6 +30,8 @@ Thumbs.db
 
 # Etat interne de l'outillage (pas du contenu projet)
 .claude/
+.wrangler/
+.dev.vars
 
 # Fichiers sources bruts (deja convertis/nettoyes dans data/exports/)
 /Extraction_ulterieure_mis_à_jour/

@@ -9,7 +9,7 @@ import shutil
 from datetime import datetime
 
 from .config import charger_config
-from .dashboarddata import construire_evolution, construire_latest
+from .dashboarddata import construire_evolution, construire_latest, construire_snapshots
 from .dhis2 import Dhis2Client
 from .excel import ecrire_excel
 from .extract import detecter_niveau_organisation_unit, extraire
@@ -26,6 +26,16 @@ from .history import (
 )
 
 logger = logging.getLogger("completude")
+
+
+def _valider_nombre_mois(valeur: str) -> int:
+    try:
+        nombre = int(valeur)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("le nombre de mois doit être un entier") from exc
+    if not 1 <= nombre <= 12:
+        raise argparse.ArgumentTypeError("le nombre de mois doit être compris entre 1 et 12")
+    return nombre
 
 
 def _ajouter_argument_config(sous_parser: argparse.ArgumentParser) -> None:
@@ -112,14 +122,19 @@ def _commande_build_json(args: argparse.Namespace) -> int:
 
     latest = construire_latest(hist, config.seuils)
     evolution = construire_evolution(hist)
+    snapshots = construire_snapshots(hist)
 
-    for chemin, payload in ((config.chemin_latest_json, latest), (config.chemin_evolution_json, evolution)):
+    for chemin, payload in (
+        (config.chemin_latest_json, latest),
+        (config.chemin_evolution_json, evolution),
+        (config.chemin_snapshots_json, snapshots),
+    ):
         os.makedirs(os.path.dirname(chemin) or ".", exist_ok=True)
         with open(chemin, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
 
     logger.info(
-        "data/latest.json (semaine %s, %d region(s)) et data/evolution.json (%d semaine(s)) ecrits",
+        "JSON du tableau de bord ecrits : semaine %s, %d region(s), %d semaine(s) historisees",
         latest["semaine_cle"], len(latest["regions"]), len(evolution["semaines"]),
     )
     return 0
@@ -188,7 +203,7 @@ def construire_parser() -> argparse.ArgumentParser:
     _ajouter_argument_config(cmd_extract)
     cmd_extract.add_argument("--dry-run", action="store_true", help="N'effectue aucun appel réseau réel")
     cmd_extract.add_argument(
-        "--mois", type=int, default=None,
+        "--mois", type=_valider_nombre_mois, default=None,
         help="Nombre de mois a extraire (mois courant + precedents), surcharge nb_mois_fenetre de la config",
     )
     cmd_extract.set_defaults(func=_commande_extract)
@@ -200,7 +215,7 @@ def construire_parser() -> argparse.ArgumentParser:
     cmd_check_week.set_defaults(func=_commande_check_week)
 
     cmd_build_json = sous_commandes.add_parser(
-        "build-json", help="Génère data/latest.json et data/evolution.json depuis l'historique (pas de réseau)"
+        "build-json", help="Génère les JSON du tableau de bord depuis l'historique (pas de réseau)"
     )
     _ajouter_argument_config(cmd_build_json)
     cmd_build_json.set_defaults(func=_commande_build_json)

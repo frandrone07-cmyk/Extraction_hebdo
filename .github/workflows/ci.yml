@@ -26,3 +26,21 @@ jobs:
 
       - name: Tests (pytest)
         run: pytest -q
+
+  browser-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Installer Chromium pour Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests navigateur et accessibilité
+        run: npm run test:e2e

@@ -7,6 +7,7 @@ on:
       - "web/**"
       - "data/latest.json"
       - "data/evolution.json"
+      - "data/snapshots.json"
       - "data/geo/districts.geojson"
   workflow_dispatch: {}
 
@@ -34,6 +35,7 @@ jobs:
           cp -r web/. site/
           cp data/latest.json site/data/latest.json
           cp data/evolution.json site/data/evolution.json
+          cp data/snapshots.json site/data/snapshots.json
           cp data/geo/districts.geojson site/data/geo/districts.geojson
 
       - uses: actions/configure-pages@v5

@@ -1,86 +1,70 @@
-// Fiche détaillée d'un district : tiroir latéral avec KPI et heatmap
-// formulaires × périodes (toutes les périodes de la semaine courante,
-// pas seulement la plus récente — contrairement aux tableaux de synthèse).
-
 import { couleurStatut } from "./charts.js";
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
 }
+function pct(value) { return value === null || value === undefined ? "—" : `${Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%`; }
+let previousFocus = null;
 
 export function ouvrirFicheDistrict(district) {
-  const panneau = document.getElementById("drawer");
-  const contenu = document.getElementById("drawer-contenu");
-  if (!panneau || !contenu) return;
-
-  const periodesVues = new Set();
-  for (const f of district.formulaires) {
-    for (const p of f.historiquePeriodes) periodesVues.add(p.periode_code);
-  }
-  const periodesTriees = [...periodesVues].sort();
-  const libellePeriode = (code) => {
-    for (const f of district.formulaires) {
-      const p = f.historiquePeriodes.find((x) => x.periode_code === code);
-      if (p) return p.periode;
-    }
-    return code;
-  };
-
-  const lignesHeatmap = district.formulaires
-    .map((f) => {
-      const cellules = periodesTriees
-        .map((code) => {
-          const p = f.historiquePeriodes.find((x) => x.periode_code === code);
-          const valeur = p ? p.valeur : null;
-          const statut = p ? p.statut : "inconnu";
-          return `<td class="heatmap-cell" style="background:${couleurStatut(statut)}">${valeur ?? "—"}</td>`;
-        })
-        .join("");
-      return `<tr><th scope="row">${escapeHtml(f.nom)}</th>${cellules}</tr>`;
-    })
-    .join("");
-
-  contenu.innerHTML = `
-    <h2>${escapeHtml(district.nom)}</h2>
-    <p class="note">${escapeHtml(district.region.replace(/^DRS_/, ""))}${district.uid ? ` — UID ${escapeHtml(district.uid)}` : ""}</p>
-    <div class="grid grid-kpi" style="margin:12px 0">
-      <div class="card kpi"><h3>Taux moyen (dernière période)</h3><div class="valeur">${district.tauxMoyen ?? "—"}%</div></div>
-      <div class="card kpi"><h3>Statut</h3><div class="valeur cell-${district.statut}">${district.statut}</div></div>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead><tr><th>Formulaire</th>${periodesTriees.map((c) => `<th>${escapeHtml(libellePeriode(c))}</th>`).join("")}</tr></thead>
-        <tbody>${lignesHeatmap}</tbody>
-      </table>
-    </div>
-  `;
-
+  const panel = document.getElementById("drawer");
+  const content = document.getElementById("drawer-contenu");
   const overlay = document.getElementById("drawer-overlay");
-  panneau.hidden = false;
+  if (!panel || !content || !overlay) return;
+  previousFocus = document.activeElement;
+  const periods = new Map();
+  for (const form of district.formulaires) for (const period of form.historiquePeriodes) periods.set(period.periode_code, period.periode);
+  const periodCodes = [...periods.keys()].sort();
+  const rows = district.formulaires.map((form) => {
+    const values = periodCodes.map((code) => {
+      const point = form.historiquePeriodes.find((item) => item.periode_code === code);
+      const value = point?.valeur ?? null;
+      const background = couleurStatut(point?.statut || "inconnu");
+      return `<td class="heatmap-cell" style="background:${background}" title="${escapeHtml(form.nom)} · ${escapeHtml(periods.get(code))}">${value === null ? "—" : Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}</td>`;
+    }).join("");
+    const variation = form.variation === null ? "—" : `${form.variation > 0 ? "+" : ""}${form.variation.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pt`;
+    return `<tr><th scope="row">${escapeHtml(form.nom)}</th>${values}<td>${variation}</td></tr>`;
+  }).join("");
+  const previous = district.tauxPrecedent === null ? "—" : pct(district.tauxPrecedent);
+  content.innerHTML = `
+    <h2 id="drawer-titre">${escapeHtml(district.nom)}</h2>
+    <p class="drawer-subtitle">${escapeHtml(district.region.replace(/^DRS[_ ]/, ""))}${district.uid ? ` · UID ${escapeHtml(district.uid)}` : ""}</p>
+    <div class="drawer-kpis">
+      <div class="drawer-kpi"><span>Taux moyen</span><strong>${pct(district.tauxMoyen)}</strong></div>
+      <div class="drawer-kpi"><span>Extraction comparée</span><strong>${previous}</strong></div>
+      <div class="drawer-kpi"><span>Écart</span><strong>${district.variation === null ? "—" : `${district.variation > 0 ? "+" : ""}${district.variation.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pt`}</strong></div>
+    </div>
+    <p class="note">Détail par formulaire et période DHIS2. Les cellules sans valeur sont affichées par un tiret.</p>
+    <div class="table-scroll"><table class="heatmap"><thead><tr><th>Formulaire</th>${periodCodes.map((code) => `<th>${escapeHtml(periods.get(code))}</th>`).join("")}<th>Écart formulaire</th></tr></thead><tbody>${rows}</tbody></table></div>
+  `;
+  panel.hidden = false;
   overlay.hidden = false;
-  requestAnimationFrame(() => {
-    panneau.classList.add("ouvert");
-    overlay.classList.add("ouvert");
-  });
+  requestAnimationFrame(() => { panel.classList.add("ouvert"); overlay.classList.add("ouvert"); });
   document.getElementById("btn-fermer-drawer").focus();
 }
 
 export function fermerFicheDistrict() {
-  const panneau = document.getElementById("drawer");
+  const panel = document.getElementById("drawer");
   const overlay = document.getElementById("drawer-overlay");
-  if (!panneau) return;
-  panneau.classList.remove("ouvert");
+  if (!panel || panel.hidden) return;
+  panel.classList.remove("ouvert");
   overlay.classList.remove("ouvert");
-  setTimeout(() => {
-    panneau.hidden = true;
-    overlay.hidden = true;
-  }, 200);
+  setTimeout(() => { panel.hidden = true; overlay.hidden = true; previousFocus?.focus?.(); }, 260);
 }
 
 export function initDrawer() {
   document.getElementById("btn-fermer-drawer").addEventListener("click", fermerFicheDistrict);
   document.getElementById("drawer-overlay").addEventListener("click", fermerFicheDistrict);
-  document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") fermerFicheDistrict();
+  document.addEventListener("keydown", (event) => {
+    const panel = document.getElementById("drawer");
+    if (!panel || panel.hidden) return;
+    if (event.key === "Escape") { fermerFicheDistrict(); return; }
+    if (event.key !== "Tab") return;
+    const focusable = [...panel.querySelectorAll("button, a[href], select, input, [tabindex]:not([tabindex='-1'])")].filter((element) => !element.disabled);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   });
 }
