@@ -1,4 +1,3 @@
-const ZOOM_MIN_ETIQUETTES = 9;
 let carte = null;
 let coucheDistricts = null;
 let coucheEtiquettes = null;
@@ -65,32 +64,52 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
   }).addTo(carte);
 
   if (etiquettes) {
-    coucheEtiquettes = L.layerGroup();
+    coucheEtiquettes = L.layerGroup().addTo(carte);
+    const entrees = [];
     coucheDistricts.eachLayer((layer) => {
       const district = byFeature.get(layer.feature);
       if (!district || district.tauxMoyen === null || district.tauxMoyen === undefined) return;
-      let centre;
-      try { centre = layer.getBounds().getCenter(); } catch { return; }
-      L.marker(centre, {
+      let limites;
+      try { limites = layer.getBounds(); } catch { return; }
+      const marqueur = L.marker(limites.getCenter(), {
         interactive: false,
+        keyboard: false,
         icon: L.divIcon({
           className: "carte-etiquette",
           html: `<span style="background:${couleur(district.statut)}">${Math.round(district.tauxMoyen)}%</span>`,
           iconSize: null,
         }),
-      }).addTo(coucheEtiquettes);
+      });
+      const surface = (limites.getNorth() - limites.getSouth()) * (limites.getEast() - limites.getWest());
+      entrees.push({ marqueur, limites, surface });
     });
-    // Chevauchement illisible en zone dense (Dakar) au niveau pays : les
-    // etiquettes n'apparaissent qu'une fois suffisamment zoome.
+    entrees.sort((a, b) => b.surface - a.surface);
+    // Placement glouton : les grands districts d'abord ; une etiquette n'est
+    // affichee que si elle tient dans son district et ne recouvre aucune autre,
+    // pour laisser les couleurs lisibles dans les zones denses (Dakar).
     gererZoomEtiquettes = () => {
       if (!carte || !coucheEtiquettes) return;
-      const visible = carte.getZoom() >= ZOOM_MIN_ETIQUETTES;
-      const presente = carte.hasLayer(coucheEtiquettes);
-      if (visible && !presente) coucheEtiquettes.addTo(carte);
-      else if (!visible && presente) carte.removeLayer(coucheEtiquettes);
+      const grand = carte.getSize().x >= 900;
+      const largeur = grand ? 46 : 40;
+      const hauteur = grand ? 22 : 18;
+      const places = [];
+      for (const entree of entrees) {
+        const nord = carte.latLngToContainerPoint(entree.limites.getNorthWest());
+        const sud = carte.latLngToContainerPoint(entree.limites.getSouthEast());
+        const tient = (sud.x - nord.x) >= largeur * 0.9 && (sud.y - nord.y) >= hauteur * 0.9;
+        const centre = carte.latLngToContainerPoint(entree.limites.getCenter());
+        const boite = { x: centre.x - largeur / 2, y: centre.y - hauteur / 2 };
+        const libre = tient && !places.some((p) => Math.abs(p.x - boite.x) < largeur + 2 && Math.abs(p.y - boite.y) < hauteur + 2);
+        const present = coucheEtiquettes.hasLayer(entree.marqueur);
+        if (libre) {
+          places.push(boite);
+          if (!present) coucheEtiquettes.addLayer(entree.marqueur);
+        } else if (present) {
+          coucheEtiquettes.removeLayer(entree.marqueur);
+        }
+      }
     };
     carte.on("zoomend", gererZoomEtiquettes);
-    if (carte.getZoom() >= ZOOM_MIN_ETIQUETTES) coucheEtiquettes.addTo(carte);
   }
 
   try { carte.fitBounds(coucheDistricts.getBounds(), { padding: [16, 16], maxZoom: 9 }); } catch { /* contours partiels */ }
