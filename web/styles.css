@@ -238,7 +238,10 @@ main { max-width: 1404px; min-height: 50vh; margin: 0 auto; padding: 22px 0 52px
 .priority-rank { display: grid; width: 23px; height: 23px; place-items: center; border-radius: 7px; background: var(--critique-soft); color: var(--critique); font-size: 10px; font-weight: 750; }
 .priority-name { display: block; font-size: 11px; font-weight: 700; }
 .priority-region { display: block; color: var(--muted); font-size: 9px; }
-.priority-value { color: var(--critique); font-size: 12px; font-weight: 800; }
+.priority-value { font-size: 12px; font-weight: 800; }
+.priority-value.critique { color: var(--critique); }
+.priority-value.surveiller { color: var(--surveiller); }
+.priority-value.conforme { color: var(--conforme); }
 .empty-state { padding: 16px; border-radius: 11px; background: var(--conforme-soft); color: var(--conforme); font-size: 11px; }
 .ranking-table td:first-child { font-weight: 650; }
 .table-scroll { width: 100%; overflow: auto; border: 1px solid var(--border); border-radius: 11px; scrollbar-width: thin; }
@@ -344,14 +347,17 @@ body.tv .tv-bar { position: fixed; top: 0; right: 0; left: 0; z-index: 2500; dis
 .tv-kpis strong.critical { color: #b93e34; }
 .tv-layout { display: grid; gap: 15px; }
 .tv-half { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.tv-map-layout { grid-template-columns: minmax(0, 2.5fr) minmax(260px, .7fr); }
+.tv-map-layout { grid-template-columns: minmax(0, 3fr) minmax(280px, .8fr); }
 .tv-chart { height: clamp(260px, 37vh, 420px); margin-top: 10px; }
+.tv-chart-status { height: clamp(340px, 48vh, 560px); }
 .tv-chart-large { height: min(65vh, 620px); }
 .tv-chart-card { padding: 18px 24px !important; }
-.tv-slide #tv-map { height: min(74vh, 760px); border-radius: 12px; }
+.tv-map-region { margin: 0 0 9px; color: #278963; font-family: Manrope, sans-serif; font-size: 15px; font-weight: 800; }
+.tv-slide #tv-map { height: min(80vh, 860px); border-radius: 12px; }
 .tv-map-legend { margin-top: 12px; font-size: 13px; }
 .tv-map-legend .legend-swatch { width: 12px; height: 12px; }
 .tv-priorities, .tv-ranking { display: grid; gap: 5px; margin-top: 10px; }
+.tv-priority-caption { margin: 3px 0 0; color: #60746b; font-size: 11px; }
 .tv-priority, .tv-ranking-row { display: grid; grid-template-columns: 30px minmax(0,1fr) auto; align-items: center; gap: 9px; padding: 8px; border: 0; border-bottom: 1px solid #e6ece7; border-radius: 8px; background: transparent; color: #172822; text-align: left; }
 .tv-priority { cursor: pointer; }
 .tv-priority:hover, .tv-ranking-row:hover { background: #f4f8f5; }
@@ -361,6 +367,13 @@ body.tv .tv-bar { position: fixed; top: 0; right: 0; left: 0; z-index: 2500; dis
 .tv-priority small, .tv-ranking-row small { color: #5e6f67; font-size: 9px; }
 .tv-priority b, .tv-ranking-row b { color: #b93e34; font-size: 12px; }
 .tv-ranking-row b { color: #13805d; }
+.tv-priority b.critique, .tv-ranking-row b.critique { color: var(--critique); }
+.tv-priority b.surveiller, .tv-ranking-row b.surveiller { color: var(--surveiller); }
+.tv-priority b.conforme, .tv-ranking-row b.conforme { color: var(--conforme); }
+.tv-priority b.inconnu, .tv-ranking-row b.inconnu { color: var(--inconnu); }
+.tv-slide .carte-etiquette-nom span { display: grid; width: 138px; gap: 1px; padding: 4px 6px; white-space: normal; line-height: 1.1; }
+.tv-slide .carte-etiquette-nom strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.tv-slide .carte-etiquette-nom small { font-size: 11px; }
 body.tv .leaflet-container { height: 100%; }
 .tv-bar { display: none; }
 
@@ -440,10 +453,13 @@ body.tv .sokhnaci-widget { display: none; }
   .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .filter-form { grid-column: span 1; }
   .grid2, .grid2e, .grid3 { grid-template-columns: 1fr; }
+  body.tv .tv-map-layout { grid-template-columns: minmax(0, 2fr) minmax(240px, .8fr); }
   .grid-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .chartbox.tall, .chartbox.xl { height: 290px; }
 }
 @media (max-width: 700px) {
+  body.tv .tv-map-layout { grid-template-columns: 1fr; }
+  body.tv .tv-slide #tv-map { height: 55vh; }
   .masthead { align-items: flex-start; flex-direction: column; gap: 11px; padding: 12px 16px; }
   .institution { width: 100%; }
   .orgs, .institution-divider { display: none; }

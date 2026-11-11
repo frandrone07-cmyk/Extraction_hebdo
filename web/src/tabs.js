@@ -7,7 +7,7 @@ function escapeHtml(value) {
 }
 
 function libelleRegion(value) { return value.replace(/^DRS[_ ]/, ""); }
-function pct(value) { return value === null || value === undefined ? "—" : `${Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%`; }
+function pct(value) { return value === null || value === undefined ? "—" : `${Number(value).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`; }
 function moyenne(values) {
   const items = values.filter((value) => value !== null && value !== undefined);
   return items.length ? Math.round(items.reduce((a, b) => a + b, 0) / items.length * 10) / 10 : null;
@@ -84,7 +84,7 @@ export function renderVue(modele) {
   const conformes = [...districts].filter((district) => district.statut === "conforme").sort((a, b) => (b.tauxMoyen ?? 0) - (a.tauxMoyen ?? 0)).slice(0, 10);
   const contexte = `${escapeHtml(modele.selection.region)} · ${escapeHtml(modele.selection.periode)}`;
   const listeDistricts = (liste, vide) => liste.length
-    ? `<ol class="priority-list">${liste.map((district, index) => `<li><button class="priority-item" type="button" data-district="${escapeHtml(district.region)}||${escapeHtml(district.nom)}"><span class="priority-rank">${String(index + 1).padStart(2, "0")}</span><span><span class="priority-name">${escapeHtml(district.nom)}</span><span class="priority-region">${escapeHtml(libelleRegion(district.region))}</span></span><span class="priority-value">${pct(district.tauxMoyen)}</span></button></li>`).join("")}</ol>`
+    ? `<ol class="priority-list">${liste.map((district, index) => `<li><button class="priority-item" type="button" data-district="${escapeHtml(district.region)}||${escapeHtml(district.nom)}"><span class="priority-rank">${String(index + 1).padStart(2, "0")}</span><span><span class="priority-name">${escapeHtml(district.nom)}</span><span class="priority-region">${escapeHtml(libelleRegion(district.region))}</span></span><span class="priority-value ${district.statut}">${pct(district.tauxMoyen)}</span></button></li>`).join("")}</ol>`
     : `<p class="empty-state">${vide}</p>`;
   const optionsAlertes = listeDistricts(alertes, `Tous les districts affichés sont au-dessus du seuil critique de ${seuils.critique}%.`);
   const optionsSurveiller = listeDistricts(aSurveiller, "Aucun district dans la zone de vigilance pour cette sélection.");
@@ -109,7 +109,7 @@ export function renderVue(modele) {
       <article class="card"><div class="card-head"><div><h2>Répartition des districts</h2><p class="card-subtitle">Selon les seuils de complétude</p></div></div><div class="chartbox sm"><canvas id="ch-statuts" aria-label="Répartition des districts par statut"></canvas></div></article>
     </section>
     <section class="grid grid3">
-      <article class="card"><div class="card-head"><div><h2>Priorités de suivi</h2><p class="card-subtitle">Districts classés par taux moyen croissant.</p></div><span class="status-chip critique">${nbCritiques} critique${nbCritiques > 1 ? "s" : ""}</span></div>${optionsAlertes}</article>
+      <article class="card"><div class="card-head"><div><h2>Priorités de suivi</h2><p class="card-subtitle">Dist. classés par taux moyen croissant.</p></div><span class="status-chip critique">${nbCritiques} critique${nbCritiques > 1 ? "s" : ""}</span></div>${optionsAlertes}</article>
       <article class="card"><div class="card-head"><div><h2>Districts à surveiller</h2><p class="card-subtitle">Entre ${seuils.critique}% et ${seuils.conforme}%.</p></div><span class="status-chip surveiller">${districts.filter((district) => district.statut === "surveiller").length}</span></div>${optionsSurveiller}</article>
       <article class="card"><div class="card-head"><div><h2>Districts conformes</h2><p class="card-subtitle">Taux moyen décroissant.</p></div><span class="status-chip conforme">${districts.filter((district) => district.statut === "conforme").length}</span></div>${optionsConformes}</article>
     </section>

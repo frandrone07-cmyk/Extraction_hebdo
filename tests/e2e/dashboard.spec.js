@@ -46,6 +46,23 @@ test("charge les données, relie les filtres à l’URL et ouvre une fiche distr
   await expect(page.locator("#drawer")).toBeHidden();
 });
 
+test("colore les taux des listes selon le statut et les affiche à une décimale", async ({ page }) => {
+  const rates = page.locator(".priority-value");
+  await expect(rates).not.toHaveCount(0);
+  const invalidRates = await rates.evaluateAll((items) => items.flatMap((item) => {
+    const status = ["critique", "surveiller", "conforme"].find((name) => item.classList.contains(name));
+    const probe = document.createElement("span");
+    probe.className = `status-chip ${status}`;
+    document.body.append(probe);
+    const expectedColor = getComputedStyle(probe).color;
+    probe.remove();
+    return status && /^\d+,\d%$/.test(item.textContent.trim()) && getComputedStyle(item).color === expectedColor
+      ? []
+      : [{ status, text: item.textContent.trim(), color: getComputedStyle(item).color, expectedColor }];
+  }));
+  expect(invalidRates).toEqual([]);
+});
+
 test("permet le thème et le mode TV au clavier", async ({ page }) => {
   await page.locator("#btn-theme").click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -53,6 +70,52 @@ test("permet le thème et le mode TV au clavier", async ({ page }) => {
   await expect(page.locator("body")).toHaveClass(/tv/);
   await page.keyboard.press("Escape");
   await expect(page.locator("body")).not.toHaveClass(/tv/);
+});
+
+test("agrandit la carte TV et fait défiler les régions", async ({ page }) => {
+  await page.locator("#btn-tv").click();
+  await page.locator("#tv-next").click();
+
+  const map = page.locator("#tv-map");
+  const region = page.locator("#tv-map-region");
+  await expect(map).toBeVisible();
+  const firstRegion = await region.textContent();
+  const mapHeight = await map.evaluate((element) => element.getBoundingClientRect().height);
+  expect(mapHeight).toBeGreaterThan(500);
+  await expect.poll(() => region.textContent(), { timeout: 8000 }).not.toBe(firstRegion);
+  await expect.poll(() => page.locator(".tv-slide .carte-etiquette-nom").count(), { timeout: 4000 }).toBeGreaterThan(0);
+  const mismatchedLabels = await page.locator(".tv-slide .carte-etiquette-nom").evaluateAll((labels) => labels.flatMap((label) => {
+    const text = label.querySelector("small")?.textContent?.replace("%", "").replace(",", ".");
+    const rate = Number(text);
+    const paletteIndex = rate < 70 ? 0 : rate < 90 ? 1 : 2;
+    const expectedColor = getComputedStyle(document.querySelectorAll(".tv-map-legend .legend-swatch")[paletteIndex]).backgroundColor;
+    const actualColor = label.querySelector("span").style.backgroundColor;
+    return actualColor !== expectedColor
+      ? [{ rate, actualColor, expectedColor }]
+      : [];
+  }));
+  expect(mismatchedLabels).toEqual([]);
+  const priorityRates = await page.locator(".tv-priority b").evaluateAll((items) => items.map((item) => ({
+    status: item.classList.contains("critique") ? "critique" : "autre",
+    decimal: /^\d+,\d%$/.test(item.textContent.trim()),
+  })));
+  expect(priorityRates.every((item) => item.status === "critique" && item.decimal)).toBe(true);
+  await expect(page.locator(".tv-priority-caption")).toBeVisible();
+
+  await page.locator('.tv-dot[data-slide-index="5"]').click();
+  await expect(page.locator(".tv-ranking-row")).toHaveCount(20);
+  const invalidRankingRates = await page.locator(".tv-ranking-row b").evaluateAll((items) => items.flatMap((item) => {
+    const status = ["critique", "surveiller", "conforme"].find((name) => item.classList.contains(name));
+    const probe = document.createElement("span");
+    probe.className = `status-chip ${status}`;
+    document.body.append(probe);
+    const expectedColor = getComputedStyle(probe).color;
+    probe.remove();
+    return status && /^\d+,\d%$/.test(item.textContent.trim()) && getComputedStyle(item).color === expectedColor
+      ? []
+      : [{ status, text: item.textContent.trim(), color: getComputedStyle(item).color, expectedColor }];
+  }));
+  expect(invalidRankingRates).toEqual([]);
 });
 
 test("ne présente pas de violations axe-core WCAG A/AA sur la vue et le tableau", async ({ page }) => {
