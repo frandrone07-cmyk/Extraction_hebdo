@@ -1,5 +1,5 @@
 import { grapheBarres, grapheBarresEmpilees, grapheDoughnut, grapheLigne, couleurStatut } from "./charts.js";
-import { afficherDistricts, detruireCarte, initCarte } from "./map.js";
+import { afficherDistricts, centrerRegion, detruireCarte, initCarte } from "./map.js";
 import { afficherRegions, detruireCarteRegions, initCarteRegions } from "./region-map.js";
 import { ouvrirFicheDistrict } from "./drawer.js";
 
@@ -107,11 +107,11 @@ export function renderVue(modele) {
       <svg class="insight-sparkline" viewBox="0 0 120 34" aria-hidden="true"><path d="M2 26 C14 23 15 12 27 18 S43 28 53 18 68 8 78 17 92 20 100 10 111 12 118 4" fill="none" stroke="#8ce0b0" stroke-width="2" stroke-linecap="round"/><path d="M2 30 C14 27 15 16 27 22 S43 32 53 22 68 12 78 21 92 24 100 14 111 16 118 8" fill="none" stroke="#8ce0b0" stroke-opacity=".18" stroke-width="8" stroke-linecap="round"/></svg>
     </section>
     <section class="grid map-pair">
-      <article class="card map-card"><div class="card-head"><div><h2>Carte des districts</h2><p class="card-subtitle">Sélectionnez un district pour ouvrir sa fiche.</p></div><span class="card-aside">${districts.filter((district) => district.feature).length}/${districts.length} contours</span></div><div id="carte" role="group" aria-label="Carte interactive du Sénégal : taux de complétude par district"></div><div class="map-legend"><span class="legend-item"><i class="legend-swatch" style="background:var(--critique)"></i>Critique &lt; ${seuils.critique}%</span><span class="legend-item"><i class="legend-swatch" style="background:var(--surveiller)"></i>À surveiller</span><span class="legend-item"><i class="legend-swatch" style="background:var(--conforme)"></i>Conforme ≥ ${seuils.conforme}%</span></div></article>
-      <article class="card map-card"><div class="card-head"><div><h2>Carte des régions</h2><p class="card-subtitle">Taux moyen régional · survolez une région pour le détail.</p></div><span class="card-aside">${regions.filter((region) => region.feature).length}/${regions.length} contours</span></div><div id="carte-regions" role="group" aria-label="Carte du Sénégal : taux de complétude par région"></div><div class="map-legend"><span class="legend-item"><i class="legend-swatch" style="background:var(--critique)"></i>Critique &lt; ${seuils.critique}%</span><span class="legend-item"><i class="legend-swatch" style="background:var(--surveiller)"></i>À surveiller</span><span class="legend-item"><i class="legend-swatch" style="background:var(--conforme)"></i>Conforme ≥ ${seuils.conforme}%</span></div></article>
+      <article class="card map-card"><div class="card-head"><div><h2>Carte des districts</h2><p class="card-subtitle">${modele.selection.regionCode ? `Zoom sur ${escapeHtml(modele.selection.region)}` : "Sélectionnez un district pour ouvrir sa fiche."}</p></div><span class="card-aside">${districts.filter((district) => district.feature).length}/${districts.length} contours</span></div><div id="carte" role="group" aria-label="Carte interactive du Sénégal : taux de complétude par district"></div><div class="map-legend"><span class="legend-item"><i class="legend-swatch" style="background:var(--critique)"></i>Critique &lt; ${seuils.critique}%</span><span class="legend-item"><i class="legend-swatch" style="background:var(--surveiller)"></i>À surveiller</span><span class="legend-item"><i class="legend-swatch" style="background:var(--conforme)"></i>Conforme ≥ ${seuils.conforme}%</span></div></article>
+      <article class="card map-card"><div class="card-head"><div><h2>Carte des régions</h2><p class="card-subtitle">${modele.selection.regionCode ? `Zoom sur ${escapeHtml(modele.selection.region)}` : "Toutes les régions · survolez une région pour le détail."}</p></div><span class="card-aside">${modele.toutesRegions.filter((region) => region.feature).length}/${modele.toutesRegions.length} contours</span></div><div id="carte-regions" role="group" aria-label="Carte du Sénégal : taux de complétude par région"></div><div class="map-legend"><span class="legend-item"><i class="legend-swatch" style="background:var(--critique)"></i>Critique &lt; ${seuils.critique}%</span><span class="legend-item"><i class="legend-swatch" style="background:var(--surveiller)"></i>À surveiller</span><span class="legend-item"><i class="legend-swatch" style="background:var(--conforme)"></i>Conforme ≥ ${seuils.conforme}%</span></div></article>
     </section>
     <section class="grid grid2">
-      <article class="card"><div class="card-head"><div><h2>Évolution du taux moyen</h2><p class="card-subtitle">Une observation par extraction du lundi.</p></div></div><div class="chartbox"><canvas id="ch-evo-globale" aria-label="Évolution hebdomadaire du taux moyen"></canvas></div></article>
+      <article class="card"><div class="card-head"><div><h2>Évolution par date d’extraction</h2><p class="card-subtitle">Une observation pour chaque extraction hebdomadaire.</p></div></div><div class="chartbox"><canvas id="ch-evo-globale" aria-label="Évolution par date d’extraction du taux moyen"></canvas></div></article>
       <article class="card"><div class="card-head"><div><h2>Répartition des districts</h2><p class="card-subtitle">Selon les seuils de complétude</p></div></div><div class="chartbox sm"><canvas id="ch-statuts" aria-label="Répartition des districts par statut : ${districts.length} districts au total"></canvas></div></article>
     </section>
     <section class="grid grid3">
@@ -135,10 +135,16 @@ export function apresRenduVue(modele, theme) {
   grapheLigne("ch-evo-globale", modele.evolution.semaines.map(formaterDate), [{ label: "Taux moyen", data: modele.evolution.moyenne_generale }], { filled: true });
   detruireCarte();
   initCarte("carte", theme);
-  afficherDistricts(districts, { onClicDistrict: ouvrirFicheDistrict, etiquettes: true, seuils: modele.seuils });
+  afficherDistricts(districts, {
+    onClicDistrict: ouvrirFicheDistrict,
+    etiquettes: true,
+    nomsEtiquettes: Boolean(modele.selection.regionCode),
+    seuils: modele.seuils,
+  });
+  if (modele.selection.regionCode) centrerRegion(modele.selection.regionCode);
   detruireCarteRegions();
   initCarteRegions("carte-regions", theme);
-  afficherRegions(modele.regions, modele.seuils);
+  afficherRegions(modele.toutesRegions, modele.seuils, modele.selection.regionCode);
   document.querySelectorAll(".priority-item").forEach((button) => button.addEventListener("click", () => {
     const district = districts.find((item) => `${item.region}||${item.nom}` === button.dataset.district);
     if (district) ouvrirFicheDistrict(district);
@@ -156,8 +162,10 @@ function rowDistrict(district, index, withRegion = true) {
 }
 
 export function renderRegions(modele) {
-  const { regions, formulaires, districts, seuils } = modele;
-  const allFormNames = formulaires.map((formulaire) => formulaire.nom);
+  const { formulaires, districts, seuils } = modele;
+  const regions = modele.toutesRegions;
+  const toutesFormulaires = modele.tousFormulaires;
+  const allFormNames = toutesFormulaires.map((formulaire) => formulaire.nom);
   const matrix = regions.map((region) => {
     const cells = allFormNames.map((name) => {
       const values = region.districts.flatMap((district) => district.formulaires.filter((form) => form.nom === name).map((form) => form.valeur));
@@ -188,7 +196,8 @@ export function renderRegions(modele) {
 }
 
 export function apresRenduRegions(modele) {
-  const { regions, formulaires, districts, seuils } = modele;
+  const { formulaires, districts, seuils } = modele;
+  const regions = modele.toutesRegions;
   grapheBarres("ch-regions", regions.map((region) => libelleRegion(region.nom)), regions.map((region) => region.tauxMoyen), { statut: true, seuils, onSelect: (label) => { const region = regions.find((item) => libelleRegion(item.nom) === label); if (region) choisirFiltre("region", region.nom); } });
   const sortedForms = [...formulaires].sort((a, b) => (a.tauxMoyen ?? 0) - (b.tauxMoyen ?? 0));
   grapheBarres("ch-formulaires", sortedForms.map((form) => form.nom), sortedForms.map((form) => form.tauxMoyen), { horizontal: true, statut: true, seuils, onSelect: (label) => choisirFiltre("formulaire", label) });
@@ -221,10 +230,10 @@ export function renderEvolution(modele) {
     return `<tr><td>${formaterDate(week)}</td><td class="cell-statut">${pct(evolution.moyenne_generale[index])}</td><td>${pct(evolution.taux_remplissage[index])}</td><td>${delta(change)}</td></tr>`;
   }).join("");
   return `<div class="page-stack">
-    ${enteteSection("Évolution hebdomadaire", "Suivez les résultats d’un lundi à l’autre, en conservant les périodes de rapport distinctes.", `${visibleWeeks.length} extraction${visibleWeeks.length > 1 ? "s" : ""} dans l’historique`)}
-    <section class="card"><div class="card-head"><div><h2>Tendance nationale</h2><p class="card-subtitle">Moyenne pour le territoire, la période et le formulaire sélectionnés.</p></div></div><div class="chartbox xl"><canvas id="ch-evo-detail"></canvas></div></section>
-    <section class="card"><div class="card-head"><div><h2>Évolution par région</h2><p class="card-subtitle">Cliquez sur une région dans la légende pour l’isoler.</p></div></div><div class="chartbox xl"><canvas id="ch-evo-regions"></canvas></div></section>
-    <section class="card"><div class="card-head"><div><h2>Historique des extractions</h2><p class="card-subtitle">Une extraction hebdomadaire correspond à un lundi.</p></div></div><div class="table-scroll"><table><thead><tr><th>Semaine (lundi)</th><th>Taux moyen</th><th>Cases renseignées</th><th>Écart</th></tr></thead><tbody>${tableRows}</tbody></table></div>${visibleWeeks.length <= 1 ? `<p class="note">Une seule semaine est disponible pour le moment. La comparaison s’enrichira après les prochaines extractions.</p>` : ""}</section>
+    ${enteteSection("Évolution par date d’extraction", "Suivez le taux à chaque extraction hebdomadaire, en gardant la période DHIS2 sélectionnée identique.", `${visibleWeeks.length} extraction${visibleWeeks.length > 1 ? "s" : ""} dans l’historique`)}
+    <section class="card"><div class="card-head"><div><h2>Tendance du périmètre sélectionné</h2><p class="card-subtitle">Une valeur par date d’extraction pour la région, la période et le formulaire choisis.</p></div></div><div class="chartbox xl"><canvas id="ch-evo-detail"></canvas></div></section>
+    <section class="card"><div class="card-head"><div><h2>Évolution des 14 régions</h2><p class="card-subtitle">Toutes les régions restent visibles, même lorsqu’une région est sélectionnée dans les filtres.</p></div></div><div class="chartbox xl"><canvas id="ch-evo-regions"></canvas></div></section>
+    <section class="card"><div class="card-head"><div><h2>Historique des extractions</h2><p class="card-subtitle">Une extraction hebdomadaire correspond à un lundi.</p></div></div><div class="table-scroll"><table><thead><tr><th>Date d’extraction (lundi)</th><th>Taux moyen</th><th>Cases renseignées</th><th>Écart</th></tr></thead><tbody>${tableRows}</tbody></table></div>${visibleWeeks.length <= 1 ? `<p class="note">Une seule semaine est disponible pour le moment. La comparaison s’enrichira après les prochaines extractions.</p>` : ""}</section>
   </div>`;
 }
 export function apresRenduEvolution(modele) {

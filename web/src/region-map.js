@@ -1,5 +1,8 @@
 let carteRegions = null;
 let couchesParRegion = new Map();
+let coucheEtiquettes = null;
+let regionSelectionnee = null;
+let gererEtiquettes = null;
 
 function couleur(statut) {
   const variable = { critique: "--critique", surveiller: "--surveiller", conforme: "--conforme", inconnu: "--inconnu" }[statut] || "--inconnu";
@@ -27,6 +30,9 @@ export function detruireCarteRegions() {
   carteRegions?.remove();
   carteRegions = null;
   couchesParRegion = new Map();
+  coucheEtiquettes = null;
+  regionSelectionnee = null;
+  gererEtiquettes = null;
 }
 
 export function initCarteRegions(elementId, theme) {
@@ -45,20 +51,24 @@ export function initCarteRegions(elementId, theme) {
   return carteRegions;
 }
 
-export function afficherRegions(regions, seuils) {
+export function afficherRegions(regions, seuils, selectionRegion = null) {
   if (!carteRegions) return;
   couchesParRegion = new Map();
+  regionSelectionnee = selectionRegion;
   const avecContours = regions.filter((region) => region.feature);
   if (!avecContours.length) return;
   const regionParFeature = new Map(avecContours.map((region) => [region.feature, region]));
+  const entreesEtiquettes = [];
+  coucheEtiquettes = L.layerGroup().addTo(carteRegions);
   const couche = L.geoJSON(avecContours.map((region) => region.feature), {
     style: (feature) => {
       const region = regionParFeature.get(feature);
+      const active = region?.nom === regionSelectionnee;
       return {
-        color: "#fff",
-        weight: 2,
+        color: active ? "#163b31" : "#fff",
+        weight: active ? 4 : 2,
         fillColor: couleur(statut(region?.tauxMoyen, seuils)),
-        fillOpacity: .8,
+        fillOpacity: active ? .98 : .8,
       };
     },
     onEachFeature: (feature, layer) => {
@@ -70,34 +80,72 @@ export function afficherRegions(regions, seuils) {
         sticky: true,
         direction: "top",
       });
-      if (region.tauxMoyen !== null && region.tauxMoyen !== undefined) {
-        const bounds = layer.getBounds();
-        const [longitude, latitude] = feature.properties.centre || [bounds.getCenter().lng, bounds.getCenter().lat];
-        L.marker([latitude, longitude], {
-          interactive: false,
-          keyboard: false,
-          icon: L.divIcon({
-            className: "region-rate-label",
-              html: `<span style="background:${couleur(statut(region.tauxMoyen, seuils))}">${pourcentage(region.tauxMoyen)}</span>`,
-            iconSize: null,
-          }),
-        }).addTo(carteRegions);
-      }
+      const bounds = layer.getBounds();
+      const [longitude, latitude] = feature.properties.centre || [bounds.getCenter().lng, bounds.getCenter().lat];
+      const marqueur = L.marker([latitude, longitude], {
+        interactive: false,
+        keyboard: false,
+        icon: L.divIcon({
+          className: "region-rate-label",
+          html: `<span data-region="${echapper(region.nom)}" style="background:${couleur(statut(region.tauxMoyen, seuils))}"><strong>${echapper(nom)}</strong><small>${pourcentage(region.tauxMoyen)}</small></span>`,
+          iconSize: null,
+        }),
+      }).addTo(coucheEtiquettes);
+      entreesEtiquettes.push({
+        marqueur,
+        nom: region.nom,
+        centre: [latitude, longitude],
+        largeur: Math.min(132, Math.max(54, nom.length * 6 + 16)),
+        surface: (bounds.getNorth() - bounds.getSouth()) * (bounds.getEast() - bounds.getWest()),
+      });
     },
   }).addTo(carteRegions);
+  gererEtiquettes = () => {
+    if (!carteRegions) return;
+    const taille = carteRegions.getSize();
+    const places = [];
+    const priorite = [...entreesEtiquettes].sort((a, b) => (
+      Number(b.nom === regionSelectionnee) - Number(a.nom === regionSelectionnee) || b.surface - a.surface
+    ));
+    for (const entree of priorite) {
+      const point = carteRegions.latLngToContainerPoint(entree.centre);
+      const boite = { x: point.x - entree.largeur / 2, y: point.y - 17, largeur: entree.largeur, hauteur: 34 };
+      const active = entree.nom === regionSelectionnee;
+      const dansCarte = point.x >= 0 && point.x <= taille.x && point.y >= 0 && point.y <= taille.y;
+      const libre = active || (dansCarte && !places.some((place) => (
+        Math.abs(place.x - boite.x) < (place.largeur + boite.largeur) / 2 + 3
+        && Math.abs(place.y - boite.y) < (place.hauteur + boite.hauteur) / 2 + 3
+      )));
+      const element = entree.marqueur.getElement();
+      if (element) {
+        element.style.visibility = libre ? "visible" : "hidden";
+        element.classList.toggle("region-label-selected", active);
+      }
+      if (libre) places.push(boite);
+    }
+  };
+  carteRegions.on("zoomend moveend", gererEtiquettes);
   try {
-    carteRegions.fitBounds(couche.getBounds(), { padding: [20, 20], maxZoom: 8 });
+    const bounds = regionSelectionnee ? couchesParRegion.get(regionSelectionnee)?.getBounds() : null;
+    carteRegions.fitBounds(bounds || couche.getBounds(), { padding: [20, 20], maxZoom: regionSelectionnee ? 9 : 8 });
   } catch {
     return;
   }
-  requestAnimationFrame(() => carteRegions?.invalidateSize());
+  requestAnimationFrame(() => {
+    carteRegions?.invalidateSize();
+    gererEtiquettes?.();
+  });
 }
 
 export function mettreEnEvidenceRegion(nom) {
   if (!carteRegions) return false;
+  regionSelectionnee = nom;
   for (const [region, layer] of couchesParRegion) {
     layer.setStyle({ color: region === nom ? "#163b31" : "#fff", weight: region === nom ? 4 : 2, fillOpacity: region === nom ? .98 : .8 });
   }
-  couchesParRegion.get(nom)?.bringToFront();
-  return couchesParRegion.has(nom);
+  const layer = couchesParRegion.get(nom);
+  layer?.bringToFront();
+  if (layer) carteRegions.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 9 });
+  gererEtiquettes?.();
+  return Boolean(layer);
 }

@@ -145,13 +145,12 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
       if (onClicDistrict) layer.on("click", () => onClicDistrict(district));
     },
   }).addTo(carte);
-
   if (etiquettes) {
     coucheEtiquettes = L.layerGroup().addTo(carte);
     const entrees = [];
     coucheDistricts.eachLayer((layer) => {
       const district = byFeature.get(layer.feature);
-      if (!district || district.tauxMoyen === null || district.tauxMoyen === undefined) return;
+      if (!district || (!nomsEtiquettes && (district.tauxMoyen === null || district.tauxMoyen === undefined))) return;
       let limites;
       try { limites = layer.getBounds(); } catch { return; }
       const statutEtiquette = seuils ? statutPourTaux(district.tauxMoyen, seuils) : district.statut;
@@ -163,13 +162,13 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         icon: L.divIcon({
           className: `carte-etiquette${nomsEtiquettes ? " carte-etiquette-nom" : ""}`,
           html: nomsEtiquettes
-            ? `<span style="background:${couleurEtiquette}"><strong>${escapeHtml(district.nom)}</strong><small>${tauxEtiquette}%</small></span>`
-            : `<span style="background:${couleurEtiquette}">${tauxEtiquette}%</span>`,
+            ? `<span data-region="${escapeHtml(district.region)}" style="background:${couleurEtiquette}"><strong>${escapeHtml(district.nom)}</strong><small>${tauxEtiquette}%</small></span>`
+            : `<span data-region="${escapeHtml(district.region)}" style="background:${couleurEtiquette}">${tauxEtiquette}%</span>`,
           iconSize: null,
         }),
       });
       const surface = (limites.getNorth() - limites.getSouth()) * (limites.getEast() - limites.getWest());
-      entrees.push({ marqueur, limites, surface, region: district.region, key: `${district.region}||${district.nom}` });
+      entrees.push({ marqueur, limites, surface, region: district.region, nom: district.nom, key: `${district.region}||${district.nom}` });
     });
     entrees.sort((a, b) => b.surface - a.surface);
     // Placement glouton : les grands districts d'abord ; une etiquette n'est
@@ -189,9 +188,10 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         }
         const nord = carte.latLngToContainerPoint(entree.limites.getNorthWest());
         const sud = carte.latLngToContainerPoint(entree.limites.getSouthEast());
-        const largeurEtiquette = nomsEtiquettes ? 138 : largeur;
+        const largeurEtiquette = nomsEtiquettes ? Math.min(138, Math.max(70, entree.nom.length * 6 + 14)) : largeur;
         const hauteurEtiquette = nomsEtiquettes ? 36 : hauteur;
-        const tient = (sud.x - nord.x) >= largeurEtiquette * 0.9 && (sud.y - nord.y) >= hauteurEtiquette * 0.9;
+        const tient = (sud.x - nord.x) >= largeurEtiquette * (nomsEtiquettes ? 0.7 : 0.9)
+          && (sud.y - nord.y) >= hauteurEtiquette * (nomsEtiquettes ? 0.7 : 0.9);
         const centre = carte.latLngToContainerPoint(entree.limites.getCenter());
         const boite = { x: centre.x - largeurEtiquette / 2, y: centre.y - hauteurEtiquette / 2 };
         const active = entree.key === etiquetteDistrictActive;

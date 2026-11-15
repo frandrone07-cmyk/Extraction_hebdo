@@ -67,7 +67,9 @@ test("colore les taux des listes selon le statut et les affiche à une décimale
   await expect(rates).not.toHaveCount(0);
   await expect(page.locator(".top-performers .priority-item")).toHaveCount(10);
   await expect(page.locator("#carte-regions")).toBeVisible();
-  const regionRates = await page.locator("#carte-regions .region-rate-label span").allTextContents();
+  const regionLabels = await page.locator("#carte-regions .region-rate-label strong").allTextContents();
+  const regionRates = await page.locator("#carte-regions .region-rate-label small").allTextContents();
+  expect(regionLabels).toHaveLength(14);
   expect(regionRates).toHaveLength(14);
   expect(regionRates.every((rate) => /^\d+,\d%$/.test(rate.trim()))).toBe(true);
   const invalidRates = await rates.evaluateAll((items) => items.flatMap((item) => {
@@ -130,11 +132,47 @@ test("identifie une région par point et utilise une couleur distincte par régi
   ))).toEqual([point.region]);
 });
 
+test("garde les 14 régions dans l’évolution et zoome les cartes sur la région choisie", async ({ page }) => {
+  const regionSelect = page.locator("#sel-region");
+  const region = await regionSelect.locator("option").nth(1).getAttribute("value");
+  await page.evaluate(() => {
+    window.__mapFitBoundsCalls = [];
+    const fitBounds = L.Map.prototype.fitBounds;
+    L.Map.prototype.fitBounds = function (bounds, options) {
+      window.__mapFitBoundsCalls.push({ map: this.getContainer().id, maxZoom: options?.maxZoom });
+      return fitBounds.call(this, bounds, options);
+    };
+  });
+
+  await regionSelect.selectOption(region);
+  await expect(page.locator("#carte-regions .region-rate-label strong")).toHaveCount(14);
+  const districtLabels = await page.locator("#carte .carte-etiquette-nom span").evaluateAll((labels, selectedRegion) => (
+    labels.filter((label) => label.dataset.region === selectedRegion).length
+  ), region);
+  expect(districtLabels).toBeGreaterThan(0);
+  const fitBoundsCalls = await page.evaluate(() => window.__mapFitBoundsCalls);
+  expect(fitBoundsCalls).toContainEqual({ map: "carte", maxZoom: 10 });
+  expect(fitBoundsCalls).toContainEqual({ map: "carte-regions", maxZoom: 9 });
+
+  await page.getByRole("tab", { name: /Évolution/ }).click();
+  const chart = await page.locator("#ch-evo-regions").evaluate((canvas) => {
+    const instance = Chart.getChart(canvas);
+    return { labels: instance.data.labels, regions: instance.data.datasets.map((dataset) => dataset.label) };
+  });
+  expect(chart.regions).toHaveLength(14);
+  expect(chart.labels.length).toBeGreaterThan(1);
+  await expect(page.getByRole("heading", { name: "Évolution par date d’extraction" })).toBeVisible();
+});
+
 test("permet le thème et le mode TV au clavier", async ({ page }) => {
+  const extraction = (await page.locator("#sous-titre").textContent()).trim();
+  const period = (await page.locator("#sel-periode option:checked").textContent()).trim();
   await page.locator("#btn-theme").click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.locator("#btn-tv").click();
   await expect(page.locator("body")).toHaveClass(/tv/);
+  await expect(page.locator("#tv-extraction")).toContainText(extraction);
+  await expect(page.locator("#tv-extraction")).toContainText(period);
   await page.keyboard.press("Escape");
   await expect(page.locator("body")).not.toHaveClass(/tv/);
 });

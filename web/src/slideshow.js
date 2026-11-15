@@ -11,7 +11,7 @@ const DEFINITIONS = [
   { id: "heat", title: "Carte thermique", description: "Lecture croisée des régions et des formulaires." },
   { id: "top", title: "Top et points de vigilance", description: "Les dix niveaux les plus élevés et les plus faibles." },
   { id: "tabreg", title: "Synthèse région et période", description: "Vue consolidée des territoires et périodes DHIS2." },
-  { id: "evo", title: "Évolution hebdomadaire", description: "Tendance nationale et régionale entre les lundis." },
+  { id: "evo", title: "Évolution par date d’extraction", description: "Tendance nationale et régionale entre les extractions." },
 ];
 const REDUIT = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -39,8 +39,9 @@ const pct = (value) => value === null || value === undefined ? "—" : `${Number
 const average = (values) => { const items = values.filter((value) => value !== null && value !== undefined); return items.length ? Math.round(items.reduce((a, b) => a + b, 0) / items.length * 10) / 10 : null; };
 
 function header(index) {
+  const data = activeModel();
   const slide = selectedSlides[index];
-  return `<header class="tv-bar" id="tvbar"><div class="tv-brand"><span class="tv-flag" aria-hidden="true">S</span><span><strong>Complétude DHIS2</strong><small>Ministère de la Santé · Sénégal</small></span></div><div class="tv-heading"><strong id="tv-title">${escapeHtml(slide.title)}</strong><span id="tv-counter">${index + 1} / ${selectedSlides.length}</span></div><div class="tv-dots" id="tv-dots">${selectedSlides.map((item, i) => `<button type="button" class="tv-dot ${i === index ? "on" : ""}" data-slide-index="${i}" aria-label="Afficher : ${escapeHtml(item.title)}" aria-current="${i === index ? "step" : "false"}"></button>`).join("")}</div><div class="tv-controls"><button type="button" id="tv-prev" aria-label="Diapositive précédente" title="← Précédent">←</button><button type="button" id="tv-pause" aria-label="Mettre en pause" title="Espace pour pause">Ⅱ</button><button type="button" id="tv-next" aria-label="Diapositive suivante" title="→ Suivant">→</button><select id="tv-duration" aria-label="Durée de chaque diapositive"><option value="8000">8 s</option><option value="12000" selected>12 s</option><option value="20000">20 s</option><option value="30000">30 s</option></select><button type="button" id="tv-fullscreen" aria-label="Activer le plein écran" title="F pour plein écran">⛶</button><button type="button" id="tv-close" aria-label="Quitter le diaporama" title="Échap pour quitter">×</button></div><div class="tv-progress" aria-hidden="true"><i id="tv-progress-fill"></i></div></header>`;
+  return `<header class="tv-bar" id="tvbar"><div class="tv-brand"><span class="tv-flag" aria-hidden="true">S</span><span><strong>Complétude DHIS2</strong><small>Ministère de la Santé · Sénégal</small></span></div><div class="tv-heading"><strong id="tv-title">${escapeHtml(slide.title)}</strong><span id="tv-counter">${index + 1} / ${selectedSlides.length}</span><small class="tv-extraction" id="tv-extraction">Situation de l’extraction du ${escapeHtml(data.semaineLibelle)} · Période DHIS2 : ${escapeHtml(data.selection.periode)}</small></div><div class="tv-dots" id="tv-dots">${selectedSlides.map((item, i) => `<button type="button" class="tv-dot ${i === index ? "on" : ""}" data-slide-index="${i}" aria-label="Afficher : ${escapeHtml(item.title)}" aria-current="${i === index ? "step" : "false"}"></button>`).join("")}</div><div class="tv-controls"><button type="button" id="tv-prev" aria-label="Diapositive précédente" title="← Précédent">←</button><button type="button" id="tv-pause" aria-label="Mettre en pause" title="Espace pour pause">Ⅱ</button><button type="button" id="tv-next" aria-label="Diapositive suivante" title="→ Suivant">→</button><select id="tv-duration" aria-label="Durée de chaque diapositive"><option value="8000">8 s</option><option value="12000" selected>12 s</option><option value="20000">20 s</option><option value="30000">30 s</option></select><button type="button" id="tv-fullscreen" aria-label="Activer le plein écran" title="F pour plein écran">⛶</button><button type="button" id="tv-close" aria-label="Quitter le diaporama" title="Échap pour quitter">×</button></div><div class="tv-progress" aria-hidden="true"><i id="tv-progress-fill"></i></div></header>`;
 }
 
 function activeModel() { return model; }
@@ -96,7 +97,7 @@ function kpisMarkup() {
   const data = activeModel();
   const rate = average(data.districts.map((district) => district.tauxMoyen));
   const critical = data.districts.filter((district) => district.statut === "critique").length;
-  return `<div class="tv-kpis"><article><span>Taux moyen</span><strong>${pct(rate)}</strong></article><article><span>Régions</span><strong>${data.regions.length}</strong></article><article><span>Districts analysés</span><strong>${data.districts.length}</strong></article><article><span>Districts critiques</span><strong class="critical">${critical}</strong></article></div>`;
+  return `<div class="tv-kpis"><article><span>Taux moyen</span><strong>${pct(rate)}</strong></article><article><span>Régions</span><strong>${data.toutesRegions.length}</strong></article><article><span>Districts analysés</span><strong>${data.districts.length}</strong></article><article><span>Districts critiques</span><strong class="critical">${critical}</strong></article></div>`;
 }
 function slideMarkup(id) {
   const data = activeModel();
@@ -111,12 +112,12 @@ function slideMarkup(id) {
         <article class="card"><h2 id="tv-tour-region-title">Districts de la région visitée</h2><div class="tv-tour-districts" id="tv-tour-districts"><p class="empty-state">La visite régionale commence après la vue complète.</p></div></article>
         <article class="card"><h2>Priorités de suivi</h2><p class="tv-priority-caption">Dist. classés par taux moyen croissant.</p><div class="tv-priorities">${[...data.districts].filter((district) => district.statut === "critique").sort((a, b) => (a.tauxMoyen ?? 100) - (b.tauxMoyen ?? 100)).slice(0, 8).map((district, index) => `<button type="button" class="tv-priority" data-district="${escapeHtml(district.region)}||${escapeHtml(district.nom)}"><i>${index + 1}</i><span><strong>${escapeHtml(district.nom)}</strong><small>${escapeHtml(labelRegion(district.region))}</small></span><b class="${district.statut}">${pct(district.tauxMoyen)}</b></button>`).join("") || `<p class="empty-state">Aucun district critique pour cette sélection.</p>`}</div></article>
       </div>`,
-    reg: `<div class="tv-slide-head"><span class="eyebrow">COMPARAISON TERRITORIALE</span><h1>Taux moyen par région</h1><p>La barre indique le taux moyen des districts affichés.</p></div><article class="card tv-chart-card"><div class="chartbox tv-chart-large"><canvas id="tv-chart-region"></canvas></div></article>`,
+    reg: `<div class="tv-slide-head"><span class="eyebrow">COMPARAISON TERRITORIALE</span><h1>Taux moyen par région</h1><p>Les 14 régions restent visibles, quelle que soit la sélection.</p></div><article class="card tv-chart-card"><div class="chartbox tv-chart-large"><canvas id="tv-chart-region"></canvas></div></article>`,
     form: `<div class="tv-slide-head"><span class="eyebrow">LECTURE PAR INDICATEUR</span><h1>Résultats par formulaire</h1><p>${data.formulaires.length} formulaire(s) dans le périmètre sélectionné.</p></div><article class="card tv-chart-card"><div class="chartbox tv-chart-large"><canvas id="tv-chart-form"></canvas></div></article>`,
-    heat: `<div class="tv-slide-head"><span class="eyebrow">CROISEMENT TERRITORIAL</span><h1>Régions × formulaires</h1><p>Les écarts de couleur suivent les seuils configurés dans DHIS2.</p></div><article class="card"><div class="table-scroll"><table class="heatmap"><thead><tr><th>Région</th>${data.formulaires.map((form) => `<th title="${escapeHtml(form.nom)}">${escapeHtml(form.nom)}</th>`).join("")}</tr></thead><tbody>${data.regions.map((region) => `<tr><th scope="row">${escapeHtml(labelRegion(region.nom))}</th>${data.formulaires.map((form) => { const value = average(region.districts.flatMap((district) => district.formulaires.filter((item) => item.nom === form.nom).map((item) => item.valeur))); const color = value === null ? "inconnu" : value < data.seuils.critique ? "critique" : value < data.seuils.conforme ? "surveiller" : "conforme"; return `<td class="heatmap-cell" style="background:${couleurStatut(color)}">${value ?? "—"}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div></article>`,
+    heat: `<div class="tv-slide-head"><span class="eyebrow">CROISEMENT TERRITORIAL</span><h1>Régions × formulaires</h1><p>Les écarts de couleur suivent les seuils configurés dans DHIS2.</p></div><article class="card"><div class="table-scroll"><table class="heatmap"><thead><tr><th>Région</th>${data.tousFormulaires.map((form) => `<th title="${escapeHtml(form.nom)}">${escapeHtml(form.nom)}</th>`).join("")}</tr></thead><tbody>${data.toutesRegions.map((region) => `<tr><th scope="row">${escapeHtml(labelRegion(region.nom))}</th>${data.tousFormulaires.map((form) => { const value = average(region.districts.flatMap((district) => district.formulaires.filter((item) => item.nom === form.nom).map((item) => item.valeur))); const color = value === null ? "inconnu" : value < data.seuils.critique ? "critique" : value < data.seuils.conforme ? "surveiller" : "conforme"; return `<td class="heatmap-cell" style="background:${couleurStatut(color)}">${value ?? "—"}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div></article>`,
     top: `<div class="tv-slide-head"><span class="eyebrow">CLASSEMENTS</span><h1>Résultats marquants</h1><p>Les taux les plus élevés et les districts à accompagner.</p></div><div class="tv-layout tv-half"><article class="card"><div class="card-head"><h2>10 meilleurs résultats</h2><span class="status-chip conforme">Top 10</span></div>${ranking(data, false)}</article><article class="card"><div class="card-head"><h2>10 taux les plus faibles</h2><span class="status-chip critique">À suivre</span></div>${ranking(data, true)}</article></div>`,
-    tabreg: `<div class="tv-slide-head"><span class="eyebrow">SYNTHÈSE CROISÉE</span><h1>Région et période</h1><p>Lecture de l’extraction ${escapeHtml(data.semaineCle)} sur ${escapeHtml(data.selection.periode)}.</p></div><div class="tv-layout tv-half"><article class="card"><h2>Synthèse par région</h2><div class="table-scroll"><table><thead><tr><th>Région</th><th>Taux moyen</th><th>Critiques</th></tr></thead><tbody>${data.regions.map((region) => `<tr><td>${escapeHtml(labelRegion(region.nom))}</td><td>${pct(region.tauxMoyen)}</td><td class="cell-critique">${region.nbCritique}</td></tr>`).join("")}</tbody></table></div></article><article class="card"><h2>Taux moyen par période</h2><div class="chartbox tv-chart"><canvas id="tv-chart-period"></canvas></div></article></div>`,
-    evo: `<div class="tv-slide-head"><span class="eyebrow">SUIVI DANS LE TEMPS</span><h1>Évolution hebdomadaire par région</h1><p>Comparaison du même indicateur au fil des lundis.</p></div><article class="card tv-chart-card"><div class="chartbox tv-chart-large"><canvas id="tv-chart-evolution"></canvas></div></article>`,
+    tabreg: `<div class="tv-slide-head"><span class="eyebrow">SYNTHÈSE CROISÉE</span><h1>Région et période</h1><p>Lecture de l’extraction ${escapeHtml(data.semaineCle)} sur ${escapeHtml(data.selection.periode)}.</p></div><div class="tv-layout tv-half"><article class="card"><h2>Synthèse par région</h2><div class="table-scroll"><table><thead><tr><th>Région</th><th>Taux moyen</th><th>Critiques</th></tr></thead><tbody>${data.toutesRegions.map((region) => `<tr><td>${escapeHtml(labelRegion(region.nom))}</td><td>${pct(region.tauxMoyen)}</td><td class="cell-critique">${region.nbCritique}</td></tr>`).join("")}</tbody></table></div></article><article class="card"><h2>Taux moyen par période</h2><div class="chartbox tv-chart"><canvas id="tv-chart-period"></canvas></div></article></div>`,
+    evo: `<div class="tv-slide-head"><span class="eyebrow">SUIVI DANS LE TEMPS</span><h1>Évolution par date d’extraction</h1><p>Comparaison des 14 régions au fil des extractions hebdomadaires.</p></div><article class="card tv-chart-card"><div class="chartbox tv-chart-large"><canvas id="tv-chart-evolution"></canvas></div></article>`,
   };
   return `<section class="tv-slide" aria-label="${escapeHtml(DEFINITIONS.find((slide) => slide.id === id)?.title || "Diapositive")}">${titles[id]}</section>`;
 }
@@ -142,7 +143,7 @@ function drawSlide(id) {
     afficherDistricts(data.districts, { onClicDistrict: ouvrirFicheDistrict, etiquettes: true, nomsEtiquettes: true, seuils: data.seuils });
     detruireCarteRegions();
     initCarteRegions("tv-map-regions", document.documentElement.dataset.theme);
-    afficherRegions(data.regions, data.seuils);
+    afficherRegions(data.toutesRegions, data.seuils, data.selection.regionCode);
     const districts = districtsAvecContours(data);
     if (districts.length) {
       mapTourIndex = 0;
@@ -163,7 +164,7 @@ function drawSlide(id) {
       }, MAP_OVERVIEW_DURATION);
     }
   } else if (id === "reg") {
-    grapheBarres("tv-chart-region", data.regions.map((region) => labelRegion(region.nom)), data.regions.map((region) => region.tauxMoyen), { statut: true, seuils: data.seuils, etiquettes: true });
+    grapheBarres("tv-chart-region", data.toutesRegions.map((region) => labelRegion(region.nom)), data.toutesRegions.map((region) => region.tauxMoyen), { statut: true, seuils: data.seuils, etiquettes: true });
   } else if (id === "form") {
     const forms = [...data.formulaires].sort((a, b) => (a.tauxMoyen ?? 0) - (b.tauxMoyen ?? 0));
     grapheBarres("tv-chart-form", forms.map((form) => form.nom), forms.map((form) => form.tauxMoyen), { horizontal: true, statut: true, seuils: data.seuils, etiquettes: true });
@@ -176,7 +177,7 @@ function drawSlide(id) {
     const ordered = [...periods.entries()].sort(([a], [b]) => a.localeCompare(b));
     grapheBarres("tv-chart-period", ordered.map(([, item]) => item.label), ordered.map(([, item]) => average(item.values)), { statut: true, seuils: data.seuils, etiquettes: true });
   } else if (id === "evo") {
-    grapheLigne("tv-chart-evolution", weeks, data.evolution.par_region.map((series) => ({ label: labelRegion(series.region), data: series.valeurs })), { etiquettes: true });
+    grapheLigne("tv-chart-evolution", weeks, data.evolution.par_region.map((series) => ({ label: labelRegion(series.region), data: series.valeurs })), { pointOnlyTooltip: true });
   }
   document.querySelectorAll("[data-district]").forEach((button) => button.addEventListener("click", () => {
     const district = data.districts.find((item) => `${item.region}||${item.nom}` === button.dataset.district);
@@ -213,6 +214,7 @@ function show(index) {
   stage.innerHTML = slideMarkup(slide.id);
   document.getElementById("tv-title").textContent = slide.title;
   document.getElementById("tv-counter").textContent = `${current + 1} / ${selectedSlides.length}`;
+  document.getElementById("tv-extraction").textContent = `Situation de l’extraction du ${model.semaineLibelle} · Période DHIS2 : ${model.selection.periode}`;
   document.querySelectorAll(".tv-dot").forEach((dot, i) => {
     dot.classList.toggle("on", i === current);
     dot.setAttribute("aria-current", i === current ? "step" : "false");
