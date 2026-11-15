@@ -5,7 +5,6 @@ import argparse
 import json
 import logging
 import os
-import shutil
 from datetime import datetime
 
 from .config import charger_config
@@ -13,7 +12,7 @@ from .dashboarddata import construire_evolution, construire_latest, construire_s
 from .dhis2 import Dhis2Client
 from .excel import ecrire_excel
 from .extract import detecter_niveau_organisation_unit, extraire
-from .geo import charger_contours
+from .geo import charger_contours, fusionner_contours_par_region
 from .history import (
     importer_anciennes,
     iso_monday,
@@ -75,8 +74,10 @@ def _commande_extract(args: argparse.Namespace) -> int:
     ecrire_excel(resultat.par_region, chemin_sortie, config.seuils.critique, config.seuils.conforme)
     logger.info("Excel écrit : %s", chemin_sortie)
 
-    chemin_dernier = os.path.join(config.chemin_sortie_dir, "dernier_export.xlsx")
-    shutil.copy(chemin_sortie, chemin_dernier)
+    chemin_export_json = os.path.join(os.path.dirname(config.chemin_latest_json) or ".", "export.json")
+    os.makedirs(os.path.dirname(chemin_export_json) or ".", exist_ok=True)
+    with open(chemin_export_json, "w", encoding="utf-8") as fh:
+        json.dump({"fichier": nom_fichier}, fh, ensure_ascii=False)
 
     if resultat.formulaires_non_resolus:
         logger.warning("Formulaires sans correspondance DHIS2 : %s", sorted(resultat.formulaires_non_resolus))
@@ -174,10 +175,16 @@ def _commande_build_geo(args: argparse.Namespace) -> int:
     with open(config.chemin_geo_final, "w", encoding="utf-8") as fh:
         json.dump({"type": "FeatureCollection", "features": features}, fh, ensure_ascii=False, separators=(",", ":"))
 
+    chemin_geo_regions = os.path.join(os.path.dirname(config.chemin_geo_final) or ".", "regions.geojson")
+    geojson_regions = fusionner_contours_par_region(features)
+    with open(chemin_geo_regions, "w", encoding="utf-8") as fh:
+        json.dump(geojson_regions, fh, ensure_ascii=False, separators=(",", ":"))
+
     logger.info(
         "%s écrit : %d/%d districts avec contour (%d sans contour)",
         config.chemin_geo_final, len(features), len(contours.districts), len(contours.districts_sans_contour),
     )
+    logger.info("%s écrit : %d régions", chemin_geo_regions, len(geojson_regions["features"]))
     return 0
 
 

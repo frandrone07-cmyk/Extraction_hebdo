@@ -12,7 +12,7 @@ Plateforme de suivi hebdomadaire des rapports DHIS2 par région, district, péri
 - Mode diaporama à huit scènes, raccourcis clavier, plein écran, Wake Lock, choix des scènes avec `?scenes=synth,carte,evo` et démarrage partageable avec `#tv=0`.
 - Guide Goorgui : synthèse déterministe en français, humeurs liées aux seuils et lecture vocale réglée sur le français.
 
-Les fichiers servis par GitHub Pages sont assemblés à partir de `web/` et `data/`. La géométrie des districts reste dans `data/geo/districts.geojson`; les historiques détaillés servant aux filtres sont produits dans `data/snapshots.json` sous forme compacte.
+Les fichiers servis par GitHub Pages sont assemblés à partir de `web/` et `data/`. Les géométries des districts et des régions sont versionnées dans `data/geo/`; les contours régionaux sont dissous depuis ceux des districts. Les historiques détaillés servant aux filtres sont produits dans `data/snapshots.json` sous forme compacte.
 
 ## Extraction et publication
 
@@ -32,7 +32,7 @@ $env:PYTHONPATH = "src"
 python -m completude.cli build-json
 ```
 
-Pour servir la version déployée localement, copier `web/` dans un dossier de prévisualisation, puis y ajouter `data/latest.json`, `data/evolution.json`, `data/snapshots.json` et `data/geo/districts.geojson`. Démarrer ensuite un serveur HTTP depuis ce dossier ; le dashboard utilise `fetch()` et ne se charge pas correctement via `file://`.
+Pour servir la version déployée localement, copier `web/` dans un dossier de prévisualisation, puis y ajouter `data/latest.json`, `data/evolution.json`, `data/snapshots.json`, `data/export.json` et les deux GeoJSON de `data/geo/`. Démarrer ensuite un serveur HTTP depuis ce dossier ; le dashboard utilise `fetch()` et ne se charge pas correctement via `file://`.
 
 Les tests Python sont lancés avec `python -m pytest -q`, et le contrôle de style avec `python -m ruff check src tests`.
 

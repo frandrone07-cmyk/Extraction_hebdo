@@ -1,8 +1,8 @@
-name: Construire les contours des districts
+name: Construire les contours des districts et des régions
 
-# Ponctuel, manuel : contrairement a l'extraction (chaque lundi), la geometrie
-# des districts change rarement. A relancer seulement si des districts
-# manquent de contour sur la carte, ou si --recharger est force.
+# Ponctuel, manuel : contrairement a l'extraction (chaque lundi), les geometries
+# des districts et des regions changent rarement. A relancer si des contours
+# manquent sur la carte, ou si --recharger est force.
 on:
   workflow_dispatch:
     inputs:
@@ -29,7 +29,7 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Construire data/geo/districts.geojson
+      - name: Construire les GeoJSON des districts et des régions
         env:
           PYTHONPATH: src
           DHIS2_USER: ${{ secrets.DHIS2_USER }}

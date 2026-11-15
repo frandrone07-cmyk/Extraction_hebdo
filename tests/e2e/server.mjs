@@ -10,7 +10,9 @@ const dataFiles = new Set([
   "/data/latest.json",
   "/data/evolution.json",
   "/data/snapshots.json",
+  "/data/export.json",
   "/data/geo/districts.geojson",
+  "/data/geo/regions.geojson",
 ]);
 const contentTypes = {
   ".css": "text/css; charset=utf-8",

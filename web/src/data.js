@@ -66,7 +66,7 @@ export function optionsPour(snapshot, semaineCle) {
   };
 }
 
-export function construireModele(snapshot, semaineCle, comparaisonCle, filters, evolution, geo) {
+export function construireModele(snapshot, semaineCle, comparaisonCle, filters, evolution, geo, geoRegions = null) {
   const semaineIndex = snapshot.semaines.indexOf(semaineCle);
   const comparaisonIndex = snapshot.semaines.indexOf(comparaisonCle);
   const regionsOptions = optionsPour(snapshot, semaineCle);
@@ -82,6 +82,10 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
   };
   const geoParCle = new Map((geo?.features || []).map((feature) => [
     `${feature.properties.region}||${feature.properties.district}`,
+    feature,
+  ]));
+  const geoRegionParNom = new Map((geoRegions?.features || []).map((feature) => [
+    feature.properties.region,
     feature,
   ]));
   const weekRows = semaineIndex < 0 ? [] : snapshot.valeursParSemaine[semaineIndex];
@@ -151,6 +155,7 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
       nbCritique: districts.filter((district) => district.statut === "critique").length,
       nbSurveiller: districts.filter((district) => district.statut === "surveiller").length,
       nbConforme: districts.filter((district) => district.statut === "conforme").length,
+      feature: geoRegionParNom.get(nom) || null,
     };
   });
   const formulaires = [...new Set(districtModels.flatMap((district) => district.formulaires.map((formulaire) => formulaire.nom)))].sort().map((nom) => ({
@@ -227,11 +232,17 @@ export async function chargerDonnees() {
     fetchJson("data/snapshots.json"),
   ]);
   let geo = null;
+  let geoRegions = null;
   try {
     geo = await fetchJson("data/geo/districts.geojson");
   } catch {
     geo = null;
   }
+  try {
+    geoRegions = await fetchJson("data/geo/regions.geojson");
+  } catch (error) {
+    console.warn("Contours régionaux non disponibles", error);
+  }
   const indexed = indexer({ ...snapshots, seuils: latest.seuils });
-  return { latest, evolution, snapshot: indexed, geo };
+  return { latest, evolution, snapshot: indexed, geo, geoRegions };
 }

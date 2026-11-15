@@ -128,7 +128,7 @@ def test_extraire_remplit_les_valeurs_et_signale_les_cases_manquantes(tmp_path):
     resultat = extraire(
         client=client,
         chemin_gabarit=str(chemin_gabarit),
-        date_reference=date(2026, 7, 15),
+        date_reference=date(2026, 8, 15),
     )
 
     df = resultat.par_region["Dakar"]
@@ -161,16 +161,16 @@ def test_extraire_garde_les_periodes_identiques_entre_les_regions(tmp_path):
 
     periodes_attendues = [f"{mois} 2026" for mois in (
         "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
-        "Août", "Septembre", "Octobre", "Novembre",
+        "Août", "Septembre", "Octobre",
     )]
     assert set(resultat.par_region) == {"Dakar", "Thies"}
     assert all(df["Période"].tolist() == periodes_attendues for df in resultat.par_region.values())
-    assert [diagnostic.cases_attendues for diagnostic in resultat.diagnostics] == [11, 11]
+    assert [diagnostic.cases_attendues for diagnostic in resultat.diagnostics] == [10, 10]
     assert len(client.appels_analytics) == 2
     assert client.appels_analytics[0]["dimension"] == client.appels_analytics[1]["dimension"]
 
 
-def test_extraire_de_janvier_a_octobre_puis_ajoute_novembre_le_15(tmp_path):
+def test_extraire_de_janvier_a_septembre_puis_ajoute_octobre_le_15_novembre(tmp_path):
     chemin_gabarit = tmp_path / "gabarit.xlsx"
     _ecrire_gabarit_periodes(chemin_gabarit, ["Janvier 2026", "Octobre 2026", "Novembre 2026"])
 
@@ -188,9 +188,9 @@ def test_extraire_de_janvier_a_octobre_puis_ajoute_novembre_le_15(tmp_path):
     periodes_le_14 = set(le_14.par_region["Dakar"]["Période"])
     periodes_le_15 = set(le_15.par_region["Dakar"]["Période"])
     assert periodes_le_14 == {f"{mois} 2026" for mois in (
-        "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre",
+        "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre",
     )}
-    assert periodes_le_15 == periodes_le_14 | {"Novembre 2026"}
+    assert periodes_le_15 == periodes_le_14 | {"Octobre 2026"}
 
 
 def test_extraire_colonne_sans_formulaire_correspondant_est_signalee(tmp_path):
@@ -205,7 +205,7 @@ def test_extraire_colonne_sans_formulaire_correspondant_est_signalee(tmp_path):
     resultat = extraire(
         client=FakeDhis2Client(),
         chemin_gabarit=str(chemin_gabarit),
-        date_reference=date(2026, 7, 15),
+        date_reference=date(2026, 8, 15),
     )
 
     assert "Tuberculose - Reporting rate" in resultat.formulaires_non_resolus

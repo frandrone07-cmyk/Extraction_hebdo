@@ -2,7 +2,7 @@ import json
 
 import pandas as pd
 
-from completude.geo import charger_contours
+from completude.geo import charger_contours, fusionner_contours_par_region
 
 
 class FakeClient:
@@ -92,3 +92,27 @@ def test_charger_contours_priorite_au_fichier_local(tmp_path):
 
     assert len(resultat.features) == 1
     assert resultat.features[0]["geometry"]["coordinates"] == [9, 9]
+
+
+def test_fusionner_contours_par_region_dissout_les_frontieres_des_districts():
+    geojson = fusionner_contours_par_region([
+        {
+            "type": "Feature",
+            "properties": {"region": "Dakar"},
+            "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+        },
+        {
+            "type": "Feature",
+            "properties": {"region": "Dakar"},
+            "geometry": {"type": "Polygon", "coordinates": [[[1, 0], [2, 0], [2, 1], [1, 1], [1, 0]]]},
+        },
+        {
+            "type": "Feature",
+            "properties": {"region": "Thiès"},
+            "geometry": {"type": "Polygon", "coordinates": [[[3, 0], [4, 0], [4, 1], [3, 1], [3, 0]]]},
+        },
+    ])
+
+    assert [feature["properties"]["region"] for feature in geojson["features"]] == ["Dakar", "Thiès"]
+    assert geojson["features"][0]["geometry"]["type"] == "Polygon"
+    assert len(geojson["features"][0]["geometry"]["coordinates"][0]) == 7

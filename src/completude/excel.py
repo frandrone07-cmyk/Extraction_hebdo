@@ -7,6 +7,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 COULEUR_ENTETE = "1F4E78"
+COULEUR_LIGNE_ALTERNE = "F2F7F4"
 COULEUR_CRITIQUE = "FF0000"
 COULEUR_SURVEILLER = "FFC000"
 COULEUR_CONFORME = "00B050"
@@ -38,7 +39,17 @@ def ecrire_excel(
     classeur = load_workbook(chemin_sortie)
     for feuille in classeur.worksheets:
         nb_lignes, nb_colonnes = feuille.max_row, feuille.max_column
-        feuille.row_dimensions[1].height = 28
+        feuille.sheet_view.showGridLines = False
+        feuille.sheet_view.zoomScale = 90
+        feuille.sheet_properties.tabColor = "16845B"
+        feuille.freeze_panes = "C2"
+        feuille.auto_filter.ref = feuille.dimensions
+        feuille.sheet_properties.pageSetUpPr.fitToPage = True
+        feuille.page_setup.orientation = "landscape"
+        feuille.page_setup.fitToWidth = 1
+        feuille.page_setup.fitToHeight = 0
+        feuille.print_title_rows = "1:1"
+        feuille.row_dimensions[1].height = 34
 
         for c in range(1, nb_colonnes + 1):
             cellule = feuille.cell(1, c)
@@ -53,6 +64,8 @@ def ecrire_excel(
                 cellule = feuille.cell(r, c)
                 cellule.font = _police(size=10)
                 cellule.border = _bordure()
+                if r % 2 == 0 and c < 3:
+                    cellule.fill = _remplissage(COULEUR_LIGNE_ALTERNE)
                 cellule.alignment = Alignment(
                     horizontal="left" if c == 1 else "center",
                     vertical="center",
@@ -70,20 +83,8 @@ def ecrire_excel(
                         cellule.fill = _remplissage(COULEUR_CONFORME)
                         cellule.font = _police(size=10, bold=True, color="FFFFFF")
 
-        # Fusionne verticalement les cellules de district répétées (colonne 1)
-        r = 2
-        while r <= nb_lignes:
-            valeur, fin = feuille.cell(r, 1).value, r
-            while fin + 1 <= nb_lignes and feuille.cell(fin + 1, 1).value == valeur:
-                fin += 1
-            if fin > r and valeur is not None:
-                for k in range(r + 1, fin + 1):
-                    feuille.cell(k, 1).value = None
-                feuille.merge_cells(start_row=r, start_column=1, end_row=fin, end_column=1)
-            r = fin + 1
-
         for c in range(1, nb_colonnes + 1):
             largeur_max = max(len(str(feuille.cell(r, c).value or "")) for r in range(1, nb_lignes + 1))
-            feuille.column_dimensions[get_column_letter(c)].width = min(max(largeur_max + 3, 12), 30)
+            feuille.column_dimensions[get_column_letter(c)].width = min(max(largeur_max + 4, 14), 34)
 
     classeur.save(chemin_sortie)

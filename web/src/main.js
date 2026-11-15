@@ -96,6 +96,30 @@ function afficherToast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("on"), 2300);
 }
+async function chargerLienExport() {
+  const lien = document.querySelector(".export-link");
+  lien.addEventListener("click", (event) => {
+    if (lien.getAttribute("aria-disabled") === "true") {
+      event.preventDefault();
+      afficherToast("Le fichier Excel n’est pas encore disponible.");
+    }
+  });
+  try {
+    const response = await fetch("data/export.json", { cache: "no-store" });
+    if (!response.ok) throw new Error(`data/export.json → HTTP ${response.status}`);
+    const { fichier } = await response.json();
+    if (typeof fichier !== "string" || !/^Situation_completude_par_region_\d{2}_\d{2}_\d{4}\.xlsx$/.test(fichier)) {
+      throw new Error("Nom de fichier Excel invalide dans data/export.json.");
+    }
+    lien.href = `https://raw.githubusercontent.com/frandrone07-cmyk/Extraction_hebdo/master/data/exports/${encodeURIComponent(fichier)}`;
+    lien.removeAttribute("aria-disabled");
+    lien.title = "Télécharger l’Excel daté de la dernière extraction";
+  } catch (error) {
+    console.error("Lien de téléchargement Excel indisponible", error);
+    lien.setAttribute("aria-disabled", "true");
+    lien.title = "Le fichier Excel n’est pas encore disponible";
+  }
+}
 function mettreAJourEntete() {
   const week = modeleCourant.semaineCle;
   document.getElementById("sous-titre").textContent = week ? formaterDate(week) : "Aucune donnée disponible";
@@ -127,7 +151,7 @@ function rafraichir(filters, { writeHash = true } = {}) {
     region: selected.region,
     periode: selected.periode,
     formulaire: selected.formulaire,
-  }, donnees.evolution, donnees.geo);
+  }, donnees.evolution, donnees.geo, donnees.geoRegions);
   stateCourant = { ...stateCourant, ...selected };
   mettreAJourEntete();
   if (sokhnaciInitialise) mettreAJourSokhnaci(modeleCourant);
@@ -220,7 +244,7 @@ async function actualiserPendantDiaporama() {
     region: selected.region,
     periode: selected.periode,
     formulaire: selected.formulaire,
-  }, donnees.evolution, donnees.geo);
+  }, donnees.evolution, donnees.geo, donnees.geoRegions);
   mettreAJourEntete();
   if (sokhnaciInitialise) mettreAJourSokhnaci(modeleCourant);
   ecrireEtatHash({ ...selected, tab: ongletCourant });
@@ -236,6 +260,7 @@ async function init() {
   initTabs();
   initActions();
   initTrigger();
+  chargerLienExport();
   try {
     donnees = await chargerDonnees();
   } catch (error) {

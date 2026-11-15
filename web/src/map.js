@@ -8,6 +8,7 @@ let couchesParDistrict = new Map();
 let regionEtiquettes = null;
 let limitesCarte = null;
 let districtActif = null;
+let etiquetteDistrictActive = null;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -42,6 +43,7 @@ export function detruireCarte() {
   regionEtiquettes = null;
   limitesCarte = null;
   districtActif = null;
+  etiquetteDistrictActive = null;
 }
 
 export function initCarte(elementId, theme) {
@@ -76,6 +78,7 @@ export function afficherVueComplete() {
   districtActif = null;
   regionEtiquettes = null;
   carte.fitBounds(limitesCarte, { padding: [28, 28], maxZoom: 8 });
+  etiquetteDistrictActive = null;
   gererZoomEtiquettes?.();
   return true;
 }
@@ -91,6 +94,7 @@ export function centrerDistrict(region, nom) {
     districtActif.closeTooltip();
   }
   districtActif = layer;
+  etiquetteDistrictActive = key;
   layer.setStyle({ color: "#fff", weight: 3, fillOpacity: 1, opacity: 1 });
   layer.bringToFront();
   regionEtiquettes = region;
@@ -136,7 +140,8 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         else limitesRegions.set(district.region, bounds);
       } catch { /* contour incomplet */ }
       const region = district.region.replace(/^DRS[_ ]/, "");
-      layer.bindTooltip(`<strong>${escapeHtml(district.nom)}</strong><br>${escapeHtml(region)}<br>Taux moyen : ${district.tauxMoyen ?? "—"}%`, { sticky: true, direction: "top" });
+      const taux = district.tauxMoyen === null || district.tauxMoyen === undefined ? "—" : `${afficherTaux(district.tauxMoyen)}%`;
+      layer.bindTooltip(`<strong>${escapeHtml(district.nom)}</strong><br>${escapeHtml(region)}<br>Taux moyen : ${taux}`, { sticky: true, direction: "top" });
       if (onClicDistrict) layer.on("click", () => onClicDistrict(district));
     },
   }).addTo(carte);
@@ -164,7 +169,7 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         }),
       });
       const surface = (limites.getNorth() - limites.getSouth()) * (limites.getEast() - limites.getWest());
-      entrees.push({ marqueur, limites, surface, region: district.region });
+      entrees.push({ marqueur, limites, surface, region: district.region, key: `${district.region}||${district.nom}` });
     });
     entrees.sort((a, b) => b.surface - a.surface);
     // Placement glouton : les grands districts d'abord ; une etiquette n'est
@@ -189,10 +194,13 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         const tient = (sud.x - nord.x) >= largeurEtiquette * 0.9 && (sud.y - nord.y) >= hauteurEtiquette * 0.9;
         const centre = carte.latLngToContainerPoint(entree.limites.getCenter());
         const boite = { x: centre.x - largeurEtiquette / 2, y: centre.y - hauteurEtiquette / 2 };
-        const libre = tient && !places.some((p) => Math.abs(p.x - boite.x) < largeurEtiquette + 2 && Math.abs(p.y - boite.y) < hauteurEtiquette + 2);
+        const active = entree.key === etiquetteDistrictActive;
+        const libre = active || (tient && !places.some((p) => Math.abs(p.x - boite.x) < largeurEtiquette + 2 && Math.abs(p.y - boite.y) < hauteurEtiquette + 2));
         if (libre) {
           places.push(boite);
           if (!present) coucheEtiquettes.addLayer(entree.marqueur);
+          entree.marqueur.getElement()?.classList.toggle("carte-etiquette-active", active);
+          entree.marqueur.setZIndexOffset(active ? 1000 : 0);
         } else if (present) {
           coucheEtiquettes.removeLayer(entree.marqueur);
         }

@@ -9,6 +9,8 @@ on:
       - "data/evolution.json"
       - "data/snapshots.json"
       - "data/geo/districts.geojson"
+      - "data/geo/regions.geojson"
+      - "data/export.json"
   workflow_dispatch: {}
 
 permissions:
@@ -37,6 +39,8 @@ jobs:
           cp data/evolution.json site/data/evolution.json
           cp data/snapshots.json site/data/snapshots.json
           cp data/geo/districts.geojson site/data/geo/districts.geojson
+          cp data/geo/regions.geojson site/data/geo/regions.geojson
+          cp data/export.json site/data/export.json
 
       - uses: actions/configure-pages@v5
 

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { test, expect } from "@playwright/test";
@@ -49,6 +49,11 @@ test("charge les données, relie les filtres à l’URL et ouvre une fiche distr
 test("colore les taux des listes selon le statut et les affiche à une décimale", async ({ page }) => {
   const rates = page.locator(".priority-value");
   await expect(rates).not.toHaveCount(0);
+  await expect(page.locator(".top-performers .priority-item")).toHaveCount(10);
+  await expect(page.locator("#carte-regions")).toBeVisible();
+  const regionRates = await page.locator("#carte-regions .region-rate-label span").allTextContents();
+  expect(regionRates).toHaveLength(14);
+  expect(regionRates.every((rate) => /^\d+,\d%$/.test(rate.trim()))).toBe(true);
   const invalidRates = await rates.evaluateAll((items) => items.flatMap((item) => {
     const status = ["critique", "surveiller", "conforme"].find((name) => item.classList.contains(name));
     const probe = document.createElement("span");
@@ -62,6 +67,7 @@ test("colore les taux des listes selon le statut et les affiche à une décimale
   }));
   expect(invalidRates).toEqual([]);
   expect(await page.locator(".map-card #carte").evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThan(500);
+  await expect(page.locator(".export-link")).toHaveAttribute("href", /Situation_completude_par_region_\d{2}_\d{2}_\d{4}\.xlsx$/);
 });
 
 test("permet le thème et le mode TV au clavier", async ({ page }) => {
@@ -76,6 +82,8 @@ test("permet le thème et le mode TV au clavier", async ({ page }) => {
 test("parle avec le personnage bébé animé", async ({ page }) => {
   const avatar = page.locator(".sokhnaci-svg");
   await expect(avatar).toHaveAttribute("aria-label", "Bébé Sokhnaci, guide du tableau de bord");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Répartition des 79 districts");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Action recommandée");
   await page.evaluate(() => {
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak = (utterance) => utterance.onstart?.();
@@ -87,15 +95,17 @@ test("parle avec le personnage bébé animé", async ({ page }) => {
 });
 
 test("montre toute la carte TV puis visite tous les districts", async ({ page }) => {
-  const contours = Number((await page.locator(".map-card .card-aside").textContent()).split("/")[0]);
+  const contours = Number((await page.locator(".map-card .card-aside").first().textContent()).split("/")[0]);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.clock.install();
   await page.locator("#btn-tv").click();
   await page.locator("#tv-next").click();
 
   const map = page.locator("#tv-map");
+  const regionMap = page.locator("#tv-map-regions");
   const progress = page.locator("#tv-map-progress");
   await expect(map).toBeVisible();
+  await expect(regionMap).toBeVisible();
   await expect(progress).toContainText("Vue complète");
   const mapHeight = await map.evaluate((element) => element.getBoundingClientRect().height);
   expect(mapHeight).toBeGreaterThan(500);
@@ -105,19 +115,22 @@ test("montre toute la carte TV puis visite tous les districts", async ({ page })
       .observe(document.getElementById("tv-map-progress"), { childList: true });
   });
   await page.clock.fastForward(3200);
-  await expect(progress).toHaveText(new RegExp(`^District 1/${contours} ·`));
-  const firstDistrict = (await progress.textContent()).split(" · ")[1].split(" — ")[0];
+  await expect(progress).toContainText(/Région 1\/\d+ · .* — District 1\//);
+  const firstDistrict = (await progress.getAttribute("data-district")).split("||")[1];
   await expect(page.locator("#tv-map .leaflet-tooltip")).toContainText(firstDistrict);
+  await expect(page.locator("#tv-map .carte-etiquette-active")).toContainText(firstDistrict);
+  await expect(page.locator("#tv-tour-districts .active")).toContainText(firstDistrict);
+  await expect(page.locator("#tv-tour-districts .tv-tour-district")).not.toHaveCount(0);
   await page.clock.runFor(contours * 1800);
-  const visited = await page.evaluate(() => window.__tvTourHistory.filter((item) => item.startsWith("District ")));
+  const visited = await page.evaluate(() => window.__tvTourHistory.filter((item) => item.includes("— District ")));
   expect(visited).toHaveLength(contours);
-  expect(visited.map((item) => Number(item.match(/^District (\d+)\//)[1]))).toEqual(Array.from({ length: contours }, (_, index) => index + 1));
+  expect(visited.every((item) => /^Région \d+\/\d+ · .* — District \d+\/\d+ · .+/.test(item))).toBe(true);
   const priorityRates = await page.locator(".tv-priority b").evaluateAll((items) => items.map((item) => ({
     status: item.classList.contains("critique") ? "critique" : "autre",
     decimal: /^\d+,\d%$/.test(item.textContent.trim()),
   })));
   expect(priorityRates.every((item) => item.status === "critique" && item.decimal)).toBe(true);
-  await expect(page.locator(".tv-priority-caption")).toBeVisible();
+  await expect(page.locator(".tv-map-details .tv-priority-caption")).toBeVisible();
 
   await page.locator('.tv-dot[data-slide-index="5"]').click();
   await expect(page.locator(".tv-ranking-row")).toHaveCount(20);

@@ -8,9 +8,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections import defaultdict
 from dataclasses import dataclass
 
 import pandas as pd
+from shapely.geometry import mapping, shape
+from shapely.ops import unary_union
 
 from .dhis2 import Dhis2Client
 from .periodes import norm
@@ -75,6 +78,32 @@ class ContoursCharges:
     districts: pd.DataFrame  # colonnes region, district, uid_district
     features: list[dict]     # GeoJSON Feature, properties.d = index dans `districts`
     districts_sans_contour: list[str]
+
+
+def fusionner_contours_par_region(features: list[dict]) -> dict:
+    geometries_par_region = defaultdict(list)
+    for feature in features:
+        proprietes = feature.get("properties") or {}
+        region = proprietes.get("region")
+        geometrie = feature.get("geometry")
+        if not region or not geometrie:
+            raise ValueError("Chaque contour de district doit avoir une région et une géométrie.")
+        geometries_par_region[str(region)].append(shape(geometrie))
+
+    regions = []
+    for region, geometries in sorted(geometries_par_region.items()):
+        geometrie_region = unary_union(geometries)
+        if geometrie_region.geom_type not in {"Polygon", "MultiPolygon"} or not geometrie_region.is_valid:
+            raise ValueError(f"Géométrie régionale invalide pour {region}.")
+        centre = geometrie_region.representative_point()
+        regions.append({
+            "type": "Feature",
+            "properties": {"region": region, "centre": [centre.x, centre.y]},
+            "geometry": mapping(geometrie_region),
+        })
+    if not regions:
+        raise ValueError("Aucun contour régional n'a pu être créé.")
+    return {"type": "FeatureCollection", "features": regions}
 
 
 def charger_contours(

@@ -1,5 +1,6 @@
 import { grapheBarres, grapheBarresEmpilees, grapheDoughnut, grapheLigne, couleurStatut } from "./charts.js";
 import { afficherDistricts, detruireCarte, initCarte } from "./map.js";
+import { afficherRegions, detruireCarteRegions, initCarteRegions } from "./region-map.js";
 import { ouvrirFicheDistrict } from "./drawer.js";
 
 function escapeHtml(value) {
@@ -82,13 +83,15 @@ export function renderVue(modele) {
   const alertes = [...districts].filter((district) => district.statut === "critique").sort((a, b) => (a.tauxMoyen ?? 101) - (b.tauxMoyen ?? 101)).slice(0, 7);
   const aSurveiller = [...districts].filter((district) => district.statut === "surveiller").sort((a, b) => (a.tauxMoyen ?? 101) - (b.tauxMoyen ?? 101)).slice(0, 10);
   const conformes = [...districts].filter((district) => district.statut === "conforme").sort((a, b) => (b.tauxMoyen ?? 0) - (a.tauxMoyen ?? 0)).slice(0, 10);
+  const meilleurs = [...districts].filter((district) => district.tauxMoyen !== null).sort((a, b) => b.tauxMoyen - a.tauxMoyen).slice(0, 10);
   const contexte = `${escapeHtml(modele.selection.region)} · ${escapeHtml(modele.selection.periode)}`;
-  const listeDistricts = (liste, vide) => liste.length
-    ? `<ol class="priority-list">${liste.map((district, index) => `<li><button class="priority-item" type="button" data-district="${escapeHtml(district.region)}||${escapeHtml(district.nom)}"><span class="priority-rank">${String(index + 1).padStart(2, "0")}</span><span><span class="priority-name">${escapeHtml(district.nom)}</span><span class="priority-region">${escapeHtml(libelleRegion(district.region))}</span></span><span class="priority-value ${district.statut}">${pct(district.tauxMoyen)}</span></button></li>`).join("")}</ol>`
+  const listeDistricts = (liste, vide, performant = false) => liste.length
+    ? `<ol class="priority-list${performant ? " top-performers" : ""}">${liste.map((district, index) => `<li><button class="priority-item" type="button" data-district="${escapeHtml(district.region)}||${escapeHtml(district.nom)}"><span class="priority-rank${performant ? " priority-rank-best" : ""}">${String(index + 1).padStart(2, "0")}</span><span><span class="priority-name">${escapeHtml(district.nom)}</span><span class="priority-region">${escapeHtml(libelleRegion(district.region))}</span></span><span class="priority-value ${district.statut}">${pct(district.tauxMoyen)}</span></button></li>`).join("")}</ol>`
     : `<p class="empty-state">${vide}</p>`;
   const optionsAlertes = listeDistricts(alertes, `Tous les districts affichés sont au-dessus du seuil critique de ${seuils.critique}%.`);
   const optionsSurveiller = listeDistricts(aSurveiller, "Aucun district dans la zone de vigilance pour cette sélection.");
   const optionsConformes = listeDistricts(conformes, `Aucun district n’atteint encore le seuil de conformité de ${seuils.conforme}% pour cette sélection.`);
+  const optionsMeilleurs = listeDistricts(meilleurs, "Aucun taux disponible pour cette sélection.", true);
 
   return `<div class="page-stack">
     ${enteteSection("Vue d’ensemble", "Un aperçu national des rapports transmis et des zones à accompagner.", contexte)}
@@ -103,7 +106,10 @@ export function renderVue(modele) {
       <div class="insight-content"><p class="eyebrow" id="synthese-titre">LECTURE DE LA SITUATION</p><p>${genererSynthese(modele)}</p></div>
       <svg class="insight-sparkline" viewBox="0 0 120 34" aria-hidden="true"><path d="M2 26 C14 23 15 12 27 18 S43 28 53 18 68 8 78 17 92 20 100 10 111 12 118 4" fill="none" stroke="#8ce0b0" stroke-width="2" stroke-linecap="round"/><path d="M2 30 C14 27 15 16 27 22 S43 32 53 22 68 12 78 21 92 24 100 14 111 16 118 8" fill="none" stroke="#8ce0b0" stroke-opacity=".18" stroke-width="8" stroke-linecap="round"/></svg>
     </section>
-    <section class="card map-card"><div class="card-head"><div><h2>Carte des districts</h2><p class="card-subtitle">Sélectionnez un district pour ouvrir sa fiche.</p></div><span class="card-aside">${districts.filter((district) => district.feature).length}/${districts.length} contours</span></div><div id="carte" role="group" aria-label="Carte interactive du Sénégal : taux de complétude par district"></div><div class="map-legend"><span class="legend-item"><i class="legend-swatch" style="background:var(--critique)"></i>Critique &lt; ${seuils.critique}%</span><span class="legend-item"><i class="legend-swatch" style="background:var(--surveiller)"></i>À surveiller</span><span class="legend-item"><i class="legend-swatch" style="background:var(--conforme)"></i>Conforme ≥ ${seuils.conforme}%</span></div></section>
+    <section class="grid map-pair">
+      <article class="card map-card"><div class="card-head"><div><h2>Carte des districts</h2><p class="card-subtitle">Sélectionnez un district pour ouvrir sa fiche.</p></div><span class="card-aside">${districts.filter((district) => district.feature).length}/${districts.length} contours</span></div><div id="carte" role="group" aria-label="Carte interactive du Sénégal : taux de complétude par district"></div><div class="map-legend"><span class="legend-item"><i class="legend-swatch" style="background:var(--critique)"></i>Critique &lt; ${seuils.critique}%</span><span class="legend-item"><i class="legend-swatch" style="background:var(--surveiller)"></i>À surveiller</span><span class="legend-item"><i class="legend-swatch" style="background:var(--conforme)"></i>Conforme ≥ ${seuils.conforme}%</span></div></article>
+      <article class="card map-card"><div class="card-head"><div><h2>Carte des régions</h2><p class="card-subtitle">Taux moyen régional · survolez une région pour le détail.</p></div><span class="card-aside">${regions.filter((region) => region.feature).length}/${regions.length} contours</span></div><div id="carte-regions" role="group" aria-label="Carte du Sénégal : taux de complétude par région"></div><div class="map-legend"><span class="legend-item"><i class="legend-swatch" style="background:var(--critique)"></i>Critique &lt; ${seuils.critique}%</span><span class="legend-item"><i class="legend-swatch" style="background:var(--surveiller)"></i>À surveiller</span><span class="legend-item"><i class="legend-swatch" style="background:var(--conforme)"></i>Conforme ≥ ${seuils.conforme}%</span></div></article>
+    </section>
     <section class="grid grid2">
       <article class="card"><div class="card-head"><div><h2>Évolution du taux moyen</h2><p class="card-subtitle">Une observation par extraction du lundi.</p></div></div><div class="chartbox"><canvas id="ch-evo-globale" aria-label="Évolution hebdomadaire du taux moyen"></canvas></div></article>
       <article class="card"><div class="card-head"><div><h2>Répartition des districts</h2><p class="card-subtitle">Selon les seuils de complétude</p></div></div><div class="chartbox sm"><canvas id="ch-statuts" aria-label="Répartition des districts par statut"></canvas></div></article>
@@ -113,6 +119,7 @@ export function renderVue(modele) {
       <article class="card"><div class="card-head"><div><h2>Districts à surveiller</h2><p class="card-subtitle">Entre ${seuils.critique}% et ${seuils.conforme}%.</p></div><span class="status-chip surveiller">${districts.filter((district) => district.statut === "surveiller").length}</span></div>${optionsSurveiller}</article>
       <article class="card"><div class="card-head"><div><h2>Districts conformes</h2><p class="card-subtitle">Taux moyen décroissant.</p></div><span class="status-chip conforme">${districts.filter((district) => district.statut === "conforme").length}</span></div>${optionsConformes}</article>
     </section>
+    <section class="card"><div class="card-head"><div><h2>10 districts les plus performants</h2><p class="card-subtitle">Taux moyen décroissant, sans retirer les priorités de suivi.</p></div><span class="status-chip conforme">Top 10</span></div>${optionsMeilleurs}</section>
   </div>`;
 }
 
@@ -126,7 +133,10 @@ export function apresRenduVue(modele, theme) {
   grapheLigne("ch-evo-globale", modele.evolution.semaines.map(formaterDate), [{ label: "Taux moyen", data: modele.evolution.moyenne_generale }], { filled: true });
   detruireCarte();
   initCarte("carte", theme);
-  afficherDistricts(districts, { onClicDistrict: ouvrirFicheDistrict, etiquettes: true });
+  afficherDistricts(districts, { onClicDistrict: ouvrirFicheDistrict, etiquettes: true, seuils: modele.seuils });
+  detruireCarteRegions();
+  initCarteRegions("carte-regions", theme);
+  afficherRegions(modele.regions, modele.seuils);
   document.querySelectorAll(".priority-item").forEach((button) => button.addEventListener("click", () => {
     const district = districts.find((item) => `${item.region}||${item.nom}` === button.dataset.district);
     if (district) ouvrirFicheDistrict(district);

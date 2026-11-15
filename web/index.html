@@ -31,7 +31,7 @@
     </div>
     <div class="masthead-actions" aria-label="Actions du tableau de bord">
       <span class="publication-status"><i aria-hidden="true"></i> Suivi hebdomadaire</span>
-      <a class="icon-button export-link" href="https://raw.githubusercontent.com/frandrone07-cmyk/Extraction_hebdo/master/data/exports/dernier_export.xlsx" download aria-label="Excel de la semaine — télécharger la dernière extraction" title="Télécharger l’Excel de la dernière extraction">
+      <a class="icon-button export-link" href="#" aria-disabled="true" download aria-label="Excel de la semaine — télécharger la dernière extraction" title="Chargement de l’export…">
         <span aria-hidden="true">↓</span><span class="button-text">Excel de la semaine</span>
       </a>
       <button class="icon-button" id="btn-theme" type="button" aria-label="Activer le thème sombre" title="Changer de thème"><span aria-hidden="true">◐</span><span class="button-text">Thème</span></button>
@@ -104,7 +104,7 @@
       <div class="trigger-head"><span class="eyebrow">MISE À JOUR DHIS2</span><button class="icon-button close-button" id="trigger-close" type="button" aria-label="Fermer">×</button></div>
       <h2 id="trigger-title">Lancer une extraction</h2>
       <p class="note">Le code PIN est envoyé uniquement au service sécurisé de déclenchement. Il n’est pas enregistré dans le navigateur.</p>
-      <p class="note">L’extraction couvre janvier jusqu’au dernier mois disponible. Le mois courant est ajouté à partir du 15.</p>
+      <p class="note">L’extraction couvre janvier jusqu’au mois précédent. Un mois devient disponible le 15 du mois suivant (ex. novembre à partir du 15 décembre).</p>
       <label for="trigger-pin">Code PIN partagé</label><input id="trigger-pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required minlength="4" maxlength="32">
       <p class="trigger-status" id="trigger-status" role="status" aria-live="polite"></p>
       <div class="trigger-result" id="trigger-result" hidden><a id="trigger-run-link" target="_blank" rel="noopener">Voir l’exécution GitHub ↗</a><button class="button-primary" id="trigger-refresh" type="button">Actualiser les données</button></div>

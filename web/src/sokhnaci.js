@@ -42,37 +42,50 @@ function creerTopo(model) {
   const rate = moyenne(model.districts.map((district) => district.tauxMoyen));
   const previous = moyenne(model.districts.map((district) => district.tauxPrecedent));
   const difference = rate === null || previous === null ? null : Math.round((rate - previous) * 10) / 10;
-  const critical = model.districts.filter((district) => district.statut === "critique");
+  const avecTaux = model.districts.filter((district) => district.tauxMoyen !== null && district.tauxMoyen !== undefined);
+  const sansTaux = model.districts.length - avecTaux.length;
+  const critical = model.districts.filter((district) => district.statut === "critique")
+    .sort((a, b) => (a.tauxMoyen ?? 101) - (b.tauxMoyen ?? 101));
+  const vigilance = model.districts.filter((district) => district.statut === "surveiller").length;
+  const conformes = model.districts.filter((district) => district.statut === "conforme").length;
   const regionsValides = [...model.regions].filter((region) => region.tauxMoyen !== null);
-  const best = regionsValides.length ? regionsValides.sort((a, b) => b.tauxMoyen - a.tauxMoyen)[0] : null;
-  const needsHelp = regionsValides.length ? regionsValides.sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0] : null;
+  const best = regionsValides.length ? [...regionsValides].sort((a, b) => b.tauxMoyen - a.tauxMoyen)[0] : null;
+  const needsHelp = regionsValides.length ? [...regionsValides].sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0] : null;
   const formulairesValides = [...(model.formulaires || [])].filter((formulaire) => formulaire.tauxMoyen !== null);
-  const formulaireFaible = formulairesValides.length ? formulairesValides.sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0] : null;
+  const formulaireFaible = formulairesValides.length ? [...formulairesValides].sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0] : null;
   const tendance = tendanceRecente(model.evolution?.moyenne_generale || []);
   const contexte = contexteFiltres(model);
+  const denominateur = model.districts.length;
+  const part = (nombre) => `${Math.round((nombre / denominateur) * 1000) / 10}%`;
+  const comparaison = model.comparaisonCle
+    ? new Date(`${model.comparaisonCle}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+  const echelle = contexte.length ? "dans le périmètre sélectionné" : "à l’échelle nationale";
 
   const parts = [];
   const introContexte = contexte.length ? ` (${contexte.join(", ")})` : "";
-  parts.push(`Bonjour, je suis Sokhnaci. Pour l’extraction du ${date}${introContexte}, le taux moyen des districts sélectionnés est de ${pct(rate)}.`);
+  parts.push(`Bonjour, je suis Sokhnaci. Pour l’extraction du ${date}${introContexte}, le taux moyen des districts affichés est de ${pct(rate)}.`);
 
   if (difference !== null) {
-    if (difference >= model.seuils.baisse) parts.push(`C’est une progression de ${points(difference)} par rapport au lundi précédent.`);
-    else if (difference <= -model.seuils.baisse) parts.push(`C’est un recul de ${points(Math.abs(difference))} par rapport au lundi précédent — un point à examiner rapidement.`);
-    else parts.push("Le niveau reste proche de celui de l’extraction de comparaison.");
+    const parRapport = comparaison ? `par rapport à l’extraction du ${comparaison}` : "par rapport à l’extraction de comparaison";
+    if (difference >= model.seuils.baisse) parts.push(`Le taux progresse de ${points(difference)} ${parRapport}.`);
+    else if (difference <= -model.seuils.baisse) parts.push(`Le taux recule de ${points(Math.abs(difference))} ${parRapport} — un point à examiner.`);
+    else parts.push(`Le taux reste proche de celui de l’extraction de comparaison (${parRapport}).`);
   }
 
-  if (tendance === "baisse") parts.push("Attention : la tendance nationale est à la baisse depuis trois semaines consécutives, ce n’est pas un accident isolé.");
-  else if (tendance === "hausse") parts.push("Bonne nouvelle : la tendance nationale progresse depuis trois semaines consécutives.");
-  else if (tendance === "stagnation" && rate !== null && rate < model.seuils.conforme) parts.push("La situation stagne depuis trois semaines sans réelle amélioration.");
+  if (tendance === "baisse") parts.push(`La tendance ${echelle} baisse depuis trois semaines consécutives.`);
+  else if (tendance === "hausse") parts.push(`La tendance ${echelle} progresse depuis trois semaines consécutives.`);
+  else if (tendance === "stagnation" && rate !== null && rate < model.seuils.conforme) parts.push(`La situation ${echelle} stagne depuis trois semaines.`);
 
-  if (critical.length === 0) parts.push(`Aucun des ${model.districts.length} districts affichés n’est sous le seuil critique.`);
-  else {
-    const pire = critical.sort((a, b) => (a.tauxMoyen ?? 101) - (b.tauxMoyen ?? 101))[0];
-    parts.push(`${critical.length} district${critical.length > 1 ? "s" : ""} ${critical.length > 1 ? "sont" : "est"} sous le seuil critique de ${model.seuils.critique} pour cent. Le plus faible est ${pire.nom}, à ${pct(pire.tauxMoyen)}.`);
+  parts.push(`Répartition des ${denominateur} districts : ${critical.length} critique${critical.length > 1 ? "s" : ""} (${part(critical.length)}), ${vigilance} à surveiller (${part(vigilance)}), ${conformes} conforme${conformes > 1 ? "s" : ""} (${part(conformes)}) et ${sansTaux} sans taux exploitable.`);
+  if (critical.length) {
+    const plusFaibles = critical.slice(0, 3).map((district) => `${district.nom} (${pct(district.tauxMoyen)})`).join(", ");
+    parts.push(`Sous le seuil critique de ${model.seuils.critique}%, les priorités sont : ${plusFaibles}.`);
   }
 
   if (best && needsHelp && best.nom !== needsHelp.nom) {
-    parts.push(`${labelRegion(best.nom)} présente le taux régional le plus élevé (${pct(best.tauxMoyen)}) ; ${labelRegion(needsHelp.nom)} mérite le suivi le plus rapproché (${pct(needsHelp.tauxMoyen)}).`);
+    const ecart = Math.round((best.tauxMoyen - needsHelp.tauxMoyen) * 10) / 10;
+    parts.push(`${labelRegion(best.nom)} affiche le taux régional le plus élevé (${pct(best.tauxMoyen)}), contre ${pct(needsHelp.tauxMoyen)} pour ${labelRegion(needsHelp.nom)}, soit un écart de ${points(ecart)}.`);
   }
 
   if (formulaireFaible && formulairesValides.length > 1 && formulaireFaible.tauxMoyen < model.seuils.conforme) {
@@ -83,7 +96,9 @@ function creerTopo(model) {
     parts.push(`${model.districtsNonResolus.length} district${model.districtsNonResolus.length > 1 ? "s" : ""} du gabarit n’${model.districtsNonResolus.length > 1 ? "ont" : "a"} pas de correspondance DHIS2 reconnue : vérifiez l’orthographe dans l’onglet Qualité et méthode.`);
   }
 
-  parts.push("Consultez les priorités et la fiche district pour préparer les actions de suivi.");
+  if (critical.length) parts.push("Action recommandée : commencer par les trois districts les plus faibles et vérifier avec eux les formulaires non renseignés.");
+  else if (vigilance) parts.push("Action recommandée : maintenir une relance ciblée auprès des districts à surveiller.");
+  else parts.push("Action recommandée : maintenir le suivi régulier et vérifier la stabilité des résultats à la prochaine extraction.");
   return parts.join(" ");
 }
 
