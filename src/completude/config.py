@@ -28,7 +28,6 @@ class Config:
     chemin_evolution_json: str
     chemin_snapshots_json: str
     seuils: ConfigSeuils
-    nb_mois_fenetre: int
     nb_extractions_detail: int
     dates_a_exclure: list[str]
 
@@ -75,7 +74,6 @@ def charger_config(chemin_yaml: str) -> Config:
         chemin_evolution_json=brut["chemins"]["evolution_json"],
         chemin_snapshots_json=brut["chemins"].get("snapshots_json", "data/snapshots.json"),
         seuils=ConfigSeuils(**brut["seuils"]),
-        nb_mois_fenetre=int(brut["extraction"]["nb_mois_fenetre"]),
         nb_extractions_detail=int(brut["dashboard"]["nb_extractions_detail"]),
         dates_a_exclure=list(brut["extraction"].get("dates_a_exclure") or []),
     )

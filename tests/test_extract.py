@@ -116,17 +116,16 @@ def test_extraire_remplit_les_valeurs_et_signale_les_cases_manquantes(tmp_path):
     resultat = extraire(
         client=client,
         chemin_gabarit=str(chemin_gabarit),
-        nb_mois_fenetre=3,
         date_reference=date(2026, 7, 15),
     )
 
     df = resultat.par_region["Dakar"]
-    pikine = df[df["Districts"] == "District de Pikine"].iloc[0]
+    pikine = df[(df["Districts"] == "District de Pikine") & (df["Période"] == "Juillet 2026")].iloc[0]
     assert pikine["Paludisme - Reporting rate"] == 92.3
     assert pikine["PEV - Reporting rate"] == 88.0
     assert pikine["Période"] == "Juillet 2026"
 
-    guediawaye = df[df["Districts"] == "District de Guediawaye"].iloc[0]
+    guediawaye = df[(df["Districts"] == "District de Guediawaye") & (df["Période"] == "Juillet 2026")].iloc[0]
     assert guediawaye["Paludisme - Reporting rate"] == 55.5
     assert pd.isna(guediawaye["PEV - Reporting rate"])  # case non renseignée côté DHIS2, pas une erreur
 
@@ -137,43 +136,27 @@ def test_extraire_remplit_les_valeurs_et_signale_les_cases_manquantes(tmp_path):
     assert resultat.diagnostics[0].valeurs_recuperees == 3
 
 
-def test_extraire_ajoute_la_periode_courante_a_partir_du_15(tmp_path):
+def test_extraire_de_janvier_a_octobre_puis_ajoute_novembre_le_15(tmp_path):
     chemin_gabarit = tmp_path / "gabarit.xlsx"
-    _ecrire_gabarit_periodes(chemin_gabarit, ["Septembre 2026", "Octobre 2026"])
+    _ecrire_gabarit_periodes(chemin_gabarit, ["Janvier 2026", "Octobre 2026", "Novembre 2026"])
 
-    avant_le_15 = extraire(
+    le_14 = extraire(
         client=FakeDhis2Client(),
         chemin_gabarit=str(chemin_gabarit),
-        nb_mois_fenetre=3,
-        date_reference=date(2026, 10, 14),
+        date_reference=date(2026, 11, 14),
     )
-    a_partir_du_15 = extraire(
+    le_15 = extraire(
         client=FakeDhis2Client(),
         chemin_gabarit=str(chemin_gabarit),
-        nb_mois_fenetre=3,
-        date_reference=date(2026, 10, 15),
+        date_reference=date(2026, 11, 15),
     )
 
-    periodes_avant = set(avant_le_15.par_region["Dakar"]["Période"])
-    periodes_apres = set(a_partir_du_15.par_region["Dakar"]["Période"])
-    assert periodes_avant == {"Septembre 2026"}
-    assert periodes_apres == {"Septembre 2026", "Octobre 2026"}
-
-
-def test_extraire_rattrape_les_mois_disponibles_absents_du_gabarit(tmp_path):
-    chemin_gabarit = tmp_path / "gabarit.xlsx"
-    _ecrire_gabarit_periodes(chemin_gabarit, ["Septembre 2026", "Novembre 2026"])
-
-    resultat = extraire(
-        client=FakeDhis2Client(),
-        chemin_gabarit=str(chemin_gabarit),
-        nb_mois_fenetre=3,
-        date_reference=date(2026, 12, 15),
-    )
-
-    assert set(resultat.par_region["Dakar"]["Période"]) == {
-        "Septembre 2026", "Octobre 2026", "Novembre 2026", "Décembre 2026",
-    }
+    periodes_le_14 = set(le_14.par_region["Dakar"]["Période"])
+    periodes_le_15 = set(le_15.par_region["Dakar"]["Période"])
+    assert periodes_le_14 == {f"{mois} 2026" for mois in (
+        "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre",
+    )}
+    assert periodes_le_15 == periodes_le_14 | {"Novembre 2026"}
 
 
 def test_extraire_colonne_sans_formulaire_correspondant_est_signalee(tmp_path):
@@ -188,7 +171,6 @@ def test_extraire_colonne_sans_formulaire_correspondant_est_signalee(tmp_path):
     resultat = extraire(
         client=FakeDhis2Client(),
         chemin_gabarit=str(chemin_gabarit),
-        nb_mois_fenetre=3,
         date_reference=date(2026, 7, 15),
     )
 

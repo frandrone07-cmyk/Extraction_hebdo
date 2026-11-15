@@ -65,6 +65,12 @@ def derniere_periode_disponible(date_ref: date) -> tuple[int, int]:
     return annee, mois
 
 
+def periodes_cumulatives(date_ref: date) -> list[tuple[int, int]]:
+    """Périodes de janvier à la dernière période disponible de l'année concernée."""
+    annee, dernier_mois = derniere_periode_disponible(date_ref)
+    return [(annee, mois) for mois in range(1, dernier_mois + 1)]
+
+
 def fenetre_mois(date_ref: date, nb_mois: int) -> list[tuple[int, int]]:
     """Les derniers mois disponibles, du plus ancien au plus récent."""
     mois_fenetre = []

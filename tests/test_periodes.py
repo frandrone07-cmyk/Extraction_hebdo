@@ -7,6 +7,7 @@ from completude.periodes import (
     libelle_periode,
     norm,
     parse_periode,
+    periodes_cumulatives,
 )
 
 
@@ -38,6 +39,11 @@ def test_libelle_periode_code_invalide_renvoie_chaine_vide():
 def test_periode_courante_disponible_a_partir_du_15():
     assert derniere_periode_disponible(date(2026, 10, 14)) == (2026, 9)
     assert derniere_periode_disponible(date(2026, 10, 15)) == (2026, 10)
+
+
+def test_periodes_cumulatives_de_janvier_au_mois_disponible():
+    assert periodes_cumulatives(date(2026, 11, 14)) == [(2026, mois) for mois in range(1, 11)]
+    assert periodes_cumulatives(date(2026, 11, 15)) == [(2026, mois) for mois in range(1, 12)]
 
 
 def test_fenetre_mois_exclut_le_mois_courant_avant_le_15():

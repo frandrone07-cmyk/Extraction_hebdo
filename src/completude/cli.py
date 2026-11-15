@@ -63,7 +63,6 @@ def _commande_extract(args: argparse.Namespace) -> int:
     resultat = extraire(
         client=client,
         chemin_gabarit=config.chemin_gabarit,
-        nb_mois_fenetre=args.mois or config.nb_mois_fenetre,
         date_reference=date_reference,
     )
 
@@ -204,7 +203,7 @@ def construire_parser() -> argparse.ArgumentParser:
     cmd_extract.add_argument("--dry-run", action="store_true", help="N'effectue aucun appel réseau réel")
     cmd_extract.add_argument(
         "--mois", type=_valider_nombre_mois, default=None,
-        help="Mois a extraire pour un gabarit sans periodes (defaut config; periode courante a partir du 15)",
+        help="Paramètre historique conservé pour compatibilité ; l'extraction est cumulative depuis janvier",
     )
     cmd_extract.set_defaults(func=_commande_extract)
 

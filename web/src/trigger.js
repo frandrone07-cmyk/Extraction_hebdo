@@ -29,7 +29,7 @@ export function initTrigger() {
       const response = await fetch(`${TRIGGER_API_URL.replace(/\/$/, "")}/trigger`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: pinInput.value, months: Number(document.getElementById("trigger-months").value) }),
+        body: JSON.stringify({ pin: pinInput.value }),
       });
       pinInput.value = "";
       const payload = await response.json().catch(() => ({}));

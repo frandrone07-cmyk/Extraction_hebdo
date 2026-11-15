@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       mois:
-        description: "Nombre de mois a extraire (mois courant + precedents). Vide = valeur de config/config.yml"
+        description: "Paramètre historique conservé pour compatibilité ; l'extraction est cumulative depuis janvier"
         required: false
         type: string
       request_id:

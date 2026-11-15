@@ -37,7 +37,6 @@ seuils:
   conforme: 90
   baisse: 5
 extraction:
-  nb_mois_fenetre: 3
   dates_a_exclure: []
 dashboard:
   nb_extractions_detail: 8
