@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }) => {
   });
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
   await page.goto("/");
-  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
   // Attendre le chargement effectif des polices web (DM Sans/Manrope) avant toute
   // capture ou analyse axe-core : sur un runner CI sans cache, le fallback
   // systeme s'affiche parfois assez longtemps pour fausser la mesure de
@@ -44,6 +44,22 @@ test("charge les données, relie les filtres à l’URL et ouvre une fiche distr
   await expect(page.locator("#drawer")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator("#drawer")).toBeHidden();
+});
+
+test("réinitialise la vue sur F5 tout en conservant les liens de partage directs", async ({ page }) => {
+  await page.goto("/#tab=regions&periode=202609");
+  await expect(page.getByRole("tab", { name: /Régions et formulaires/ })).toHaveAttribute("aria-selected", "true");
+  const dernierePeriode = await page.locator("#sel-periode option").last().getAttribute("value");
+
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await expect(page.getByRole("tab", { name: /Vue d’ensemble/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#sel-periode")).toHaveValue(dernierePeriode);
+  await expect(page.locator("#sel-region")).toHaveValue("");
+  await expect(page.locator("body")).not.toHaveClass(/tv/);
+  await expect(page).toHaveURL(/#tab=vue$/);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
 
 test("colore les taux des listes selon le statut et les affiche à une décimale", async ({ page }) => {
@@ -70,6 +86,50 @@ test("colore les taux des listes selon le statut et les affiche à une décimale
   await expect(page.locator(".export-link")).toHaveAttribute("href", /Situation_completude_par_region_\d{2}_\d{2}_\d{4}\.xlsx$/);
 });
 
+test("affiche l’effectif total au centre du diagramme circulaire", async ({ page }) => {
+  const chart = await page.locator("#ch-statuts").evaluate((canvas) => {
+    const instance = Chart.getChart(canvas);
+    return {
+      label: canvas.getAttribute("aria-label"),
+      values: instance.data.datasets[0].data,
+      plugins: instance.config.plugins.map((plugin) => plugin.id),
+    };
+  });
+  const total = chart.values.reduce((sum, value) => sum + value, 0);
+  expect(chart.label).toContain(`${total} districts au total`);
+  expect(chart.plugins).toContain("center-label-ch-statuts");
+});
+
+test("identifie une région par point et utilise une couleur distincte par région", async ({ page }) => {
+  await page.getByRole("tab", { name: /Évolution/ }).click();
+  const chart = await page.locator("#ch-evo-regions").evaluate((canvas) => {
+    const instance = Chart.getChart(canvas);
+    return {
+      labels: instance.data.datasets.map((dataset) => dataset.label),
+      colors: instance.data.datasets.map((dataset) => dataset.borderColor),
+      tooltipMode: instance.options.plugins.tooltip.mode,
+      tooltipIntersect: instance.options.plugins.tooltip.intersect,
+    };
+  });
+  expect(chart.labels).toHaveLength(14);
+  expect(new Set(chart.colors).size).toBe(14);
+  expect(chart.tooltipMode).toBe("nearest");
+  expect(chart.tooltipIntersect).toBe(true);
+  const point = await page.locator("#ch-evo-regions").evaluate((canvas) => {
+    const instance = Chart.getChart(canvas);
+    const datasetIndex = instance.data.datasets.findIndex((dataset) => dataset.data.some((value) => value !== null));
+    const pointIndex = instance.data.datasets[datasetIndex].data.findIndex((value) => value !== null);
+    const position = instance.getDatasetMeta(datasetIndex).data[pointIndex].getProps(["x", "y"], true);
+    return { x: position.x, y: position.y, region: instance.data.datasets[datasetIndex].label };
+  });
+  await page.locator("#ch-evo-regions").scrollIntoViewIfNeeded();
+  const bounds = await page.locator("#ch-evo-regions").boundingBox();
+  await page.mouse.click(bounds.x + point.x, bounds.y + point.y);
+  await expect.poll(() => page.locator("#ch-evo-regions").evaluate((canvas) => (
+    Chart.getChart(canvas).tooltip.dataPoints.map((item) => item.dataset.label)
+  ))).toEqual([point.region]);
+});
+
 test("permet le thème et le mode TV au clavier", async ({ page }) => {
   await page.locator("#btn-theme").click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -92,6 +152,17 @@ test("parle avec le personnage bébé animé", async ({ page }) => {
   await expect(page.locator(".sokhnaci-widget")).toHaveClass(/speaking/);
   await expect.poll(() => avatar.locator(".baby-arm-left").evaluate((arm) => getComputedStyle(arm).animationName)).toBe("baby-gesture");
   await expect.poll(() => avatar.locator(".baby-mouth-open").evaluate((mouth) => getComputedStyle(mouth).display)).toBe("block");
+});
+
+test("rend visibles les cellules manquantes par formulaire dans l’onglet qualité", async ({ page }) => {
+  await page.getByRole("tab", { name: /Qualité et méthode/ }).click();
+  const rows = page.locator("#table-qualite-formulaires tbody tr[data-empty-count]");
+  await expect(rows).toHaveCount(20);
+  const missingCounts = await rows.evaluateAll((items) => items.map((item) => Number(item.dataset.emptyCount)));
+  expect(missingCounts.some((count) => count > 0)).toBe(true);
+  await expect(page.locator("#table-qualite-formulaires details summary").first()).toBeVisible();
+  await page.locator("#table-qualite-formulaires details summary").first().click();
+  await expect(page.locator("#table-qualite-formulaires .quality-missing-list li").first()).toContainText("·");
 });
 
 test("montre toute la carte TV puis visite tous les districts", async ({ page }) => {

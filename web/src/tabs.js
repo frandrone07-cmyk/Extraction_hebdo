@@ -112,7 +112,7 @@ export function renderVue(modele) {
     </section>
     <section class="grid grid2">
       <article class="card"><div class="card-head"><div><h2>Évolution du taux moyen</h2><p class="card-subtitle">Une observation par extraction du lundi.</p></div></div><div class="chartbox"><canvas id="ch-evo-globale" aria-label="Évolution hebdomadaire du taux moyen"></canvas></div></article>
-      <article class="card"><div class="card-head"><div><h2>Répartition des districts</h2><p class="card-subtitle">Selon les seuils de complétude</p></div></div><div class="chartbox sm"><canvas id="ch-statuts" aria-label="Répartition des districts par statut"></canvas></div></article>
+      <article class="card"><div class="card-head"><div><h2>Répartition des districts</h2><p class="card-subtitle">Selon les seuils de complétude</p></div></div><div class="chartbox sm"><canvas id="ch-statuts" aria-label="Répartition des districts par statut : ${districts.length} districts au total"></canvas></div></article>
     </section>
     <section class="grid grid3">
       <article class="card"><div class="card-head"><div><h2>Priorités de suivi</h2><p class="card-subtitle">Dist. classés par taux moyen croissant.</p></div><span class="status-chip critique">${nbCritiques} critique${nbCritiques > 1 ? "s" : ""}</span></div>${optionsAlertes}</article>
@@ -129,6 +129,8 @@ export function apresRenduVue(modele, theme) {
     conforme: districts.filter((district) => district.statut === "conforme").length,
     surveiller: districts.filter((district) => district.statut === "surveiller").length,
     critique: districts.filter((district) => district.statut === "critique").length,
+    inconnu: districts.filter((district) => district.statut === "inconnu").length,
+    total: districts.length,
   });
   grapheLigne("ch-evo-globale", modele.evolution.semaines.map(formaterDate), [{ label: "Taux moyen", data: modele.evolution.moyenne_generale }], { filled: true });
   detruireCarte();
@@ -229,7 +231,7 @@ export function apresRenduEvolution(modele) {
   const { evolution } = modele;
   const labels = evolution.semaines.map(formaterDate);
   grapheLigne("ch-evo-detail", labels, [{ label: "Taux moyen", data: evolution.moyenne_generale }], { filled: true });
-  grapheLigne("ch-evo-regions", labels, evolution.par_region.map((series) => ({ label: libelleRegion(series.region), data: series.valeurs })));
+  grapheLigne("ch-evo-regions", labels, evolution.par_region.map((series) => ({ label: libelleRegion(series.region), data: series.valeurs })), { pointOnlyTooltip: true });
 }
 
 // -------------------------------- Districts --------------------------------
@@ -285,8 +287,40 @@ export function apresRenduDistricts(modele) {
 
 // --------------------------- Qualité et méthode ---------------------------
 
+function cellulesManquantesParFormulaire(modele) {
+  const periodes = new Map();
+  for (const district of modele.districts) for (const formulaire of district.formulaires) {
+    for (const periode of formulaire.historiquePeriodes) periodes.set(periode.periode_code, periode.periode);
+  }
+  const toutesLesPeriodes = modele.selection.periode === "Toutes les périodes";
+  const codeSelectionne = [...periodes].find(([, label]) => label === modele.selection.periode)?.[0];
+  return modele.formulaires.map(({ nom }) => {
+    const codes = toutesLesPeriodes
+      ? [...periodes.keys()].filter((code) => modele.districts.some((district) => district.formulaires
+        .some((formulaire) => formulaire.nom === nom && formulaire.historiquePeriodes.some((periode) => periode.periode_code === code))))
+      : codeSelectionne ? [codeSelectionne] : [];
+    const manquantes = [];
+    for (const code of codes) for (const district of modele.districts) {
+      const formulaire = district.formulaires.find((item) => item.nom === nom);
+      const periode = formulaire?.historiquePeriodes.find((item) => item.periode_code === code);
+      if (!periode || periode.valeur === null || periode.valeur === undefined) {
+        manquantes.push(`${district.nom} · ${libelleRegion(district.region)} · ${periodes.get(code)}`);
+      }
+    }
+    const attendues = modele.districts.length * codes.length;
+    return { nom, manquantes, attendues, renseignees: attendues - manquantes.length };
+  });
+}
+
 export function renderQualite(modele) {
   const { districtsNonResolus, seuils, evolution } = modele;
+  const qualiteFormulaires = cellulesManquantesParFormulaire(modele);
+  const lignesQualite = qualiteFormulaires.map(({ nom, manquantes, attendues, renseignees }) => {
+    const details = manquantes.length
+      ? `<details><summary>Voir les ${manquantes.length} cellules vides</summary><ul class="quality-missing-list">${manquantes.map((cellule) => `<li>${escapeHtml(cellule)}</li>`).join("")}</ul></details>`
+      : `<span class="status-chip conforme">Aucune cellule vide</span>`;
+    return `<tr data-empty-count="${manquantes.length}"><th scope="row">${escapeHtml(nom)}</th><td>${renseignees} / ${attendues}</td><td><span class="status-chip ${manquantes.length ? "inconnu" : "conforme"}">${manquantes.length}</span></td><td>${attendues ? pct(Math.round((renseignees / attendues) * 1000) / 10) : "—"}</td><td>${details}</td></tr>`;
+  }).join("");
   const unresolvedMarkup = districtsNonResolus.length
     ? `<ul>${districtsNonResolus.map((district) => `<li>${escapeHtml(district)}</li>`).join("")}</ul>`
     : `<p class="note">Tous les districts affichés possèdent une correspondance DHIS2 exploitable.</p>`;
@@ -294,6 +328,7 @@ export function renderQualite(modele) {
     ${enteteSection("Qualité et méthode", "Contrôlez la complétude des données et consultez les règles de lecture.", `Seuils : ${seuils.critique}% / ${seuils.conforme}%`)}
     <section class="grid grid2"><article class="card"><div class="card-head"><div><h2>Cases renseignées par extraction</h2><p class="card-subtitle">Part des cellules district × période × formulaire contenant une valeur DHIS2.</p></div></div><div class="chartbox"><canvas id="ch-qualite"></canvas></div></article>
       <article class="card"><div class="card-head"><div><h2>Diagnostic des districts</h2><p class="card-subtitle">Correspondance des unités avec le gabarit d’extraction.</p></div></div><div class="diag-summary"><span class="diag-count ${districtsNonResolus.length ? "warn" : ""}">${districtsNonResolus.length}</span><div><strong>${districtsNonResolus.length ? "Correspondance à vérifier" : "Correspondances reconnues"}</strong><div class="note">${districtsNonResolus.length ? `${districtsNonResolus.length} district(s) sans UID dans les données affichées.` : "Aucun district sans UID détecté pour cette sélection."}</div></div></div>${unresolvedMarkup}</article></section>
+    <section class="card"><div class="card-head"><div><h2>Cellules vides par formulaire</h2><p class="card-subtitle">Les valeurs absentes sont comptées et détaillées par district, région et période (${escapeHtml(modele.selection.periode)}).</p></div></div><div class="table-scroll"><table id="table-qualite-formulaires"><thead><tr><th>Formulaire</th><th>Cellules renseignées</th><th>Cellules vides</th><th>Couverture</th><th>Détail des cellules vides</th></tr></thead><tbody>${lignesQualite || `<tr><td colspan="5"><p class="empty-state">Aucun formulaire disponible pour cette sélection.</p></td></tr>`}</tbody></table></div></section>
     <section class="card"><div class="card-head"><div><h2>Seuils de lecture</h2><p class="card-subtitle">Les mêmes seuils sont appliqués aux indicateurs, tableaux et cartes.</p></div></div><ul class="definition-list"><li><strong><span class="status-chip critique">Critique</span></strong><span>Taux strictement inférieur à ${seuils.critique}% : suivi prioritaire du district et du formulaire.</span></li><li><strong><span class="status-chip surveiller">À surveiller</span></strong><span>Taux compris entre ${seuils.critique}% et ${seuils.conforme}% : progression à consolider.</span></li><li><strong><span class="status-chip conforme">Conforme</span></strong><span>Taux supérieur ou égal à ${seuils.conforme}% : niveau attendu atteint.</span></li></ul></section>
     <section class="card prose"><div class="card-head"><div><h2>Méthode de calcul</h2><p class="card-subtitle">Lecture des indicateurs de complétude DHIS2.</p></div></div><p><strong>Taux de complétude (reporting rate)</strong> : pourcentage d’unités sanitaires attendues ayant effectivement transmis leur rapport pour un formulaire et une période donnés.</p><p>Les extractions sont réalisées chaque lundi. Chaque point de la courbe correspond à un lundi distinct ; la période DHIS2 sélectionnée reste identique entre les semaines comparées, afin de ne pas confondre les mois de rapport.</p><p>Les cellules sans valeur restent visibles comme données manquantes et entrent dans le calcul du taux de remplissage de l’extraction.</p><p><strong>Taux moyen affiché</strong> : il s’agit d’une moyenne simple (non pondérée) des taux de complétude — moyenne des formulaires pour un district, puis moyenne des districts pour une région ou le pays. Un district comptant peu de structures sanitaires pèse donc autant qu’un district en comptant beaucoup. DHIS2 ne fournit pas directement les effectifs bruts (structures ayant transmis / structures attendues) nécessaires à une moyenne pondérée par la taille réelle de chaque district ; seul le pourcentage par district est actuellement extrait. Ce choix garde le calcul simple et compréhensible, au prix d’une légère sur-représentation des petits districts dans les moyennes régionales et nationale.</p></section>
     <p class="note">${evolution.semaines.length} extraction${evolution.semaines.length > 1 ? "s" : ""} présente${evolution.semaines.length > 1 ? "s" : ""} dans l’historique analysé.</p>

@@ -263,6 +263,10 @@ tbody tr:hover td, tbody tr:hover th { background: var(--surface-soft); }
 .cell-critique { color: var(--critique); }
 .cell-surveiller { color: var(--surveiller); }
 .cell-conforme { color: var(--conforme); }
+#table-qualite-formulaires { min-width: 760px; }
+#table-qualite-formulaires details summary { color: var(--primary); cursor: pointer; font-weight: 650; }
+.quality-missing-list { max-height: 220px; overflow: auto; margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 10px; }
+.quality-missing-list li + li { margin-top: 3px; }
 .heatmap { min-width: 740px; }
 .heatmap th:first-child { position: sticky; left: 0; z-index: 2; background: var(--surface-soft); }
 .heatmap td { text-align: center; font-size: 10px; font-weight: 750; }

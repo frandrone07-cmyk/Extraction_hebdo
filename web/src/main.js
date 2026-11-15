@@ -27,6 +27,11 @@ const SELECTORS = {
   periode: "sel-periode",
   formulaire: "sel-formulaire",
 };
+const REINITIALISER_APRES_RECHARGEMENT = performance.getEntriesByType("navigation")[0]?.type === "reload";
+
+if (REINITIALISER_APRES_RECHARGEMENT) {
+  history.replaceState(null, "", `${location.pathname}${location.search}`);
+}
 
 let donnees = null;
 let modeleCourant = null;
@@ -159,11 +164,12 @@ function rafraichir(filters, { writeHash = true } = {}) {
   afficherOnglet(ongletCourant);
 }
 function selectionInitiale() {
-  const hash = lireEtatHash();
+  const hash = REINITIALISER_APRES_RECHARGEMENT ? {} : lireEtatHash();
   const week = donnees.snapshot.semaines.includes(hash.extraction) ? hash.extraction : donnees.latest.semaine_cle;
   stateCourant = filtresValides(week, hash);
   ongletCourant = RENDUS[hash.tab] ? hash.tab : "vue";
   rafraichir(stateCourant, { writeHash: false });
+  if (REINITIALISER_APRES_RECHARGEMENT) requestAnimationFrame(() => window.scrollTo(0, 0));
 }
 function initTabs() {
   document.querySelectorAll('[role="tab"][data-tab]').forEach((button) => {

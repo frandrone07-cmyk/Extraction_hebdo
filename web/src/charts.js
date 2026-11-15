@@ -100,13 +100,21 @@ export function grapheBarres(id, labels, values, { horizontal = false, couleurPa
   }));
 }
 
-export function grapheLigne(id, labels, series, { filled = false, percent = true, etiquettes = false } = {}) {
+export function grapheLigne(id, labels, series, { filled = false, percent = true, etiquettes = false, pointOnlyTooltip = false } = {}) {
   if (!disponible()) return;
   detruire(id);
   const canvas = document.getElementById(id);
   if (!canvas) return;
-  const palette = [color("primaire"), color("secondaire"), color("conforme"), color("surveiller"), color("critique"), "#7b71d1", "#e48644", "#4ba7ad"];
+  const basePalette = [color("primaire"), color("secondaire"), color("conforme"), color("surveiller"), color("critique"), "#7b71d1", "#e48644", "#4ba7ad"];
+  const palette = series.length > basePalette.length
+    ? series.map((_, index) => `hsl(${Math.round((index * 360) / series.length)} 68% 42%)`)
+    : basePalette;
   const options = commonOptions();
+  if (pointOnlyTooltip) {
+    options.interaction = { mode: "nearest", intersect: true };
+    options.plugins.tooltip.mode = "nearest";
+    options.plugins.tooltip.intersect = true;
+  }
   options.plugins.legend.display = series.length > 1;
   // Une seule serie : etiquette possible sans surcharger le graphe. Avec
   // plusieurs series (ex. evolution par region), les etiquettes se
@@ -131,8 +139,8 @@ export function grapheLigne(id, labels, series, { filled = false, percent = true
         tension: .32,
         spanGaps: false,
         borderWidth: 2.2,
-        pointRadius: labels.length > 14 ? 0 : 3,
-        pointHoverRadius: 5,
+        pointRadius: labels.length > 14 ? 0 : pointOnlyTooltip ? 4 : 3,
+        pointHoverRadius: pointOnlyTooltip ? 7 : 5,
         pointBackgroundColor: color("--surface"),
         pointBorderWidth: 2,
       })),
@@ -173,12 +181,35 @@ export function grapheDoughnut(id, distribution, { etiquettes = false } = {}) {
   options.plugins.tooltip.callbacks.label = (context) => ` ${context.label} : ${context.raw}`;
   options.plugins.datalabels = datalabelsOptions(etiquettes, (value) => (value ? String(value) : ""));
   if (etiquettes) options.plugins.datalabels.color = "#fff";
+  const total = distribution.total ?? distribution.conforme + distribution.surveiller + distribution.critique + (distribution.inconnu || 0);
+  const centerLabel = {
+    id: `center-label-${id}`,
+    afterDraw(chart) {
+      const area = chart.chartArea;
+      if (!area) return;
+      const { ctx } = chart;
+      const x = (area.left + area.right) / 2;
+      const y = (area.top + area.bottom) / 2;
+      const size = Math.min(26, Math.max(16, area.width * 0.18));
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = color("--text");
+      ctx.font = `700 ${size}px Manrope, sans-serif`;
+      ctx.fillText(String(total), x, y - size * 0.25);
+      ctx.fillStyle = color("--muted");
+      ctx.font = `600 ${Math.max(9, size * 0.38)}px "DM Sans", sans-serif`;
+      ctx.fillText("districts", x, y + size * 0.55);
+      ctx.restore();
+    },
+  };
   INSTANCES.set(id, new Chart(canvas, {
     type: "doughnut",
     data: {
-      labels: ["Conforme", "À surveiller", "Critique"],
-      datasets: [{ data: [distribution.conforme, distribution.surveiller, distribution.critique], backgroundColor: [color("conforme"), color("surveiller"), color("critique")], borderWidth: 0, hoverOffset: 5, spacing: 3 }],
+      labels: ["Conforme", "À surveiller", "Critique", "Sans taux"],
+      datasets: [{ data: [distribution.conforme, distribution.surveiller, distribution.critique, distribution.inconnu || 0], backgroundColor: [color("conforme"), color("surveiller"), color("critique"), color("inconnu")], borderWidth: 0, hoverOffset: 5, spacing: 3 }],
     },
+    plugins: [centerLabel],
     options,
   }));
 }
