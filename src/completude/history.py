@@ -17,7 +17,7 @@ from datetime import date, timedelta
 import pandas as pd
 
 from .extract import cols_districts_periode
-from .periodes import libelle_periode, parse_periode
+from .periodes import code_periode, derniere_periode_disponible, libelle_periode, parse_periode
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,13 @@ def lire_historique(chemin: str) -> pd.DataFrame:
         dtype={c: str for c in COLS_HIST if c != "valeur"},
         encoding="utf-8-sig",
     )
+
+
+def limiter_periodes_disponibles(hist: pd.DataFrame, date_reference: date) -> pd.DataFrame:
+    """Masque les périodes pas encore ouvertes sans modifier l'historique source."""
+    annee, mois = derniere_periode_disponible(date_reference)
+    limite = code_periode(annee, mois)
+    return hist.loc[hist["periode_code"].astype(str) <= limite].reset_index(drop=True)
 
 
 def ecrire_historique(hist: pd.DataFrame, chemin: str) -> pd.DataFrame:

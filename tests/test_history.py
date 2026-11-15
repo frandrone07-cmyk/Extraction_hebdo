@@ -7,6 +7,7 @@ from completude.history import (
     fichiers_datees,
     importer_anciennes,
     iso_monday,
+    limiter_periodes_disponibles,
     migrer_historique_legacy,
     nettoyer_hist,
     purger_dates,
@@ -116,6 +117,22 @@ def test_nettoyer_hist_ecarte_les_lignes_sans_periode_exploitable():
     ])
     nettoye = nettoyer_hist(hist)
     assert len(nettoye) == 0
+
+
+def test_limiter_periodes_disponibles_applique_le_seuil_du_15_sans_modifier_l_historique():
+    hist = pd.DataFrame([
+        {"periode_code": "202512"},
+        {"periode_code": "202609"},
+        {"periode_code": "202610"},
+        {"periode_code": "202611"},
+    ])
+
+    avant_le_15 = limiter_periodes_disponibles(hist, date(2026, 11, 14))
+    a_partir_du_15 = limiter_periodes_disponibles(hist, date(2026, 11, 15))
+
+    assert avant_le_15["periode_code"].tolist() == ["202512", "202609"]
+    assert a_partir_du_15["periode_code"].tolist() == ["202512", "202609", "202610"]
+    assert hist["periode_code"].tolist() == ["202512", "202609", "202610", "202611"]
 
 
 def test_importer_anciennes_tolere_des_entetes_completement_differents(tmp_path):

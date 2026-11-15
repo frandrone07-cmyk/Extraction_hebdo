@@ -16,6 +16,7 @@ from .geo import charger_contours, fusionner_contours_par_region
 from .history import (
     importer_anciennes,
     iso_monday,
+    limiter_periodes_disponibles,
     lire_historique,
     migrer_historique_legacy,
     nettoyer_hist,
@@ -119,6 +120,7 @@ def _commande_check_week(args: argparse.Namespace) -> int:
 def _commande_build_json(args: argparse.Namespace) -> int:
     config = charger_config(args.config)
     hist = lire_historique(config.chemin_historique)
+    hist = limiter_periodes_disponibles(hist, datetime.now().date())
 
     latest = construire_latest(hist, config.seuils)
     evolution = construire_evolution(hist)
