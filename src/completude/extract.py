@@ -170,7 +170,7 @@ def extraire(
             tous_districts |= set(df[col_districts].ffill().dropna().astype(str))
 
     resolveur = UidResolver.depuis_client(client, tous_districts)
-    periodes = periodes_cumulatives(date_reference)
+    periodes_a_extraire = periodes_cumulatives(date_reference)
 
     resultat = ResultatExtraction(niveau_organisation_unit=resolveur.niveau_organisation_unit)
 
@@ -180,7 +180,7 @@ def extraire(
             logger.warning("%s : colonne Districts introuvable, région ignorée", region)
             continue
 
-        df = _lignes_generees(df_orig, col_districts, periodes, col_periode)
+        df = _lignes_generees(df_orig, col_districts, periodes_a_extraire, col_periode)
 
         periodes = [parse_periode(v) for v in df["Période"]]
         valides = [p is not None for p in periodes]

@@ -108,6 +108,18 @@ def _ecrire_gabarit_periodes(chemin, periodes):
     classeur.save(chemin)
 
 
+def _ecrire_gabarit_deux_regions(chemin):
+    classeur = openpyxl.Workbook()
+    feuille = classeur.active
+    feuille.title = "Dakar"
+    feuille.append(["Districts", "Période", "Paludisme - Reporting rate"])
+    feuille.append(["District de Pikine", "Septembre 2026", None])
+    autre_feuille = classeur.create_sheet("Thies")
+    autre_feuille.append(["Districts", "Période", "Paludisme - Reporting rate"])
+    autre_feuille.append(["District de Pikine", "Septembre 2026", None])
+    classeur.save(chemin)
+
+
 def test_extraire_remplit_les_valeurs_et_signale_les_cases_manquantes(tmp_path):
     chemin_gabarit = tmp_path / "gabarit.xlsx"
     _ecrire_gabarit(chemin_gabarit)
@@ -134,6 +146,28 @@ def test_extraire_remplit_les_valeurs_et_signale_les_cases_manquantes(tmp_path):
     assert resultat.uid_district[("Dakar", "District de Pikine")] == "OUA"
     assert len(resultat.diagnostics) == 1
     assert resultat.diagnostics[0].valeurs_recuperees == 3
+
+
+def test_extraire_garde_les_periodes_identiques_entre_les_regions(tmp_path):
+    chemin_gabarit = tmp_path / "gabarit.xlsx"
+    _ecrire_gabarit_deux_regions(chemin_gabarit)
+    client = FakeDhis2Client()
+
+    resultat = extraire(
+        client=client,
+        chemin_gabarit=str(chemin_gabarit),
+        date_reference=date(2026, 11, 15),
+    )
+
+    periodes_attendues = [f"{mois} 2026" for mois in (
+        "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
+        "Août", "Septembre", "Octobre", "Novembre",
+    )]
+    assert set(resultat.par_region) == {"Dakar", "Thies"}
+    assert all(df["Période"].tolist() == periodes_attendues for df in resultat.par_region.values())
+    assert [diagnostic.cases_attendues for diagnostic in resultat.diagnostics] == [11, 11]
+    assert len(client.appels_analytics) == 2
+    assert client.appels_analytics[0]["dimension"] == client.appels_analytics[1]["dimension"]
 
 
 def test_extraire_de_janvier_a_octobre_puis_ajoute_novembre_le_15(tmp_path):
