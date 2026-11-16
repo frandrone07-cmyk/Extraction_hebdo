@@ -1,0 +1,15 @@
+Enregistrements wolof de Sokhnaci (facultatifs).
+
+Si un fichier ci-dessous est present, Sokhnaci le joue a la place de la voix de synthese
+(qui n'a pas d'accent wolof). Sans fichier, elle utilise la voix francaise du navigateur.
+
+Format : MP3 mono, une phrase par fichier, sans silence au debut ni a la fin.
+
+  salaamalekum.mp3        "Salaamalekum !"
+  nanga-def.mp3           "Nanga def ?"
+  maa-ngi-fi-rekk.mp3     "Maa ngi fi rekk !"
+  jerejef.mp3             "Jerejef !"
+  baal-ma-waxaat.mp3      "Baal ma, men nga ko waxaat ?"
+
+A faire enregistrer par une personne qui parle wolof et qui est d'accord pour que sa voix soit
+publiee sur le site.

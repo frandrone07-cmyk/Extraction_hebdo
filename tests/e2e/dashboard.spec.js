@@ -195,7 +195,9 @@ test("parle avec Sokhnaci animée", async ({ page }) => {
   });
   await page.locator(".sokhnaci-speak").click();
   await expect(page.locator(".sokhnaci-widget")).toHaveClass(/speaking/);
-  await expect.poll(() => avatar.locator(".baby-arm-left").evaluate((arm) => getComputedStyle(arm).animationName)).toBe("baby-gesture");
+  await expect(page.locator(".sokhnaci-widget")).toHaveAttribute("data-geste", /\w+/);
+  await expect.poll(() => avatar.locator(".baby-arm-left, .baby-arm-right").evaluateAll((bras) => bras.some((arm) => getComputedStyle(arm).animationName !== "none"))).toBe(true);
+  await expect(page.locator(".sokhnaci-svg .sok-leg-l")).toHaveCount(1);
   await expect.poll(() => avatar.locator(".baby-mouth-open").evaluate((mouth) => getComputedStyle(mouth).display)).toBe("block");
 });
 

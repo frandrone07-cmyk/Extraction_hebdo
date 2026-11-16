@@ -76,7 +76,7 @@ function choisir(cle, options) {
   derniers.set(cle, index);
   return options[index];
 }
-function segment(texte, geste = null, langue = "fr") { return { langue, texte, geste }; }
+function segment(texte, geste = null, langue = "fr", audio = null) { return { langue, texte, geste, audio }; }
 function moyenne(valeurs) {
   const utiles = valeurs.filter((v) => v !== null && v !== undefined);
   return utiles.length ? utiles.reduce((a, b) => a + b, 0) / utiles.length : null;
@@ -127,7 +127,11 @@ export function creerSituation(model) {
   const emotion = emotionPour(taux, seuils);
   const segments = [];
 
-  segments.push(segment(choisir("salut", ["Salaamalekum !", "Salaamalekum ! Nanga def ?", "Salaamalekum, bienvenue !"]), "salut_main", "wo"));
+  segments.push(...choisir("salut", [
+    [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum")],
+    [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum"), segment("Nanga def ?", "sourire", "wo", "nanga-def")],
+    [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum"), segment("Bienvenue !", "sourire")],
+  ]));
   segments.push(segment(choisir("presentation", [
     "Je suis Sokhna Ci, votre assistante pour suivre les rapports.",
     "Moi, c’est Sokhna Ci : je vous guide dans la complétude des rapports.",
@@ -206,12 +210,39 @@ function formulairesCites(question, model) {
   const mots = ` ${question} `;
   return (model.tousFormulaires || []).filter((f) => jetons(f.nom).some((mot) => mots.includes(` ${mot}`)));
 }
+function distance(a, b) {
+  const lignes = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j += 1) lignes[0][j] = j;
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      lignes[i][j] = Math.min(lignes[i - 1][j] + 1, lignes[i][j - 1] + 1, lignes[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return lignes[a.length][b.length];
+}
+const MOTS_COURANTS = new Set(["pour", "point", "comment", "situation", "region", "regions", "district", "districts", "taux", "plus", "meilleur", "faible", "bonjour", "merci", "quel", "quelle", "quels", "quelles", "dans", "avec", "donne", "dites", "voir", "etre", "cette", "cette", "mois"]);
+// Renvoie { item, approx } : correspondance exacte d'abord, sinon la plus proche (nom mal prononcé ou mal transcrit).
 function entiteCitee(liste_, question, cle) {
-  const trouves = liste_.filter((item) => {
+  const exact = liste_.filter((item) => {
     const nom = normaliser(cle(item));
     return nom.length >= 3 && ` ${question} `.includes(` ${nom} `);
-  });
-  return trouves.sort((a, b) => normaliser(cle(b)).length - normaliser(cle(a)).length)[0] || null;
+  }).sort((a, b) => normaliser(cle(b)).length - normaliser(cle(a)).length)[0];
+  if (exact) return { item: exact, approx: false };
+  const mots = question.split(" ").filter(Boolean);
+  let meilleur = null;
+  for (const item of liste_) {
+    const nom = normaliser(cle(item));
+    if (nom.length < 5) continue;
+    const taille = nom.split(" ").length;
+    const tolerance = Math.floor(nom.length / 4);
+    for (let debut = 0; debut + taille <= mots.length; debut += 1) {
+      const groupe = mots.slice(debut, debut + taille).join(" ");
+      if (MOTS_COURANTS.has(groupe)) continue;
+      const ecart = distance(nom, groupe);
+      if (ecart <= tolerance && (!meilleur || ecart < meilleur.ecart)) meilleur = { item, approx: true, ecart };
+    }
+  }
+  return meilleur;
 }
 function reponse(emotion, segments, suivi = null) { return { etat: "parle", emotion, segments, suivi }; }
 function variationPhrase(variation, comparaison) {
@@ -221,39 +252,93 @@ function variationPhrase(variation, comparaison) {
   return `C’est stable par rapport à ${comparaison}.`;
 }
 
+const contexte = { type: null, nom: null, region: null };
+const INTENTIONS = {
+  pire: ["retard", "faible", "critique", "rouge", "urgent", "grave", "probleme", "mauvais", "bas ", "pire", "difficult", "difficile", "alerte", "inquiet", "inquietant", "souci", "prioritaire", "manque", "pas bon", "mal", "aider", "relancer", "relance"],
+  meilleur: ["meilleur", "bien", "bon ", "vert", "conforme", "reussi", "bravo", "top", "performant", "champion", "felicit", "reussite", "avance"],
+  evolution: ["evolu", "progress", "baisse", "hausse", "tendance", "compar", "avant", "depuis", "ecart", "semaine", "derniere", "change", "monte", "descend", "amelior"],
+  periode: ["quand", "date", "mise a jour", "periode", "mois", "extraction", "actualis", "frais", "recent"],
+  situation: ["situation", "point", "resume", "bilan", "global", "general", "national", "pays", "senegal", "ensemble", "comment", "taux", "moyenne", "chiffre", "complet", "ca va", "ou en"],
+};
+function intention(question) {
+  let meilleur = null;
+  for (const [nom, mots] of Object.entries(INTENTIONS)) {
+    const score = mots.filter((mot) => ` ${question} `.includes(mot.endsWith(" ") ? mot : ` ${mot}`) || question.includes(mot.trim())).length;
+    if (score > 0 && (!meilleur || score > meilleur.score)) meilleur = { nom, score };
+  }
+  return meilleur?.nom || null;
+}
+function retenir(type, nom, region = null) { contexte.type = type; contexte.nom = nom; contexte.region = region; }
+function prefixeApprox(approx, nom) { return approx ? [segment(`Je pense que vous parlez de ${nom}.`, "sourire")] : []; }
+
+function suiteContexte(model, seuils) {
+  const cadre = cadreDonnees(model);
+  if (contexte.type === "district") {
+    const district = toutesDistricts(model).find((d) => d.nom === contexte.nom && (!contexte.region || d.region === contexte.region));
+    const faibles = (district?.formulaires || []).filter((f) => f.valeur !== null && f.valeur !== undefined).sort((a, b) => a.valeur - b.valeur).slice(0, 3);
+    if (faibles.length) return reponse("encourageante", [segment(`${cadre}, à ${district.nom}, les formulaires à relancer sont ${liste(faibles.map((f) => `${nomFormulaire(f.nom)}, à ${T(f.valeur)}`))}.`, "compter_doigts"), segment("Contactez d’abord la structure qui n’a pas transmis ces rapports.", "geste_rassurant")]);
+  }
+  if (contexte.type === "region") {
+    const region = (model.toutesRegions || []).find((r) => r.nom === contexte.nom);
+    const faibles = [...(region?.districts || [])].filter((d) => d.tauxMoyen !== null && d.tauxMoyen !== undefined).sort((a, b) => a.tauxMoyen - b.tauxMoyen).slice(0, 3);
+    if (faibles.length) return reponse("encourageante", [segment(`${cadre}, dans la région de ${labelRegion(region.nom)}, les districts à relancer sont ${liste(faibles.map((d) => `${d.nom}, à ${T(d.tauxMoyen)}`))}.`, "compter_doigts")]);
+  }
+  if (contexte.type === "formulaire") {
+    const formulaire = (model.tousFormulaires || []).find((f) => f.nom === contexte.nom);
+    const parRegion = (model.toutesRegions || []).map((r) => ({ nom: r.nom, taux: moyenne(r.districts.flatMap((d) => d.formulaires.filter((f) => f.nom === contexte.nom).map((f) => f.valeur))) }))
+      .filter((r) => r.taux !== null).sort((a, b) => a.taux - b.taux).slice(0, 3);
+    if (formulaire && parRegion.length) return reponse("encourageante", [segment(`Pour « ${nomFormulaire(formulaire.nom)} », les régions les plus en retard sont ${liste(parRegion.map((r) => `${labelRegion(r.nom)}, à ${T(r.taux)}`))}.`, "compter_doigts")]);
+  }
+  return null;
+}
+
 export function repondre(questionBrute, model) {
   const question = normaliser(questionBrute);
   const seuils = model.seuils;
   const districts = toutesDistricts(model);
   const comparaison = model.comparaisonCle ? `l’extraction du ${D(model.comparaisonCle)}` : "l’extraction précédente";
-  if (!question) return reponse("neutre", [segment("Pardon, pouvez-vous répéter ?", "inclinaison_ecoute"), segment("Baal ma, mën nga ko waxaat ?", null, "wo")]);
-  if (/\b(merci|jerejef)\b/.test(question)) return reponse("souriante", [segment(choisir("merci", ["Jërëjëf à vous ! C’est un plaisir de vous accompagner.", "Avec plaisir ! Je reste là si vous avez d’autres questions."]), "main_sur_coeur")]);
-  if (/\b(humain|humaine|robot|vraie personne|qui es tu|tu es qui|qui etes vous)\b/.test(question)) return reponse("souriante", [segment("Je suis Sokhna Ci, une assistante virtuelle. Je lis les chiffres du tableau de bord pour vous aider à agir.", "sourire")]);
+  const cadre = cadreDonnees(model);
+  if (!question) return reponse("neutre", [segment("Pardon, pouvez-vous répéter ?", "inclinaison_ecoute"), segment("Baal ma, mën nga ko waxaat ?", null, "wo", "baal-ma-waxaat")]);
+  if (/\b(merci|jerejef)\b/.test(question)) return reponse("souriante", [segment("Jërëjëf !", "main_sur_coeur", "wo", "jerejef"), segment(choisir("merci", ["C’est un plaisir de vous accompagner.", "Je reste là si vous avez d’autres questions."]), "sourire")]);
+  if (/\b(salaamalekum|salam|bonjour|bonsoir|salut|nanga def|hello|coucou)\b/.test(question)) {
+    return reponse("souriante", [segment("Maa ngi fi rekk !", "salut_main", "wo", "maa-ngi-fi-rekk"), segment("Que voulez-vous savoir sur la complétude des rapports ?", "inclinaison_ecoute")]);
+  }
+  if (/\b(humain|humaine|robot|vraie personne|qui es tu|tu es qui|qui etes vous|ton nom|tu t appelles)\b/.test(question)) return reponse("souriante", [segment("Je suis Sokhna Ci, une assistante virtuelle. Je lis les chiffres du tableau de bord pour vous aider à agir.", "sourire")]);
   if (/\b(politique|election|president|diagnostic|malade|maladie|medicament|traitement|symptome|grossesse|vaccin pour)\b/.test(question)) {
     return reponse("neutre", [segment("Je suis là pour la complétude des rapports, pas pour cela. Voulez-vous que je vous donne la situation d’une région ?", "geste_ouvert")]);
   }
 
-  const district = entiteCitee(districts, question, (d) => d.nom);
-  const region = entiteCitee(model.toutesRegions || [], question, (r) => labelRegion(r.nom));
+  const suite = /\b(oui|ok|d accord|vas y|detail|details|plus|continue|explique|ensuite|et apres|pourquoi)\b/.test(question) && question.split(" ").length <= 6;
+  const districtTrouve = entiteCitee(districts, question, (d) => d.nom);
+  const regionTrouvee = entiteCitee(model.toutesRegions || [], question, (r) => labelRegion(r.nom));
   const formulairesTrouves = formulairesCites(question, model);
-  const cadre = cadreDonnees(model);
+  const district = districtTrouve?.item || null;
+  const region = regionTrouvee?.item || null;
+  const memeNom = district && region && normaliser(labelRegion(region.nom)) === normaliser(district.nom);
 
-  if (district && !(region && normaliser(labelRegion(region.nom)) === normaliser(district.nom))) {
+  if (suite && !district && !region && !formulairesTrouves.length) {
+    const reponseSuite = suiteContexte(model, seuils);
+    if (reponseSuite) return reponseSuite;
+  }
+
+  if (district && !memeNom && (!region || !districtTrouve.approx)) {
     const faibles = district.formulaires.filter((f) => f.valeur !== null && f.valeur !== undefined).sort((a, b) => a.valeur - b.valeur);
-    const segments = [segment(`${cadre}, ${district.nom} affiche ${T(district.tauxMoyen)}, ${niveau(district.tauxMoyen, seuils)}.`, "pointer_ecran")];
+    const segments = [...prefixeApprox(districtTrouve.approx, district.nom), segment(`${cadre}, ${district.nom} affiche ${T(district.tauxMoyen)}, ${niveau(district.tauxMoyen, seuils)}.`, "pointer_ecran")];
     const variation = variationPhrase(district.variation, comparaison);
     if (variation) segments.push(segment(variation, "hochement_tete"));
     if (faibles.length) segments.push(segment(`Son formulaire le plus faible est ${nomFormulaire(faibles[0].nom)}, à ${T(faibles[0].valeur)}.`, "pointer_ecran"));
     segments.push(segment("Voulez-vous le détail par formulaire ?", "inclinaison_ecoute"));
+    retenir("district", district.nom, district.region);
     return reponse(emotionPour(district.tauxMoyen, seuils), segments, "Détail par formulaire ?");
   }
   if (region) {
     const faibles = [...region.districts].filter((d) => d.tauxMoyen !== null && d.tauxMoyen !== undefined).sort((a, b) => a.tauxMoyen - b.tauxMoyen);
-    const segments = [segment(`${cadre}, la région de ${labelRegion(region.nom)} est à ${T(region.tauxMoyen)}, ${niveau(region.tauxMoyen, seuils)}.`, "pointer_ecran")];
+    const segments = [...prefixeApprox(regionTrouvee.approx, labelRegion(region.nom)), segment(`${cadre}, la région de ${labelRegion(region.nom)} est à ${T(region.tauxMoyen)}, ${niveau(region.tauxMoyen, seuils)}.`, "pointer_ecran")];
     segments.push(segment(`${E(region.nbCritique)} district${region.nbCritique > 1 ? "s" : ""} sur ${E(region.districts.length)} ${region.nbCritique > 1 ? "sont" : "est"} en rouge.`, "compter_doigts"));
     const variation = variationPhrase(region.variation, comparaison);
     if (variation) segments.push(segment(variation, "hochement_tete"));
     if (faibles.length) segments.push(segment(`À relancer d’abord : ${faibles[0].nom}, à ${T(faibles[0].tauxMoyen)}.`, "geste_rassurant"));
+    retenir("region", region.nom);
     return reponse(emotionPour(region.tauxMoyen, seuils), segments, "Détail par district ?");
   }
   if (formulairesTrouves.length === 1) {
@@ -264,18 +349,22 @@ export function repondre(questionBrute, model) {
     const variation = variationPhrase(formulaire.variation, comparaison);
     if (variation) segments.push(segment(variation, "hochement_tete"));
     if (parRegion.length > 1) segments.push(segment(`La région la plus en retard sur ce formulaire est ${labelRegion(parRegion[0].nom)}, à ${T(parRegion[0].taux)}.`, "geste_rassurant"));
+    retenir("formulaire", formulaire.nom);
     return reponse(emotionPour(formulaire.tauxMoyen, seuils), segments, "Une région en particulier ?");
   }
   if (formulairesTrouves.length > 1) {
     const famille = [...formulairesTrouves].filter((f) => f.tauxMoyen !== null && f.tauxMoyen !== undefined).sort((a, b) => a.tauxMoyen - b.tauxMoyen);
     const moyenneFamille = moyenne(famille.map((f) => f.tauxMoyen));
+    retenir("formulaire", famille[0].nom);
     return reponse(emotionPour(moyenneFamille, seuils), [
       segment(`${cadre}, ces ${E(famille.length)} formulaires sont en moyenne à ${T(moyenneFamille)}, ${niveau(moyenneFamille, seuils)}.`, "pointer_ecran"),
       segment(`Le plus en retard est ${nomFormulaire(famille[0].nom)}, à ${T(famille[0].tauxMoyen)}.`, "geste_rassurant"),
       segment("Voulez-vous celui-là en détail ?", "inclinaison_ecoute"),
     ], "Détail du formulaire le plus en retard ?");
   }
-  if (/\b(meilleur|meilleurs|mieux|top|premier|bravo|champion)\b/.test(question)) {
+
+  const but = intention(question);
+  if (but === "meilleur") {
     const parRegion = /\bregion/.test(question);
     const classes = (parRegion ? (model.toutesRegions || []).map((r) => ({ nom: labelRegion(r.nom), taux: r.tauxMoyen })) : districts.map((d) => ({ nom: d.nom, taux: d.tauxMoyen })))
       .filter((x) => x.taux !== null && x.taux !== undefined).sort((a, b) => b.taux - a.taux).slice(0, 3);
@@ -284,7 +373,7 @@ export function repondre(questionBrute, model) {
       segment("Bravo à ces équipes !", "pouce_leve"),
     ], "Et les plus en retard ?");
   }
-  if (/\b(pire|pires|faible|faibles|retard|critique|critiques|prioritaire|prioritaires|alerte|bas|difficile|probleme)\b/.test(question)) {
+  if (but === "pire") {
     const parRegion = /\bregion/.test(question);
     const classes = (parRegion ? (model.toutesRegions || []).map((r) => ({ nom: labelRegion(r.nom), taux: r.tauxMoyen })) : districts.map((d) => ({ nom: d.nom, taux: d.tauxMoyen })))
       .filter((x) => x.taux !== null && x.taux !== undefined).sort((a, b) => a.taux - b.taux).slice(0, 3);
@@ -293,9 +382,33 @@ export function repondre(questionBrute, model) {
       segment("Une relance ciblée auprès de ces équipes serait utile.", "geste_rassurant"),
     ], "Voulez-vous le détail d’un district ?");
   }
-  if (/\b(situation|point|resume|resumer|bilan|ou en est|vue d ensemble|ouverture)\b/.test(question)) return creerSituation(model);
-  if (/\b(aide|aider|peux tu|que sais tu|que peux)\b/.test(question)) {
-    return reponse("souriante", [segment("Demandez-moi la situation d’une région, d’un district ou d’un formulaire, ou bien les meilleurs et les plus en retard.", "geste_ouvert")]);
+  if (but === "evolution") {
+    const serie = (model.evolution?.moyenne_generale || []).filter((v) => v !== null && v !== undefined);
+    const nb = model.evolution?.semaines?.length || 0;
+    if (serie.length >= 2) {
+      const gain = Math.round((serie.at(-1) - serie[0]) * 10) / 10;
+      return reponse(gain >= 0 ? "encourageante" : "preoccupee", [
+        segment(`Sur les ${E(nb)} extractions suivies, le taux des mois comparables est passé de ${T(Math.round(serie[0] * 10) / 10)} à ${T(Math.round(serie.at(-1) * 10) / 10)}.`, "pointer_ecran"),
+        segment("Cette hausse vient surtout des rapports transmis en retard après chaque mois.", "hochement_tete"),
+      ], "Voulez-vous l’évolution d’une région ?");
+    }
   }
-  return reponse("neutre", [segment("Je n’ai pas bien saisi. De quelle région, quel district ou quel formulaire voulez-vous parler ?", "inclinaison_ecoute")], "Région, district ou formulaire ?");
+  if (but === "periode") {
+    return reponse("neutre", [
+      segment(`Les données datent de l’extraction du ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`, "pointer_ecran"),
+      segment("Une nouvelle extraction est faite chaque lundi à minuit.", "hochement_tete"),
+    ]);
+  }
+  if (but === "situation") return creerSituation(model);
+  if (/\b(aide|aider|peux tu|que sais tu|que peux|comment ca marche)\b/.test(question)) {
+    return reponse("souriante", [segment("Demandez-moi la situation d’une région, d’un district ou d’un formulaire, ou bien les meilleurs et les plus en retard. Vous pouvez aussi me parler au micro.", "geste_ouvert")]);
+  }
+  if (suite) { const reponseSuite = suiteContexte(model, seuils); if (reponseSuite) return reponseSuite; }
+
+  // Question trop vague : je donne le point national en une phrase, puis UNE précision.
+  const national = moyenne(model.districts.map((d) => d.tauxMoyen));
+  return reponse("neutre", [
+    segment(`Je n’ai pas bien saisi, mais voici l’essentiel : le taux moyen est de ${T(national)}, ${niveau(national, seuils)}.`, "pointer_ecran"),
+    segment("Parlez-vous d’une région, d’un district ou d’un formulaire ?", "inclinaison_ecoute"),
+  ], "Région, district ou formulaire ?");
 }
