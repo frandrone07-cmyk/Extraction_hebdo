@@ -1,12 +1,15 @@
+import { creerSituation, repondre, versAffichage, versOral } from "./sokhnaci-dialogue.js";
+
 const CLE_VOIX = "completude-sokhnaci-voice";
 let widget = null;
 let currentText = "";
+let segmentsCourants = [];
+let modeleCourant = null;
+const HUMEUR_PAR_EMOTION = { neutre: "attentif", souriante: "serein", preoccupee: "alerte", encourageante: "vigilant", felicitations: "content" };
+const LIBELLE_HUMEUR = { alerte: "Point d’attention", vigilant: "À surveiller", attentif: "Analyse en cours", content: "En progression", serein: "Situation conforme" };
 let voiceEnabled = true;
 let utterance = null;
 
-function pct(value) { return value === null || value === undefined ? "non disponible" : `${Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pour cent`; }
-function points(value) { return `${Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} point${Math.abs(value) === 1 ? "" : "s"} de pourcentage`; }
-function labelRegion(nom) { return nom.replace(/^DRS[_ ]/, ""); }
 function moyenne(values) {
   const usable = values.filter((value) => value !== null && value !== undefined);
   return usable.length ? usable.reduce((a, b) => a + b, 0) / usable.length : null;
@@ -25,105 +28,6 @@ function tendanceRecente(serie) {
   if (d1 >= 1 && d2 >= 1) return "hausse";
   if (Math.abs(d1) < 1 && Math.abs(d2) < 1) return "stagnation";
   return null;
-}
-
-function contexteFiltres(model) {
-  const morceaux = [];
-  if (model.selection.region !== "Toutes les régions") morceaux.push(`région ${model.selection.region}`);
-  if (model.selection.formulaire !== "Tous les formulaires") morceaux.push(`formulaire « ${model.selection.formulaire} »`);
-  if (model.selection.periode !== "Toutes les périodes") morceaux.push(`période ${model.selection.periode}`);
-  return morceaux;
-}
-
-function creerTopo(model) {
-  const date = model.semaineCle ? new Date(`${model.semaineCle}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "la dernière extraction";
-  if (!model.districts.length) return `Bonjour, je suis Sokhnaci. Aucun résultat n’est disponible pour les filtres sélectionnés. Élargissez la sélection pour poursuivre l’analyse.`;
-
-  const rate = moyenne(model.districts.map((district) => district.tauxMoyen));
-  const previous = moyenne(model.districts.map((district) => district.tauxPrecedent));
-  const comparable = moyenne(model.districts.map((district) => district.tauxComparable));
-  const difference = comparable === null || previous === null ? null : Math.round((comparable - previous) * 10) / 10;
-  const avecTaux = model.districts.filter((district) => district.tauxMoyen !== null && district.tauxMoyen !== undefined);
-  const sansTaux = model.districts.length - avecTaux.length;
-  const critical = model.districts.filter((district) => district.statut === "critique")
-    .sort((a, b) => (a.tauxMoyen ?? 101) - (b.tauxMoyen ?? 101));
-  const vigilance = model.districts.filter((district) => district.statut === "surveiller").length;
-  const conformes = model.districts.filter((district) => district.statut === "conforme").length;
-  const regionsValides = [...model.regions].filter((region) => region.tauxMoyen !== null);
-  const best = regionsValides.length ? [...regionsValides].sort((a, b) => b.tauxMoyen - a.tauxMoyen)[0] : null;
-  const needsHelp = regionsValides.length ? [...regionsValides].sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0] : null;
-  const formulairesValides = [...(model.formulaires || [])].filter((formulaire) => formulaire.tauxMoyen !== null);
-  const formulaireFaible = formulairesValides.length ? [...formulairesValides].sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0] : null;
-  const tendance = tendanceRecente(model.evolution?.moyenne_generale || []);
-  const contexte = contexteFiltres(model);
-  const denominateur = model.districts.length;
-  const part = (nombre) => `${Math.round((nombre / denominateur) * 1000) / 10}%`;
-  const comparaison = model.comparaisonCle
-    ? new Date(`${model.comparaisonCle}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })
-    : null;
-  const echelle = contexte.length ? "dans le périmètre sélectionné" : "à l’échelle nationale";
-
-  const parts = [];
-  const introContexte = contexte.length ? ` (${contexte.join(", ")})` : "";
-  parts.push(`Bonjour, je suis Sokhnaci. Pour l’extraction du ${date}${introContexte}, le taux moyen des districts affichés est de ${pct(rate)}.`);
-
-  if (difference !== null) {
-    const moisCommuns = model.comparaisonRepli ? ` (sur les mois communs aux deux extractions : ${model.comparaisonRepli.join(", ")})` : "";
-    const parRapport = `${comparaison ? `par rapport à l’extraction du ${comparaison}` : "par rapport à l’extraction de comparaison"}${moisCommuns}`;
-    if (difference >= model.seuils.baisse) parts.push(`Le taux progresse de ${points(difference)} ${parRapport}.`);
-    else if (difference <= -model.seuils.baisse) parts.push(`Le taux recule de ${points(Math.abs(difference))} ${parRapport} — un point à examiner.`);
-    else parts.push(`Le taux reste proche de celui de l’extraction de comparaison (${parRapport}).`);
-  }
-
-  const nbExtractions = model.evolution?.semaines?.length || 0;
-  const serie = (model.evolution?.moyenne_generale || []).filter((value) => value !== null && value !== undefined);
-  if (nbExtractions >= 3 && serie.length >= 3) {
-    const gain = Math.round((serie.at(-1) - serie[0]) * 10) / 10;
-    parts.push(`Sur les ${nbExtractions} extractions suivies, le taux ${model.evolution.tendanceRepli ? "des mois comparables" : "du mois choisi"} ${gain >= 0 ? "a gagné" : "a perdu"} ${points(Math.abs(gain))}. Cette progression traduit surtout le rattrapage des rapports transmis en retard après la fin de chaque mois.`);
-  }
-  if (tendance === "baisse") parts.push(`La tendance ${echelle} baisse depuis trois semaines consécutives.`);
-  else if (tendance === "hausse") parts.push(`La tendance ${echelle} progresse depuis trois semaines consécutives.`);
-  else if (tendance === "stagnation" && rate !== null && rate < model.seuils.conforme) parts.push(`La situation ${echelle} stagne depuis trois semaines.`);
-
-  parts.push(`Répartition des ${denominateur} districts : ${critical.length} critique${critical.length > 1 ? "s" : ""} (${part(critical.length)}), ${vigilance} à surveiller (${part(vigilance)}), ${conformes} conforme${conformes > 1 ? "s" : ""} (${part(conformes)}) et ${sansTaux} sans taux exploitable.`);
-  if (critical.length) {
-    const plusFaibles = critical.slice(0, 3).map((district) => `${district.nom} (${pct(district.tauxMoyen)})`).join(", ");
-    parts.push(`Sous le seuil critique de ${model.seuils.critique}%, les priorités sont : ${plusFaibles}.`);
-  }
-
-  if (best && needsHelp && best.nom !== needsHelp.nom) {
-    const ecart = Math.round((best.tauxMoyen - needsHelp.tauxMoyen) * 10) / 10;
-    parts.push(`${labelRegion(best.nom)} affiche le taux régional le plus élevé (${pct(best.tauxMoyen)}), contre ${pct(needsHelp.tauxMoyen)} pour ${labelRegion(needsHelp.nom)}, soit un écart de ${points(ecart)}.`);
-  }
-
-  const avecEcart = regionsValides.filter((region) => region.variation !== null && region.variation !== undefined);
-  if (comparaison && avecEcart.length > 2) {
-    const parEcart = [...avecEcart].sort((a, b) => b.variation - a.variation);
-    const hausse = parEcart[0];
-    const baisse = parEcart.at(-1);
-    if (hausse.variation >= 0.5) parts.push(`La plus forte progression régionale est ${labelRegion(hausse.nom)} (+${points(hausse.variation)}).`);
-    if (baisse.variation < 0) parts.push(`${labelRegion(baisse.nom)} recule de ${points(Math.abs(baisse.variation))} : à vérifier en priorité.`);
-
-  }
-  const enRecul = model.districts.filter((district) => district.variation !== null && district.variation !== undefined && district.variation <= -model.seuils.baisse)
-    .sort((a, b) => a.variation - b.variation);
-  if (comparaison && enRecul.length) {
-    parts.push(`${enRecul.length} district${enRecul.length > 1 ? "s" : ""} recule${enRecul.length > 1 ? "nt" : ""} d’au moins ${model.seuils.baisse} points, notamment ${enRecul.slice(0, 2).map((district) => `${district.nom} (${Number(district.variation).toLocaleString("fr-FR")} pt)`).join(" et ")}.`);
-  }
-  const quasiConformes = model.districts.filter((district) => district.statut === "surveiller" && district.tauxMoyen >= model.seuils.conforme - 5);
-  if (quasiConformes.length) parts.push(`${quasiConformes.length} district${quasiConformes.length > 1 ? "s sont" : " est"} à moins de 5 points du seuil de conformité : une relance courte peut les faire basculer.`);
-  if (formulaireFaible && formulairesValides.length > 1 && formulaireFaible.tauxMoyen < model.seuils.conforme) {
-    parts.push(`Le formulaire le moins bien renseigné est « ${formulaireFaible.nom} », à ${pct(formulaireFaible.tauxMoyen)} en moyenne — un point d’appui possible pour la prochaine relance.`);
-  }
-
-  if (model.districtsNonResolus?.length) {
-    parts.push(`${model.districtsNonResolus.length} district${model.districtsNonResolus.length > 1 ? "s" : ""} du gabarit n’${model.districtsNonResolus.length > 1 ? "ont" : "a"} pas de correspondance DHIS2 reconnue : vérifiez l’orthographe dans l’onglet Qualité et méthode.`);
-  }
-
-  if (critical.length) parts.push("Action recommandée : commencer par les trois districts les plus faibles et vérifier avec eux les formulaires non renseignés.");
-  else if (vigilance) parts.push("Action recommandée : maintenir une relance ciblée auprès des districts à surveiller.");
-  else parts.push("Action recommandée : maintenir le suivi régulier et vérifier la stabilité des résultats à la prochaine extraction.");
-  return parts.join(" ");
 }
 
 function svgMarkup() {
@@ -146,15 +50,20 @@ function svgMarkup() {
 }
 
 function parler() {
-  if (!voiceEnabled || !currentText || !("speechSynthesis" in window)) return;
+  if (!voiceEnabled || !segmentsCourants.length || !("speechSynthesis" in window)) return;
   window.speechSynthesis.cancel();
-  utterance = new SpeechSynthesisUtterance(currentText);
-  utterance.lang = "fr-FR";
-  utterance.rate = 0.94;
-  utterance.pitch = 1.02;
-  utterance.onstart = () => widget?.classList.add("speaking");
-  utterance.onend = utterance.onerror = () => widget?.classList.remove("speaking");
-  window.speechSynthesis.speak(utterance);
+  segmentsCourants.forEach((segment, index) => {
+    utterance = new SpeechSynthesisUtterance(segment.oral);
+    utterance.lang = "fr-FR";
+    utterance.rate = 0.94;
+    utterance.pitch = 1.04;
+    utterance.onstart = () => {
+      widget?.classList.add("speaking");
+      if (widget) widget.dataset.geste = segment.geste || "";
+    };
+    if (index === segmentsCourants.length - 1) utterance.onend = utterance.onerror = () => widget?.classList.remove("speaking");
+    window.speechSynthesis.speak(utterance);
+  });
 }
 
 function humeur(model) {
@@ -171,15 +80,27 @@ function humeur(model) {
   return "attentif";
 }
 
-function render(model, { speak = false } = {}) {
-  currentText = creerTopo(model);
-  const mood = humeur(model);
+function afficherDialogue(dialogue, humeurForcee = null, { speak = false } = {}) {
+  segmentsCourants = dialogue.segments.map((segment) => ({ ...segment, affichage: versAffichage(segment.texte), oral: versOral(segment.texte) }));
+  currentText = segmentsCourants.map((segment) => segment.affichage).join(" ");
+  const mood = humeurForcee || HUMEUR_PAR_EMOTION[dialogue.emotion] || "attentif";
   const bubble = widget.querySelector(".sokhnaci-bubble");
   bubble.textContent = currentText;
   bubble.setAttribute("aria-label", currentText);
+  bubble.scrollTop = 0;
   widget.querySelector(".sokhnaci-svg").setAttribute("data-mood", mood);
-  widget.querySelector(".sokhnaci-state").textContent = ({ alerte: "Point d’attention", vigilant: "À surveiller", attentif: "Analyse en cours", content: "En progression", serein: "Situation conforme" })[mood];
+  widget.querySelector(".sokhnaci-state").textContent = LIBELLE_HUMEUR[mood];
   if (speak) parler();
+}
+
+function render(model, { speak = false } = {}) {
+  modeleCourant = model;
+  afficherDialogue(creerSituation(model), humeur(model), { speak });
+}
+
+function poserQuestion(texte) {
+  if (!modeleCourant) return;
+  afficherDialogue(repondre(texte, modeleCourant), null, { speak: voiceEnabled });
 }
 
 function majBoutonVoix(bouton) {
@@ -201,7 +122,7 @@ export function initSokhnaci(model) {
   widget = document.createElement("section");
   widget.className = "sokhnaci-widget";
   widget.setAttribute("aria-label", "Bébé Sokhnaci, guide vocal du tableau de bord");
-  widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
+  widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div><form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button type="submit">Demander</button></form></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
   document.body.appendChild(widget);
   widget.querySelector(".sokhnaci-collapse").addEventListener("click", replierSokhnaci);
   widget.querySelector(".sokhnaci-launcher").addEventListener("click", () => {
@@ -209,6 +130,12 @@ export function initSokhnaci(model) {
     widget.querySelector(".sokhnaci-launcher").hidden = true;
   });
   widget.querySelector(".sokhnaci-speak").addEventListener("click", parler);
+  widget.querySelector(".sokhnaci-ask").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const champ = event.currentTarget.elements.question;
+    poserQuestion(champ.value);
+    champ.value = "";
+  });
   widget.querySelector(".sokhnaci-voice").addEventListener("click", (event) => {
     voiceEnabled = !voiceEnabled;
     try { localStorage.setItem(CLE_VOIX, String(voiceEnabled)); } catch { /* stockage facultatif */ }

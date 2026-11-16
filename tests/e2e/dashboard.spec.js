@@ -180,8 +180,15 @@ test("permet le thème et le mode TV au clavier", async ({ page }) => {
 test("parle avec le personnage bébé animé", async ({ page }) => {
   const avatar = page.locator(".sokhnaci-svg");
   await expect(avatar).toHaveAttribute("aria-label", "Bébé Sokhnaci, guide du tableau de bord");
-  await expect(page.locator(".sokhnaci-bubble")).toContainText("Répartition des 79 districts");
-  await expect(page.locator(".sokhnaci-bubble")).toContainText("Action recommandée");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Salaamalekum");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText(/Sokhna Ci/);
+  await expect(page.locator(".sokhnaci-bubble")).toContainText(/\d+,\d %/);
+  await page.locator(".sokhnaci-ask input").fill("Comment va Dakar Centre ?");
+  await page.locator(".sokhnaci-ask input").press("Enter");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Dakar Centre affiche");
+  await page.locator(".sokhnaci-ask input").fill("Quel est le traitement du paludisme");
+  await page.locator(".sokhnaci-ask input").press("Enter");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("complétude des rapports");
   await page.evaluate(() => {
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak = (utterance) => utterance.onstart?.();

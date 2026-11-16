@@ -446,6 +446,10 @@ html[data-theme="dark"] .status-chip.conforme, html[data-theme="dark"] .empty-st
 .sokhnaci-actions { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 7px; margin-top: 2px; }
 .sokhnaci-actions button { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); color: var(--muted); font-size: 9px; font-weight: 700; cursor: pointer; }
 .sokhnaci-actions .sokhnaci-speak { border-color: var(--primary); background: var(--primary); color: var(--primary-contrast); }
+.sokhnaci-ask { display: flex; grid-column: 1 / -1; gap: 6px; margin-top: 6px; }
+.sokhnaci-ask input { flex: 1; min-width: 0; min-height: 30px; padding: 0 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 11px; }
+.sokhnaci-ask button { min-height: 30px; padding: 0 10px; border: 1px solid var(--primary); border-radius: 8px; background: transparent; color: var(--primary); font-size: 10px; font-weight: 700; cursor: pointer; }
+.sokhnaci-widget[data-geste="salut_main"].speaking .baby-arm-right { animation: baby-wave 1s ease-in-out infinite; }
 .sokhnaci-launcher { display: flex; align-items: center; gap: 8px; margin-left: auto; padding: 8px 12px 8px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); font-size: 10px; font-weight: 750; cursor: pointer; }
 .sokhnaci-mini { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 50%; background: var(--primary); color: var(--primary-contrast); font-family: Manrope, sans-serif; }
 .sokhnaci-mini::before { content: "👶"; font-size: 15px; }
