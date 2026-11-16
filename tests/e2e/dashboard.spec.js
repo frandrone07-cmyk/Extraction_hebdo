@@ -226,7 +226,8 @@ test("montre toute la carte TV puis visite tous les districts", async ({ page })
   await page.clock.fastForward(3200);
   await expect(progress).toContainText(/Région 1\/\d+ · .* — District 1\//);
   const firstDistrict = (await progress.getAttribute("data-district")).split("||")[1];
-  await expect(page.locator("#tv-map .leaflet-tooltip")).toContainText(firstDistrict);
+  await expect(page.locator("#tv-map .carte-etiquette")).toHaveCount(1);
+  await expect(page.locator("#tv-map .leaflet-tooltip")).toHaveCount(0);
   await expect(page.locator("#tv-map .carte-etiquette-active")).toContainText(firstDistrict);
   await expect(page.locator("#tv-tour-districts .active")).toContainText(firstDistrict);
   await expect(page.locator("#tv-tour-districts .tv-tour-district")).not.toHaveCount(0);

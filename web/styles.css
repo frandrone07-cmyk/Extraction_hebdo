@@ -224,13 +224,13 @@ main { max-width: 1404px; min-height: 50vh; margin: 0 auto; padding: 22px 0 52px
 .carte-etiquette-nom span { display: grid; width: max-content; max-width: 80px; gap: 0; padding: 1px 4px; white-space: normal; line-height: 1.05; text-align: center; }
 .carte-etiquette-nom strong { overflow: hidden; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .carte-etiquette-nom small { font-size: 7.5px; }
-.carte-etiquette-active span { outline: 2px solid #fff; box-shadow: 0 0 0 5px rgba(19, 51, 42, .72), 0 2px 8px rgba(0,0,0,.35); }
+.carte-etiquette-active span { outline: 1px solid #fff; box-shadow: 0 0 0 2px rgba(19, 51, 42, .8); }
 .tv-slide .carte-etiquette span { font-size: 10px; padding: 1px 5px; }
 .region-rate-label { border: 0; background: transparent; }
-.region-rate-label span { display: grid; width: max-content; max-width: 88px; gap: 0; padding: 1px 4px; transform: translate(-50%, -50%); border: 1px solid rgba(255,255,255,.9); border-radius: 6px; color: #fff; font-family: Manrope, sans-serif; text-align: center; text-shadow: 0 1px 2px rgba(0,0,0,.45); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.region-rate-label span { display: grid; width: max-content; max-width: 88px; gap: 0; padding: 0; transform: translate(-50%, -50%); border: 0; border-radius: 4px; background: transparent !important; color: #fff; font-family: Manrope, sans-serif; text-align: center; text-shadow: 0 0 2px #0b2a22, 0 0 3px #0b2a22, 0 1px 2px #0b2a22; box-shadow: none; }
 .region-rate-label strong { overflow: hidden; font-size: 7.5px; text-overflow: ellipsis; white-space: nowrap; }
 .region-rate-label small { font-size: 8px; font-weight: 800; white-space: nowrap; }
-.region-label-selected span { outline: 2px solid #fff; box-shadow: 0 0 0 5px rgba(19, 51, 42, .72), 0 2px 8px rgba(0,0,0,.35); }
+.region-label-selected span { padding: 1px 5px; background: rgba(19, 51, 42, .82) !important; text-shadow: none; }
 .statut-puce { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; }
 .statut-critique { background: var(--critique); }
 .statut-surveiller { background: var(--surveiller); }
@@ -401,9 +401,9 @@ body.tv .tv-bar { position: fixed; top: 0; right: 0; left: 0; z-index: 2500; dis
 .tv-tour-district strong.surveiller { color: var(--surveiller); }
 .tv-tour-district strong.conforme { color: #0b5c42; }
 .tv-tour-district strong.inconnu { color: var(--inconnu); }
-.tv-slide .carte-etiquette-nom span { display: grid; width: 84px; gap: 0; padding: 1px 4px; white-space: normal; line-height: 1.1; }
-.tv-slide .carte-etiquette-nom strong { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.tv-slide .carte-etiquette-nom small { font-size: 9px; }
+.tv-slide .carte-etiquette-nom span { display: grid; width: 66px; gap: 0; padding: 1px 4px; white-space: normal; line-height: 1.1; }
+.tv-slide .carte-etiquette-nom strong { overflow: hidden; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.tv-slide .carte-etiquette-nom small { font-size: 8px; }
 body.tv .leaflet-container { height: 100%; }
 .tv-bar { display: none; }
 html[data-theme="dark"] .status-chip.conforme, html[data-theme="dark"] .empty-state, html[data-theme="dark"] .priority-rank-best { color: var(--conforme); }

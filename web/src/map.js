@@ -9,6 +9,53 @@ let regionEtiquettes = null;
 let limitesCarte = null;
 let districtActif = null;
 let etiquetteDistrictActive = null;
+let etiquetteActiveSeule = false;
+
+// Point situé réellement dans le polygone (le centre du rectangle englobant peut tomber en mer ou dans un autre district).
+function pointInterieur(layer) {
+  const polygones = layer.getLatLngs();
+  const estAnneau = (valeur) => Array.isArray(valeur) && valeur.length && valeur[0] && valeur[0].lat !== undefined;
+  const anneaux = estAnneau(polygones[0]) ? [polygones[0]] : polygones.map((polygone) => polygone[0]);
+  const aire = (anneau) => { const b = L.latLngBounds(anneau); return (b.getNorth() - b.getSouth()) * (b.getEast() - b.getWest()); };
+  const anneau = anneaux.filter(estAnneau).sort((a, b) => aire(b) - aire(a))[0];
+  if (!anneau) return layer.getBounds().getCenter();
+  const dedans = (x, y) => {
+    let inside = false;
+    for (let i = 0, j = anneau.length - 1; i < anneau.length; j = i++) {
+      const a = anneau[i];
+      const b = anneau[j];
+      if ((a.lat > y) !== (b.lat > y) && x < ((b.lng - a.lng) * (y - a.lat)) / (b.lat - a.lat) + a.lng) inside = !inside;
+    }
+    return inside;
+  };
+  let sommeAire = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0, j = anneau.length - 1; i < anneau.length; j = i++) {
+    const f = anneau[j].lng * anneau[i].lat - anneau[i].lng * anneau[j].lat;
+    sommeAire += f;
+    cx += (anneau[j].lng + anneau[i].lng) * f;
+    cy += (anneau[j].lat + anneau[i].lat) * f;
+  }
+  if (sommeAire) {
+    const x = cx / (3 * sommeAire);
+    const y = cy / (3 * sommeAire);
+    if (dedans(x, y)) return L.latLng(y, x);
+  }
+  const b = L.latLngBounds(anneau);
+  let meilleur = null;
+  let distanceMax = -1;
+  for (let i = 1; i < 14; i += 1) {
+    for (let k = 1; k < 14; k += 1) {
+      const x = b.getWest() + ((b.getEast() - b.getWest()) * i) / 14;
+      const y = b.getSouth() + ((b.getNorth() - b.getSouth()) * k) / 14;
+      if (!dedans(x, y)) continue;
+      const proche = Math.min(...anneau.map((point) => (point.lng - x) ** 2 + (point.lat - y) ** 2));
+      if (proche > distanceMax) { distanceMax = proche; meilleur = L.latLng(y, x); }
+    }
+  }
+  return meilleur || b.getCenter();
+}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -103,13 +150,14 @@ export function centrerDistrict(region, nom) {
   } else {
     carte.flyToBounds(bounds, { padding: [48, 48], maxZoom: 11, duration: .8 });
   }
-  layer.openTooltip();
+  if (!etiquetteActiveSeule) layer.openTooltip();
   gererZoomEtiquettes?.();
   return true;
 }
 
-export function afficherDistricts(districts, { onClicDistrict, etiquettes = false, nomsEtiquettes = false, seuils = null } = {}) {
+export function afficherDistricts(districts, { onClicDistrict, etiquettes = false, nomsEtiquettes = false, seuils = null, activeSeule = false } = {}) {
   if (!carte) return;
+  etiquetteActiveSeule = activeSeule;
   if (coucheDistricts) carte.removeLayer(coucheDistricts);
   if (coucheEtiquettes) carte.removeLayer(coucheEtiquettes);
   if (gererZoomEtiquettes) { carte.off("zoomend moveend", gererZoomEtiquettes); gererZoomEtiquettes = null; }
@@ -156,7 +204,8 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
       const statutEtiquette = seuils ? statutPourTaux(district.tauxMoyen, seuils) : district.statut;
       const couleurEtiquette = couleur(statutEtiquette);
       const tauxEtiquette = afficherTaux(district.tauxMoyen);
-      const marqueur = L.marker(limites.getCenter(), {
+      const centre = pointInterieur(layer);
+      const marqueur = L.marker(centre, {
         interactive: false,
         keyboard: false,
         icon: L.divIcon({
@@ -168,7 +217,7 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         }),
       });
       const surface = (limites.getNorth() - limites.getSouth()) * (limites.getEast() - limites.getWest());
-      entrees.push({ marqueur, limites, surface, region: district.region, nom: district.nom, key: `${district.region}||${district.nom}` });
+      entrees.push({ marqueur, limites, centre, surface, region: district.region, nom: district.nom, key: `${district.region}||${district.nom}` });
     });
     entrees.sort((a, b) => b.surface - a.surface);
     // Placement glouton : les grands districts d'abord ; une etiquette n'est
@@ -183,7 +232,7 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
       const ordre = [...entrees].sort((a, b) => (b.key === etiquetteDistrictActive) - (a.key === etiquetteDistrictActive));
       for (const entree of ordre) {
         const present = coucheEtiquettes.hasLayer(entree.marqueur);
-        if (regionEtiquettes && entree.region !== regionEtiquettes) {
+        if ((regionEtiquettes && entree.region !== regionEtiquettes) || (etiquetteActiveSeule && etiquetteDistrictActive && entree.key !== etiquetteDistrictActive)) {
           if (present) coucheEtiquettes.removeLayer(entree.marqueur);
           continue;
         }
@@ -195,7 +244,7 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         const active = entree.key === etiquetteDistrictActive;
         const tient = (sud.x - nord.x) >= largeurEtiquette * (nomsEtiquettes ? 0.5 : 0.9)
           && (sud.y - nord.y) >= hauteurEtiquette * (nomsEtiquettes ? 0.5 : 0.9);
-        const centre = carte.latLngToContainerPoint(entree.limites.getCenter());
+        const centre = carte.latLngToContainerPoint(entree.centre);
         const boite = { x: centre.x - largeurEtiquette / 2, y: centre.y - hauteurEtiquette / 2, l: largeurEtiquette, h: hauteurEtiquette };
         const chevauche = places.some((p) => boite.x < p.x + p.l + 3 && p.x < boite.x + boite.l + 3 && boite.y < p.y + p.h + 3 && p.y < boite.y + boite.h + 3);
         const libre = active || (tient && !chevauche);

@@ -151,7 +151,7 @@ function drawSlide(id) {
   } else if (id === "carte") {
     detruireCarte();
     initCarte("tv-map", document.documentElement.dataset.theme);
-    afficherDistricts(data.districts, { onClicDistrict: ouvrirFicheDistrict, etiquettes: true, nomsEtiquettes: true, seuils: data.seuils });
+    afficherDistricts(data.districts, { onClicDistrict: ouvrirFicheDistrict, etiquettes: true, nomsEtiquettes: true, activeSeule: true, seuils: data.seuils });
     detruireCarteRegions();
     initCarteRegions("tv-map-regions", document.documentElement.dataset.theme);
     afficherRegions(data.toutesRegions, data.seuils, data.selection.regionCode);

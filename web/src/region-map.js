@@ -68,7 +68,7 @@ export function afficherRegions(regions, seuils, selectionRegion = null) {
         color: active ? "#163b31" : "#fff",
         weight: active ? 4 : 2,
         fillColor: couleur(statut(region?.tauxMoyen, seuils)),
-        fillOpacity: active ? .98 : .8,
+        fillOpacity: active ? .85 : .58,
       };
     },
     onEachFeature: (feature, layer) => {
@@ -141,7 +141,7 @@ export function mettreEnEvidenceRegion(nom) {
   if (!carteRegions) return false;
   regionSelectionnee = nom;
   for (const [region, layer] of couchesParRegion) {
-    layer.setStyle({ color: region === nom ? "#163b31" : "#fff", weight: region === nom ? 4 : 2, fillOpacity: region === nom ? .98 : .8 });
+    layer.setStyle({ color: region === nom ? "#163b31" : "#fff", weight: region === nom ? 4 : 2, fillOpacity: region === nom ? .85 : .58 });
   }
   const layer = couchesParRegion.get(nom);
   layer?.bringToFront();
