@@ -345,6 +345,10 @@ body.tv .tv-bar { position: fixed; top: 0; right: 0; left: 0; z-index: 2500; dis
 .tv-dot.on { width: 22px; background: #9be1b5; }
 .tv-controls { display: flex; align-items: center; gap: 5px; }
 .tv-controls button, .tv-controls select { display: grid; min-width: 31px; height: 31px; place-items: center; padding: 0 7px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; background: rgba(255,255,255,.08); color: #f3f8f4; font-size: 12px; cursor: pointer; }
+.tv-clock { display: grid; margin-right: 8px; text-align: right; line-height: 1.1; white-space: nowrap; }
+.tv-clock strong { color: #fff; font-family: Manrope, sans-serif; font-size: 19px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.tv-clock small { display: block; color: #b7c9c0; font-size: 9px; }
+.tv-clock small::first-letter { text-transform: uppercase; }
 .tv-controls button:hover, .tv-controls select:hover { background: rgba(255,255,255,.16); }
 .tv-controls select { display: block; font-size: 9px; }
 .tv-controls option { color: #132a31; }

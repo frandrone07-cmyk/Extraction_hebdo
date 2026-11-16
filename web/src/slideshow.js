@@ -25,6 +25,7 @@ let paused = false;
 let timer = null;
 let progressTimer = null;
 let refreshTimer = null;
+let clockTimer = null;
 let wakeLock = null;
 let pointerStart = null;
 let active = false;
@@ -41,9 +42,19 @@ const average = (values) => { const items = values.filter((value) => value !== n
 function header(index) {
   const data = activeModel();
   const slide = selectedSlides[index];
-  return `<header class="tv-bar" id="tvbar"><div class="tv-brand"><span class="tv-flag" aria-hidden="true">S</span><span><strong>Complétude DHIS2</strong><small>Ministère de la Santé · Sénégal</small></span></div><div class="tv-heading"><strong id="tv-title">${escapeHtml(slide.title)}</strong><span id="tv-counter">${index + 1} / ${selectedSlides.length}</span><small class="tv-extraction" id="tv-extraction">Situation de l’extraction du ${escapeHtml(data.semaineLibelle)} · Période DHIS2 : ${escapeHtml(data.selection.periode)}</small></div><div class="tv-dots" id="tv-dots">${selectedSlides.map((item, i) => `<button type="button" class="tv-dot ${i === index ? "on" : ""}" data-slide-index="${i}" aria-label="Afficher : ${escapeHtml(item.title)}" aria-current="${i === index ? "step" : "false"}"></button>`).join("")}</div><div class="tv-controls"><button type="button" id="tv-prev" aria-label="Diapositive précédente" title="← Précédent">←</button><button type="button" id="tv-pause" aria-label="Mettre en pause" title="Espace pour pause">Ⅱ</button><button type="button" id="tv-next" aria-label="Diapositive suivante" title="→ Suivant">→</button><select id="tv-duration" aria-label="Durée de chaque diapositive"><option value="8000">8 s</option><option value="12000" selected>12 s</option><option value="20000">20 s</option><option value="30000">30 s</option></select><button type="button" id="tv-fullscreen" aria-label="Activer le plein écran" title="F pour plein écran">⛶</button><button type="button" id="tv-close" aria-label="Quitter le diaporama" title="Échap pour quitter">×</button></div><div class="tv-progress" aria-hidden="true"><i id="tv-progress-fill"></i></div></header>`;
+  return `<header class="tv-bar" id="tvbar"><div class="tv-brand"><span class="tv-flag" aria-hidden="true">S</span><span><strong>Complétude DHIS2</strong><small>Ministère de la Santé · Sénégal</small></span></div><div class="tv-heading"><strong id="tv-title">${escapeHtml(slide.title)}</strong><span id="tv-counter">${index + 1} / ${selectedSlides.length}</span><small class="tv-extraction" id="tv-extraction">Situation de l’extraction du ${escapeHtml(data.semaineLibelle)} · Période DHIS2 : ${escapeHtml(data.selection.periode)}</small></div><div class="tv-dots" id="tv-dots">${selectedSlides.map((item, i) => `<button type="button" class="tv-dot ${i === index ? "on" : ""}" data-slide-index="${i}" aria-label="Afficher : ${escapeHtml(item.title)}" aria-current="${i === index ? "step" : "false"}"></button>`).join("")}</div><div class="tv-controls"><time class="tv-clock" id="tv-clock" aria-label="Heure actuelle"></time><button type="button" id="tv-prev" aria-label="Diapositive précédente" title="← Précédent">←</button><button type="button" id="tv-pause" aria-label="Mettre en pause" title="Espace pour pause">Ⅱ</button><button type="button" id="tv-next" aria-label="Diapositive suivante" title="→ Suivant">→</button><select id="tv-duration" aria-label="Durée de chaque diapositive"><option value="8000">8 s</option><option value="12000" selected>12 s</option><option value="20000">20 s</option><option value="30000">30 s</option></select><button type="button" id="tv-fullscreen" aria-label="Activer le plein écran" title="F pour plein écran">⛶</button><button type="button" id="tv-close" aria-label="Quitter le diaporama" title="Échap pour quitter">×</button></div><div class="tv-progress" aria-hidden="true"><i id="tv-progress-fill"></i></div></header>`;
 }
 
+function majHorloge() {
+  const element = document.getElementById("tv-clock");
+  if (!element) return;
+  const maintenant = new Date();
+  const options = { timeZone: "Africa/Dakar" };
+  const heure = maintenant.toLocaleTimeString("fr-FR", { ...options, hour: "2-digit", minute: "2-digit" });
+  const date = maintenant.toLocaleDateString("fr-FR", { ...options, weekday: "long", day: "numeric", month: "long" });
+  element.innerHTML = `<strong>${heure}</strong><small>${escapeHtml(date)}</small>`;
+  element.dateTime = maintenant.toISOString();
+}
 function activeModel() { return model; }
 function districtsAvecContours(data) {
   return data.districts.filter((district) => district.feature)
@@ -256,6 +267,7 @@ function close() {
   clearInterval(mapTourTimer);
   mapTourTimer = null;
   clearInterval(refreshTimer);
+  clearInterval(clockTimer);
   document.removeEventListener("keydown", onKeydown);
   document.removeEventListener("visibilitychange", onVisibilityChange);
   window.removeEventListener("online", onOnlineChange);
@@ -341,5 +353,7 @@ export function demarrerDiaporama(currentModel, { initialSlide = 0, refresh, clo
   history.replaceState(null, "", `#${params.toString()}`);
   requestWakeLock();
   refreshTimer = setInterval(refreshData, 10 * 60 * 1000);
+  majHorloge();
+  clockTimer = setInterval(majHorloge, 15 * 1000);
   show(current);
 }
