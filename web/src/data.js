@@ -257,6 +257,19 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
     });
   }
 
+  const idsPeriodes = [...new Set(snapshot.valeursParSemaine.slice(0, dernierIndexVisible + 1).flatMap((lignes) => lignes.map((ligne) => ligne.periode)))]
+    .sort((a, b) => snapshot.periodes[a][0].localeCompare(snapshot.periodes[b][0]));
+  const parPeriode = idsPeriodes.map((idPeriode) => ({
+    periode_code: snapshot.periodes[idPeriode][0],
+    periode: snapshot.periodes[idPeriode][1],
+    valeurs: snapshot.semaines.slice(0, dernierIndexVisible + 1).map((_, wi) => moyenne(snapshot.valeursParSemaine[wi].filter((row) => {
+      if (row.periode !== idPeriode) return false;
+      if (selections.regionIndex !== null && snapshot.districts[row.district][0] !== selections.regionIndex) return false;
+      if (selections.formulaireIndex !== null && row.formulaire !== selections.formulaireIndex) return false;
+      return true;
+    }).map((row) => row.valeur))),
+  }));
+
   const unresolved = new Set(districtModels.filter((district) => !district.uid).map((district) => district.nom));
   const selectedPeriodLabel = selections.periodeIndex === null ? "Toutes les périodes" : snapshot.periodes[selections.periodeIndex][1];
   const selectedRegionLabel = selections.regionIndex === null ? "Toutes les régions" : snapshot.regions[selections.regionIndex];
@@ -289,6 +302,7 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
       taux_remplissage: tauxRemplissage.slice(0, currentWeekIndex + 1),
       par_region: seriesRegion.map((serie) => ({ ...serie, valeurs: serie.valeurs.slice(0, currentWeekIndex + 1) })),
       par_region_formulaire_periode: evolution.par_region_formulaire_periode,
+      parPeriode,
       tendanceRepli,
       motifRepli,
       periodesTendance,

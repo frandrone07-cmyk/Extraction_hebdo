@@ -190,7 +190,7 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         const nord = carte.latLngToContainerPoint(entree.limites.getNorthWest());
         const sud = carte.latLngToContainerPoint(entree.limites.getSouthEast());
         const mesure = entree.marqueur.getElement()?.firstElementChild;
-        const largeurEtiquette = mesure?.offsetWidth || (nomsEtiquettes ? Math.min(104, Math.max(56, entree.nom.length * 4.6 + 12)) : largeur);
+        const largeurEtiquette = mesure?.offsetWidth || (nomsEtiquettes ? Math.min(80, Math.max(48, entree.nom.length * 4 + 10)) : largeur);
         const hauteurEtiquette = mesure?.offsetHeight || (nomsEtiquettes ? 26 : hauteur);
         const active = entree.key === etiquetteDistrictActive;
         const tient = (sud.x - nord.x) >= largeurEtiquette * (nomsEtiquettes ? 0.5 : 0.9)

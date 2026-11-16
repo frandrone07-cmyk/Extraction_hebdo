@@ -41,7 +41,8 @@ function creerTopo(model) {
 
   const rate = moyenne(model.districts.map((district) => district.tauxMoyen));
   const previous = moyenne(model.districts.map((district) => district.tauxPrecedent));
-  const difference = rate === null || previous === null ? null : Math.round((rate - previous) * 10) / 10;
+  const comparable = moyenne(model.districts.map((district) => district.tauxComparable));
+  const difference = comparable === null || previous === null ? null : Math.round((comparable - previous) * 10) / 10;
   const avecTaux = model.districts.filter((district) => district.tauxMoyen !== null && district.tauxMoyen !== undefined);
   const sansTaux = model.districts.length - avecTaux.length;
   const critical = model.districts.filter((district) => district.statut === "critique")
@@ -67,12 +68,19 @@ function creerTopo(model) {
   parts.push(`Bonjour, je suis Sokhnaci. Pour l’extraction du ${date}${introContexte}, le taux moyen des districts affichés est de ${pct(rate)}.`);
 
   if (difference !== null) {
-    const parRapport = comparaison ? `par rapport à l’extraction du ${comparaison}` : "par rapport à l’extraction de comparaison";
+    const moisCommuns = model.comparaisonRepli ? ` (sur les mois communs aux deux extractions : ${model.comparaisonRepli.join(", ")})` : "";
+    const parRapport = `${comparaison ? `par rapport à l’extraction du ${comparaison}` : "par rapport à l’extraction de comparaison"}${moisCommuns}`;
     if (difference >= model.seuils.baisse) parts.push(`Le taux progresse de ${points(difference)} ${parRapport}.`);
     else if (difference <= -model.seuils.baisse) parts.push(`Le taux recule de ${points(Math.abs(difference))} ${parRapport} — un point à examiner.`);
     else parts.push(`Le taux reste proche de celui de l’extraction de comparaison (${parRapport}).`);
   }
 
+  const nbExtractions = model.evolution?.semaines?.length || 0;
+  const serie = (model.evolution?.moyenne_generale || []).filter((value) => value !== null && value !== undefined);
+  if (nbExtractions >= 3 && serie.length >= 3) {
+    const gain = Math.round((serie.at(-1) - serie[0]) * 10) / 10;
+    parts.push(`Sur les ${nbExtractions} extractions suivies, le taux ${model.evolution.tendanceRepli ? "des mois comparables" : "du mois choisi"} ${gain >= 0 ? "a gagné" : "a perdu"} ${points(Math.abs(gain))}. Cette progression traduit surtout le rattrapage des rapports transmis en retard après la fin de chaque mois.`);
+  }
   if (tendance === "baisse") parts.push(`La tendance ${echelle} baisse depuis trois semaines consécutives.`);
   else if (tendance === "hausse") parts.push(`La tendance ${echelle} progresse depuis trois semaines consécutives.`);
   else if (tendance === "stagnation" && rate !== null && rate < model.seuils.conforme) parts.push(`La situation ${echelle} stagne depuis trois semaines.`);
@@ -88,6 +96,22 @@ function creerTopo(model) {
     parts.push(`${labelRegion(best.nom)} affiche le taux régional le plus élevé (${pct(best.tauxMoyen)}), contre ${pct(needsHelp.tauxMoyen)} pour ${labelRegion(needsHelp.nom)}, soit un écart de ${points(ecart)}.`);
   }
 
+  const avecEcart = regionsValides.filter((region) => region.variation !== null && region.variation !== undefined);
+  if (comparaison && avecEcart.length > 2) {
+    const parEcart = [...avecEcart].sort((a, b) => b.variation - a.variation);
+    const hausse = parEcart[0];
+    const baisse = parEcart.at(-1);
+    if (hausse.variation >= 0.5) parts.push(`La plus forte progression régionale est ${labelRegion(hausse.nom)} (+${points(hausse.variation)}).`);
+    if (baisse.variation < 0) parts.push(`${labelRegion(baisse.nom)} recule de ${points(Math.abs(baisse.variation))} : à vérifier en priorité.`);
+
+  }
+  const enRecul = model.districts.filter((district) => district.variation !== null && district.variation !== undefined && district.variation <= -model.seuils.baisse)
+    .sort((a, b) => a.variation - b.variation);
+  if (comparaison && enRecul.length) {
+    parts.push(`${enRecul.length} district${enRecul.length > 1 ? "s" : ""} recule${enRecul.length > 1 ? "nt" : ""} d’au moins ${model.seuils.baisse} points, notamment ${enRecul.slice(0, 2).map((district) => `${district.nom} (${Number(district.variation).toLocaleString("fr-FR")} pt)`).join(" et ")}.`);
+  }
+  const quasiConformes = model.districts.filter((district) => district.statut === "surveiller" && district.tauxMoyen >= model.seuils.conforme - 5);
+  if (quasiConformes.length) parts.push(`${quasiConformes.length} district${quasiConformes.length > 1 ? "s sont" : " est"} à moins de 5 points du seuil de conformité : une relance courte peut les faire basculer.`);
   if (formulaireFaible && formulairesValides.length > 1 && formulaireFaible.tauxMoyen < model.seuils.conforme) {
     parts.push(`Le formulaire le moins bien renseigné est « ${formulaireFaible.nom} », à ${pct(formulaireFaible.tauxMoyen)} en moyenne — un point d’appui possible pour la prochaine relance.`);
   }
@@ -140,7 +164,8 @@ function humeur(model) {
   const tendance = tendanceRecente(model.evolution?.moyenne_generale || []);
   if (rate !== null && rate < model.seuils.critique) return "alerte";
   if (tendance === "baisse") return "alerte";
-  if (previous !== null && rate !== null && rate - previous >= model.seuils.baisse) return "content";
+  const comparable = moyenne(model.districts.map((district) => district.tauxComparable));
+  if (previous !== null && comparable !== null && comparable - previous >= model.seuils.baisse) return "content";
   if (critical > 0) return "vigilant";
   if (rate !== null && rate >= model.seuils.conforme) return "serein";
   return "attentif";

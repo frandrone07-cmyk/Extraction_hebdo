@@ -95,7 +95,7 @@ export function afficherRegions(regions, seuils, selectionRegion = null) {
         marqueur,
         nom: region.nom,
         centre: [latitude, longitude],
-        largeur: Math.min(132, Math.max(54, nom.length * 6 + 16)),
+        largeur: Math.min(88, Math.max(38, nom.length * 4.4 + 10)),
         surface: (bounds.getNorth() - bounds.getSouth()) * (bounds.getEast() - bounds.getWest()),
       });
     },
@@ -109,7 +109,7 @@ export function afficherRegions(regions, seuils, selectionRegion = null) {
     ));
     for (const entree of priorite) {
       const point = carteRegions.latLngToContainerPoint(entree.centre);
-      const boite = { x: point.x - entree.largeur / 2, y: point.y - 17, largeur: entree.largeur, hauteur: 34 };
+      const boite = { x: point.x - entree.largeur / 2, y: point.y - 11, largeur: entree.largeur, hauteur: 22 };
       const active = entree.nom === regionSelectionnee;
       const dansCarte = point.x >= 0 && point.x <= taille.x && point.y >= 0 && point.y <= taille.y;
       const libre = active || (dansCarte && !places.some((place) => (

@@ -254,6 +254,7 @@ export function renderEvolution(modele) {
     ${noteRepli}
     <section class="card"><div class="card-head"><div><h2>Tendance du périmètre sélectionné</h2><p class="card-subtitle">Une valeur par date d’extraction pour la région, la période et le formulaire choisis.</p></div></div><div class="chartbox xl"><canvas id="ch-evo-detail"></canvas></div></section>
     <section class="card"><div class="card-head"><div><h2>Évolution des 14 régions</h2><p class="card-subtitle">Toutes les régions restent visibles, même lorsqu’une région est sélectionnée dans les filtres.</p></div></div><div class="chartbox xl"><canvas id="ch-evo-regions"></canvas></div></section>
+    <section class="card"><div class="card-head"><div><h2>Taux de chaque mois, extraction après extraction</h2><p class="card-subtitle">Un mois de rapport continue de progresser après sa clôture, à mesure que les structures transmettent leurs rapports en retard : une courbe qui monte reflète ce rattrapage, pas une erreur de calcul.</p></div></div><div class="chartbox xl"><canvas id="ch-evo-periodes"></canvas></div></section>
     ${blocEcarts}
     <section class="card"><div class="card-head"><div><h2>Historique des extractions</h2><p class="card-subtitle">Une extraction hebdomadaire correspond à un lundi.</p></div></div><div class="table-scroll"><table><thead><tr><th>Date d’extraction (lundi)</th><th>Taux moyen</th><th>Cases renseignées</th><th>Écart</th></tr></thead><tbody>${tableRows}</tbody></table></div>${visibleWeeks.length <= 1 ? `<p class="note">Une seule semaine est disponible pour le moment. La comparaison s’enrichira après les prochaines extractions.</p>` : ""}</section>
   </div>`;
@@ -262,6 +263,7 @@ export function apresRenduEvolution(modele) {
   const { evolution } = modele;
   const labels = evolution.semaines.map(formaterDate);
   grapheLigne("ch-evo-detail", labels, [{ label: "Taux moyen", data: evolution.moyenne_generale }], { filled: true });
+  grapheLigne("ch-evo-periodes", labels, evolution.parPeriode.map((serie) => ({ label: serie.periode, data: serie.valeurs })), { pointOnlyTooltip: true });
   grapheLigne("ch-evo-regions", labels, evolution.par_region.map((series) => ({ label: libelleRegion(series.region), data: series.valeurs })), { pointOnlyTooltip: true });
 }
 
