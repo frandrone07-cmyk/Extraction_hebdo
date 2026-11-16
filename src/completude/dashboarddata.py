@@ -21,10 +21,21 @@ def _statut(valeur: float | None, seuils: ConfigSeuils) -> str:
     return "conforme"
 
 
+def _par_extraction(hist: pd.DataFrame) -> pd.DataFrame:
+    """Une extraction = un lundi (`semaine_cle`). Si l'historique contient plusieurs
+    passages dans la même semaine (rattrapage), seul le dernier fait foi, comme
+    `upsert_week` qui remplace la semaine : jamais deux passages fusionnés."""
+    if hist.empty or "date_extraction" not in hist.columns:
+        return hist
+    derniere = hist.groupby("semaine_cle")["date_extraction"].transform("max")
+    return hist[hist["date_extraction"] == derniere].reset_index(drop=True)
+
+
 def construire_latest(hist: pd.DataFrame, seuils: ConfigSeuils) -> dict:
     """Snapshot de la semaine la plus récente : régions -> districts ->
     formulaires -> valeurs par période (une extraction couvre plusieurs mois,
     ne jamais les confondre sous un même "formulaire")."""
+    hist = _par_extraction(hist)
     if hist.empty:
         return {
             "genere_le": datetime.now(UTC).isoformat(),
@@ -83,6 +94,7 @@ def construire_snapshots(hist: pd.DataFrame) -> dict:
     if hist.empty:
         return {"semaines": [], "regions": [], "districts": [], "formulaires": [], "periodes": [], "lignes": []}
 
+    hist = _par_extraction(hist)
     semaines = sorted(hist["semaine_cle"].dropna().astype(str).unique())
     regions = sorted(hist["region"].dropna().astype(str).unique())
     formulaires = sorted(hist["formulaire"].dropna().astype(str).unique())
@@ -172,7 +184,7 @@ def construire_evolution(hist: pd.DataFrame) -> dict:
             "par_region": [], "par_region_formulaire_periode": [],
         }
 
-    hist = hist.copy()
+    hist = _par_extraction(hist)
     hist["valeur_num"] = pd.to_numeric(hist["valeur"], errors="coerce")
     semaines = sorted(hist["semaine_cle"].unique())
 

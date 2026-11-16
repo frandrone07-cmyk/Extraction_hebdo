@@ -176,6 +176,24 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
       .filter((formulaire) => formulaire.nom === nom).map((formulaire) => formulaire.valeur))),
   }));
 
+  // Une tendance compare des mois présents dans TOUTES les extractions affichées :
+  // sans mois choisi, ou si le mois choisi n'existe que dans une seule extraction
+  // (ex. le mois en cours), on retombe sur les mois communs à toutes les extractions.
+  const dernierIndexVisible = Math.max(0, semaineIndex);
+  const periodesParSemaine = [];
+  for (let wi = 0; wi <= dernierIndexVisible; wi += 1) periodesParSemaine.push(new Set(snapshot.valeursParSemaine[wi].map((row) => row.periode)));
+  const communesBrutes = periodesParSemaine.reduce((acc, presentes) => (acc === null ? presentes : new Set([...acc].filter((id) => presentes.has(id)))), null);
+  let periodeTendance = selections.periodeIndex;
+  let periodesCommunes = null;
+  let tendanceRepli = false;
+  if (selections.periodeIndex !== null && periodesParSemaine.filter((presentes) => presentes.has(selections.periodeIndex)).length < 2 && communesBrutes?.size) {
+    periodeTendance = null;
+    tendanceRepli = true;
+  }
+  if (periodeTendance === null && communesBrutes?.size) periodesCommunes = communesBrutes;
+  const periodesTendance = periodesCommunes ? [...periodesCommunes].map((id) => snapshot.periodes[id][1]) : [];
+  const periodeComparable = (row) => periodesCommunes === null || periodesCommunes.has(row.periode);
+
   const serieGenerale = [];
   const tauxRemplissage = [];
   const seriesRegion = [];
@@ -183,7 +201,8 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
     const scoped = snapshot.valeursParSemaine[wi].filter((row) => {
       if (selections.regionIndex !== null && snapshot.districts[row.district][0] !== selections.regionIndex) return false;
       if (selections.formulaireIndex !== null && row.formulaire !== selections.formulaireIndex) return false;
-      if (selections.periodeIndex !== null && row.periode !== selections.periodeIndex) return false;
+      if (periodeTendance !== null && row.periode !== periodeTendance) return false;
+      if (!periodeComparable(row)) return false;
       return true;
     });
     serieGenerale.push(moyenne(scoped.map((row) => row.valeur)));
@@ -197,7 +216,8 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
         const scoped = snapshot.valeursParSemaine[wi].filter((row) => {
           if (snapshot.districts[row.district][0] !== ri) return false;
           if (selections.formulaireIndex !== null && row.formulaire !== selections.formulaireIndex) return false;
-          if (selections.periodeIndex !== null && row.periode !== selections.periodeIndex) return false;
+          if (periodeTendance !== null && row.periode !== periodeTendance) return false;
+          if (!periodeComparable(row)) return false;
           return true;
         });
         return moyenne(scoped.map((row) => row.valeur));
@@ -236,6 +256,8 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
       taux_remplissage: tauxRemplissage.slice(0, currentWeekIndex + 1),
       par_region: seriesRegion.map((serie) => ({ ...serie, valeurs: serie.valeurs.slice(0, currentWeekIndex + 1) })),
       par_region_formulaire_periode: evolution.par_region_formulaire_periode,
+      tendanceRepli,
+      periodesTendance,
     },
   };
 }

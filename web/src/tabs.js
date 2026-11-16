@@ -117,7 +117,7 @@ export function renderVue(modele) {
     <section class="grid grid3">
       <article class="card"><div class="card-head"><div><h2>Priorités de suivi</h2><p class="card-subtitle">Districts en critique.</p></div><span class="status-chip critique">${nbCritiques} critique${nbCritiques > 1 ? "s" : ""}</span></div>${optionsAlertes}</article>
       <article class="card"><div class="card-head"><div><h2>Districts à surveiller</h2><p class="card-subtitle">Entre ${seuils.critique}% et ${seuils.conforme}%.</p></div><span class="status-chip surveiller">${districts.filter((district) => district.statut === "surveiller").length}</span></div>${optionsSurveiller}</article>
-      <article class="card"><div class="card-head"><div><h2>Districts conformes</h2><p class="card-subtitle">Districts au-dessus du seuil de conformité.</p></div><span class="status-chip conforme">${districts.filter((district) => district.statut === "conforme").length}</span></div>${optionsConformes}</article>
+      <article class="card"><div class="card-head"><div><h2>Districts conformes</h2><p class="card-subtitle">Taux moyen décroissant.</p></div><span class="status-chip conforme">${districts.filter((district) => district.statut === "conforme").length}</span></div>${optionsConformes}</article>
     </section>
     <section class="card"><div class="card-head"><div><h2>10 districts les plus performants</h2><p class="card-subtitle">Taux moyen décroissant, sans retirer les priorités de suivi.</p></div><span class="status-chip conforme">Top 10</span></div>${optionsMeilleurs}</section>
   </div>`;
@@ -229,10 +229,27 @@ export function renderEvolution(modele) {
       ? Math.round((evolution.moyenne_generale[index] - evolution.moyenne_generale[previousIndex]) * 10) / 10 : null;
     return `<tr><td>${formaterDate(week)}</td><td class="cell-statut">${pct(evolution.moyenne_generale[index])}</td><td>${pct(evolution.taux_remplissage[index])}</td><td>${delta(change)}</td></tr>`;
   }).join("");
+  const idx = endIndex >= 0 ? endIndex : weeks.length - 1;
+  const libelleTendance = evolution.tendanceRepli || modele.selection.periode === "Toutes les périodes"
+    ? `mois communs aux extractions (${evolution.periodesTendance.join(", ")})` : modele.selection.periode;
+  const noteRepli = evolution.tendanceRepli
+    ? `<p class="note">${escapeHtml(modele.selection.periode)} n’apparaît que dans la dernière extraction : la tendance est calculée sur les mois présents dans toutes les extractions (${escapeHtml(evolution.periodesTendance.join(", "))}).</p>` : "";
+  const prev = idx - 1;
+  const lignesRegions = evolution.par_region.map((serie) => {
+    const actuel = serie.valeurs[idx] ?? null;
+    const precedent = prev >= 0 ? (serie.valeurs[prev] ?? null) : null;
+    const ecart = actuel !== null && precedent !== null ? Math.round((actuel - precedent) * 10) / 10 : null;
+    return `<tr><td>${escapeHtml(libelleRegion(serie.region))}</td><td class="cell-statut">${pct(precedent)}</td><td class="cell-statut">${pct(actuel)}</td><td>${delta(ecart)}</td></tr>`;
+  }).join("");
+  const blocEcarts = prev >= 0
+    ? `<section class="card"><div class="card-head"><div><h2>Écart par région entre deux extractions</h2><p class="card-subtitle">${escapeHtml(formaterDate(weeks[prev]))} → ${escapeHtml(formaterDate(weeks[idx]))} · ${escapeHtml(libelleTendance)} · ${escapeHtml(modele.selection.formulaire)}</p></div></div><div class="table-scroll"><table><thead><tr><th>Région</th><th>${escapeHtml(formaterDate(weeks[prev]))}</th><th>${escapeHtml(formaterDate(weeks[idx]))}</th><th>Écart</th></tr></thead><tbody>${lignesRegions}</tbody></table></div></section>`
+    : "";
   return `<div class="page-stack">
     ${enteteSection("Évolution par date d’extraction", "Suivez le taux à chaque extraction hebdomadaire, en gardant la période DHIS2 sélectionnée identique.", `${visibleWeeks.length} extraction${visibleWeeks.length > 1 ? "s" : ""} dans l’historique`)}
+    ${noteRepli}
     <section class="card"><div class="card-head"><div><h2>Tendance du périmètre sélectionné</h2><p class="card-subtitle">Une valeur par date d’extraction pour la région, la période et le formulaire choisis.</p></div></div><div class="chartbox xl"><canvas id="ch-evo-detail"></canvas></div></section>
     <section class="card"><div class="card-head"><div><h2>Évolution des 14 régions</h2><p class="card-subtitle">Toutes les régions restent visibles, même lorsqu’une région est sélectionnée dans les filtres.</p></div></div><div class="chartbox xl"><canvas id="ch-evo-regions"></canvas></div></section>
+    ${blocEcarts}
     <section class="card"><div class="card-head"><div><h2>Historique des extractions</h2><p class="card-subtitle">Une extraction hebdomadaire correspond à un lundi.</p></div></div><div class="table-scroll"><table><thead><tr><th>Date d’extraction (lundi)</th><th>Taux moyen</th><th>Cases renseignées</th><th>Écart</th></tr></thead><tbody>${tableRows}</tbody></table></div>${visibleWeeks.length <= 1 ? `<p class="note">Une seule semaine est disponible pour le moment. La comparaison s’enrichira après les prochaines extractions.</p>` : ""}</section>
   </div>`;
 }
