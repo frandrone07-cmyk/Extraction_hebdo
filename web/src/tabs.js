@@ -53,11 +53,12 @@ function genererSynthese(modele) {
   if (!districts.length) return "Aucun résultat pour cette combinaison de filtres. Élargissez la sélection ou choisissez une autre extraction.";
   const global = moyenne(districts.map((district) => district.tauxMoyen));
   const previous = moyenne(districts.map((district) => district.tauxPrecedent));
+  const comparable = moyenne(districts.map((district) => district.tauxComparable));
   const critiques = districts.filter((district) => district.statut === "critique");
   const meilleure = [...regions].filter((region) => region.tauxMoyen !== null).sort((a, b) => b.tauxMoyen - a.tauxMoyen)[0];
   const plusFaible = [...regions].filter((region) => region.tauxMoyen !== null).sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0];
   const comparaison = comparaisonCle ? `par rapport à l’extraction du ${formaterDate(comparaisonCle)}` : "par rapport à la précédente extraction";
-  const variation = global === null || previous === null ? null : Math.round((global - previous) * 10) / 10;
+  const variation = comparable === null || previous === null ? null : Math.round((comparable - previous) * 10) / 10;
   const tendance = variation === null
     ? "Aucune extraction de comparaison n’est sélectionnée."
     : variation > 0 ? `Le taux moyen progresse de <strong>${pct(variation).replace("%", " points")}</strong> ${comparaison}.`
@@ -76,10 +77,12 @@ export function renderVue(modele) {
   const { regions, districts, seuils, evolution } = modele;
   const tauxGlobal = moyenne(districts.map((district) => district.tauxMoyen));
   const tauxPrevious = moyenne(districts.map((district) => district.tauxPrecedent));
-  const variation = tauxGlobal === null || tauxPrevious === null ? null : Math.round((tauxGlobal - tauxPrevious) * 10) / 10;
+  const tauxComparable = moyenne(districts.map((district) => district.tauxComparable));
+  const variation = tauxComparable === null || tauxPrevious === null ? null : Math.round((tauxComparable - tauxPrevious) * 10) / 10;
   const nbCritiques = districts.filter((district) => district.statut === "critique").length;
+  const nbCritiquesComparable = districts.filter((district) => district.tauxComparable !== null && district.tauxComparable < seuils.critique).length;
   const nbCritiquesPrec = districts.filter((district) => district.tauxPrecedent !== null && district.tauxPrecedent < seuils.critique).length;
-  const variationCritiques = modele.comparaisonCle ? nbCritiquesPrec - nbCritiques : null;
+  const variationCritiques = modele.comparaisonCle ? nbCritiquesPrec - nbCritiquesComparable : null;
   const alertes = [...districts].filter((district) => district.statut === "critique").sort((a, b) => (a.tauxMoyen ?? 101) - (b.tauxMoyen ?? 101)).slice(0, 7);
   const aSurveiller = [...districts].filter((district) => district.statut === "surveiller").sort((a, b) => (a.tauxMoyen ?? 101) - (b.tauxMoyen ?? 101)).slice(0, 10);
   const conformes = [...districts].filter((district) => district.statut === "conforme").sort((a, b) => (b.tauxMoyen ?? 0) - (a.tauxMoyen ?? 0)).slice(0, 10);
@@ -163,6 +166,7 @@ function rowDistrict(district, index, withRegion = true) {
 
 export function renderRegions(modele) {
   const { formulaires, districts, seuils } = modele;
+  const comparaisonTexte = modele.comparaisonCle ? `Écart en points vs l’extraction du ${formaterDate(modele.comparaisonCle)}${modele.comparaisonRepli ? ` (mois communs : ${modele.comparaisonRepli.join(", ")})` : ""}.` : "Aucune extraction de comparaison sélectionnée.";
   const regions = modele.toutesRegions;
   const toutesFormulaires = modele.tousFormulaires;
   const allFormNames = toutesFormulaires.map((formulaire) => formulaire.nom);
@@ -178,8 +182,8 @@ export function renderRegions(modele) {
   const flop10 = sortedDistricts.slice(-10).reverse();
   const indexFor = (district) => districts.indexOf(district);
   const periodSeries = chartDataPourPeriodes(modele);
-  const formLines = [...formulaires].sort((a, b) => (a.tauxMoyen ?? -1) - (b.tauxMoyen ?? -1)).map((form) => `<tr><td><button class="row-link" type="button" data-form-filter="${escapeHtml(form.nom)}">${escapeHtml(form.nom)}</button></td><td class="cell-statut">${pct(form.tauxMoyen)}</td></tr>`).join("");
-  const regionLines = regions.map((region) => `<tr><td><button class="row-link" type="button" data-region-filter="${escapeHtml(region.nom)}">${escapeHtml(libelleRegion(region.nom))}</button></td><td class="cell-statut">${pct(region.tauxMoyen)}</td><td>${region.districts.length}</td><td class="cell-critique">${region.nbCritique}</td></tr>`).join("");
+  const formLines = [...formulaires].sort((a, b) => (a.tauxMoyen ?? -1) - (b.tauxMoyen ?? -1)).map((form) => `<tr><td><button class="row-link" type="button" data-form-filter="${escapeHtml(form.nom)}">${escapeHtml(form.nom)}</button></td><td class="cell-statut">${pct(form.tauxMoyen)}</td><td>${delta(form.variation)}</td></tr>`).join("");
+  const regionLines = regions.map((region) => `<tr><td><button class="row-link" type="button" data-region-filter="${escapeHtml(region.nom)}">${escapeHtml(libelleRegion(region.nom))}</button></td><td class="cell-statut">${pct(region.tauxMoyen)}</td><td>${delta(region.variation)}</td><td>${region.districts.length}</td><td class="cell-critique">${region.nbCritique}</td></tr>`).join("");
   const rankings = (items) => `<div class="table-scroll"><table class="ranking-table"><thead><tr><th>District</th><th>Région</th><th>Taux</th><th>Écart</th></tr></thead><tbody>${items.map((district) => rowDistrict(district, indexFor(district))).join("")}</tbody></table></div>`;
   return `<div class="page-stack">
     ${enteteSection("Régions et formulaires", "Repérez les écarts territoriaux et les formulaires qui nécessitent un appui ciblé.", `${regions.length} régions · ${formulaires.length} formulaires`)}
@@ -190,8 +194,8 @@ export function renderRegions(modele) {
     <section class="card"><div class="card-head"><div><h2>Carte thermique · régions × formulaires</h2><p class="card-subtitle">Les couleurs suivent les seuils officiels du tableau de bord.</p></div></div><div class="table-scroll"><table class="heatmap"><thead><tr><th>Région</th>${allFormNames.map((name) => `<th title="${escapeHtml(name)}">${escapeHtml(name)}</th>`).join("")}</tr></thead><tbody>${matrix}</tbody></table></div></section>
     <section class="grid grid2"><article class="card"><div class="card-head"><div><h2>10 districts les plus performants</h2><p class="card-subtitle">Taux moyen décroissant.</p></div><span class="status-chip conforme">Top 10</span></div>${rankings(top10)}</article>
       <article class="card"><div class="card-head"><div><h2>10 districts à accompagner</h2><p class="card-subtitle">Taux moyen croissant.</p></div><span class="status-chip critique">À suivre</span></div>${rankings(flop10)}</article></section>
-    <section class="grid grid2"><article class="card"><div class="card-head"><div><h2>Synthèse par région</h2><p class="card-subtitle">Comparaison rapide des territoires affichés.</p></div></div><div class="table-scroll"><table id="table-synthese-region"><thead><tr><th>Région</th><th>Taux moyen</th><th>Districts</th><th>Critiques</th></tr></thead><tbody>${regionLines}</tbody></table></div></article>
-      <article class="card"><div class="card-head"><div><h2>Synthèse par formulaire</h2><p class="card-subtitle">Valeur moyenne pour le périmètre choisi.</p></div></div><div class="table-scroll"><table id="table-synthese-formulaire"><thead><tr><th>Formulaire</th><th>Taux moyen</th></tr></thead><tbody>${formLines}</tbody></table></div></article></section>
+    <section class="grid grid2"><article class="card"><div class="card-head"><div><h2>Synthèse par région</h2><p class="card-subtitle">${comparaisonTexte}</p></div></div><div class="table-scroll"><table id="table-synthese-region"><thead><tr><th>Région</th><th>Taux moyen</th><th>Écart</th><th>Districts</th><th>Critiques</th></tr></thead><tbody>${regionLines}</tbody></table></div></article>
+      <article class="card"><div class="card-head"><div><h2>Synthèse par formulaire</h2><p class="card-subtitle">${comparaisonTexte}</p></div></div><div class="table-scroll"><table id="table-synthese-formulaire"><thead><tr><th>Formulaire</th><th>Taux moyen</th><th>Écart</th></tr></thead><tbody>${formLines}</tbody></table></div></article></section>
   </div>`;
 }
 
@@ -234,7 +238,8 @@ export function renderEvolution(modele) {
     ? `mois communs aux extractions (${evolution.periodesTendance.join(", ")})` : modele.selection.periode;
   const noteRepli = evolution.tendanceRepli
     ? `<p class="note">${escapeHtml(modele.selection.periode)} n’apparaît que dans la dernière extraction : la tendance est calculée sur les mois présents dans toutes les extractions (${escapeHtml(evolution.periodesTendance.join(", "))}).</p>` : "";
-  const prev = idx - 1;
+  const indexComparaison = modele.comparaisonCle ? weeks.indexOf(modele.comparaisonCle) : -1;
+  const prev = modele.comparaisonCle ? indexComparaison : idx - 1;
   const lignesRegions = evolution.par_region.map((serie) => {
     const actuel = serie.valeurs[idx] ?? null;
     const precedent = prev >= 0 ? (serie.valeurs[prev] ?? null) : null;

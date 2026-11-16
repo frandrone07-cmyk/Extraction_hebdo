@@ -41,6 +41,7 @@ function moyennePour(snapshot, semaineIndex, districtIndex, formulaireIndex, per
     if (selections.regionIndex !== null && snapshot.districts[ligne.district][0] !== selections.regionIndex) return false;
     if (selections.formulaireIndex !== null && ligne.formulaire !== selections.formulaireIndex) return false;
     if (selections.periodeIndex !== null && ligne.periode !== selections.periodeIndex) return false;
+    if (selections.periodesSet && !selections.periodesSet.has(ligne.periode)) return false;
     if (formulaireIndex !== null && ligne.formulaire !== formulaireIndex) return false;
     if (periodeIndex !== null && ligne.periode !== periodeIndex) return false;
     return true;
@@ -66,13 +67,21 @@ export function optionsPour(snapshot, semaineCle) {
   };
 }
 
+function ecart(actuel, precedent) {
+  return actuel === null || actuel === undefined || precedent === null || precedent === undefined ? null : Math.round((actuel - precedent) * 10) / 10;
+}
+
 function construireRegions(districtModels, nomsRegions, geoRegionParNom) {
   return nomsRegions.map((nom) => {
     const districts = districtModels.filter((district) => district.region === nom);
+    const tauxMoyen = moyenne(districts.map((district) => district.tauxMoyen));
+    const tauxPrecedent = moyenne(districts.map((district) => district.tauxPrecedent));
     return {
       nom,
       districts,
-      tauxMoyen: moyenne(districts.map((district) => district.tauxMoyen)),
+      tauxMoyen,
+      tauxPrecedent,
+      variation: ecart(moyenne(districts.map((district) => district.tauxComparable)), tauxPrecedent),
       nbCritique: districts.filter((district) => district.statut === "critique").length,
       nbSurveiller: districts.filter((district) => district.statut === "surveiller").length,
       nbConforme: districts.filter((district) => district.statut === "conforme").length,
@@ -95,6 +104,21 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
     formulaireIndex: formulaireIndex !== null && formulaireIndex >= 0 ? formulaireIndex : null,
     periodeIndex: periodeIndex !== null && periodeIndex >= 0 ? periodeIndex : null,
   };
+  // Le mois choisi peut ne pas exister dans l'extraction comparée (ex. mois en cours) :
+  // l'écart est alors calculé sur les mois présents dans les deux extractions.
+  let selectionsComparaison = { ...selections, regionIndex: null };
+  let comparaisonRepli = null;
+  if (comparaisonIndex >= 0 && semaineIndex >= 0 && selections.periodeIndex !== null) {
+    const ids = (index) => new Set(snapshot.valeursParSemaine[index].map((ligne) => ligne.periode));
+    const idsComparaison = ids(comparaisonIndex);
+    if (!idsComparaison.has(selections.periodeIndex)) {
+      const communs = new Set([...ids(semaineIndex)].filter((id) => idsComparaison.has(id)));
+      if (communs.size) {
+        selectionsComparaison = { ...selectionsComparaison, periodeIndex: null, periodesSet: communs };
+        comparaisonRepli = [...communs].map((id) => snapshot.periodes[id][1]);
+      }
+    }
+  }
   const geoParCle = new Map((geo?.features || []).map((feature) => [
     `${feature.properties.region}||${feature.properties.district}`,
     feature,
@@ -132,12 +156,14 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
         const value = moyenne(periodsSelected.map((period) => period.valeur));
         const previousValue = comparaisonIndex < 0
           ? null
-          : moyennePour(snapshot, comparaisonIndex, districtId, id, null, { ...selections, regionIndex: null });
+          : moyennePour(snapshot, comparaisonIndex, districtId, id, null, selectionsComparaison);
+        const valeurComparable = comparaisonRepli ? moyennePour(snapshot, semaineIndex, districtId, id, null, selectionsComparaison) : value;
         return {
           nom: snapshot.formulaires[id],
           valeur: value,
           valeurPrecedente: previousValue,
-          variation: value === null || previousValue === null ? null : Math.round((value - previousValue) * 10) / 10,
+          valeurComparable,
+          variation: ecart(valeurComparable, previousValue),
           statut: statutDepuisValeur(value, snapshot.seuils),
           periode: periodsSelected.at(-1)?.periode || null,
           periode_code: periodsSelected.at(-1)?.periode_code || null,
@@ -145,7 +171,8 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
         };
       });
     const tauxMoyen = moyenne(formulaires.map((formulaire) => formulaire.valeur));
-      const tauxPrecedent = comparaisonIndex < 0 ? null : moyennePour(snapshot, comparaisonIndex, districtId, null, null, { ...selections, regionIndex: null });
+      const tauxPrecedent = comparaisonIndex < 0 ? null : moyennePour(snapshot, comparaisonIndex, districtId, null, null, selectionsComparaison);
+      const tauxComparable = comparaisonRepli ? moyennePour(snapshot, semaineIndex, districtId, null, null, selectionsComparaison) : tauxMoyen;
     const cle = `${snapshot.regions[districtRegionIndex]}||${districtName}`;
       tousDistricts.push({
       region: snapshot.regions[districtRegionIndex],
@@ -154,7 +181,8 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
       formulaires,
       tauxMoyen,
       tauxPrecedent,
-      variation: tauxMoyen === null || tauxPrecedent === null ? null : Math.round((tauxMoyen - tauxPrecedent) * 10) / 10,
+      tauxComparable,
+      variation: ecart(tauxComparable, tauxPrecedent),
       statut: statutDepuisValeur(tauxMoyen, snapshot.seuils),
       feature: geoParCle.get(cle) || null,
     });
@@ -165,16 +193,15 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
     : tousDistricts.filter((district) => snapshot.regions[selections.regionIndex] === district.region);
   const regions = construireRegions(districtModels, [...new Set(districtModels.map((district) => district.region))].sort(), geoRegionParNom);
   const toutesRegions = construireRegions(tousDistricts, snapshot.regions, geoRegionParNom);
-  const formulaires = [...new Set(districtModels.flatMap((district) => district.formulaires.map((formulaire) => formulaire.nom)))].sort().map((nom) => ({
-    nom,
-    tauxMoyen: moyenne(districtModels.flatMap((district) => district.formulaires
-      .filter((formulaire) => formulaire.nom === nom).map((formulaire) => formulaire.valeur))),
-  }));
-  const tousFormulaires = snapshot.formulaires.map((nom) => ({
-    nom,
-    tauxMoyen: moyenne(tousDistricts.flatMap((district) => district.formulaires
-      .filter((formulaire) => formulaire.nom === nom).map((formulaire) => formulaire.valeur))),
-  }));
+  const resumeFormulaire = (nom, districtsSource) => {
+    const lignes = districtsSource.flatMap((district) => district.formulaires.filter((formulaire) => formulaire.nom === nom));
+    const tauxMoyen = moyenne(lignes.map((formulaire) => formulaire.valeur));
+    const tauxPrecedent = moyenne(lignes.map((formulaire) => formulaire.valeurPrecedente));
+    return { nom, tauxMoyen, tauxPrecedent, variation: ecart(moyenne(lignes.map((formulaire) => formulaire.valeurComparable)), tauxPrecedent) };
+  };
+  const formulaires = [...new Set(districtModels.flatMap((district) => district.formulaires.map((formulaire) => formulaire.nom)))].sort()
+    .map((nom) => resumeFormulaire(nom, districtModels));
+  const tousFormulaires = snapshot.formulaires.map((nom) => resumeFormulaire(nom, tousDistricts));
 
   // Une tendance compare des mois présents dans TOUTES les extractions affichées :
   // sans mois choisi, ou si le mois choisi n'existe que dans une seule extraction
@@ -234,6 +261,7 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
   return {
     semaineCle,
     comparaisonCle: comparaisonIndex >= 0 ? comparaisonCle : null,
+    comparaisonRepli,
     semaineLibelle: libelleSemaine(semaineCle),
     seuils: snapshot.seuils || { critique: 70, conforme: 90, baisse: 5 },
     districts: districtModels.sort((a, b) => a.nom.localeCompare(b.nom, "fr")),

@@ -549,3 +549,5 @@ body.tv .sokhnaci-widget { display: none; }
   .insight-card { background: #132a31 !important; print-color-adjust: exact; }
   #carte { height: 340px; }
 }
+
+.variation { white-space: nowrap; }
