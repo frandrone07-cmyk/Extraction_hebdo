@@ -364,14 +364,14 @@ body.tv .tv-bar { position: fixed; top: 0; right: 0; left: 0; z-index: 2500; dis
 .tv-kpis strong.critical { color: #b93e34; }
 .tv-layout { display: grid; gap: 15px; }
 .tv-half { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.tv-map-layout { grid-template-columns: minmax(0, 1.45fr) minmax(320px, 1fr); }
+.tv-map-layout { grid-template-columns: minmax(0, 2.2fr) minmax(300px, 1fr); }
 .tv-map-details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .tv-chart { height: clamp(260px, 37vh, 420px); margin-top: 10px; }
 .tv-chart-status { height: clamp(340px, 48vh, 560px); }
 .tv-chart-large { height: min(65vh, 620px); }
 .tv-chart-card { padding: 18px 24px !important; }
 .tv-map-region { margin: 0 0 9px; color: #278963; font-family: Manrope, sans-serif; font-size: 15px; font-weight: 800; }
-.tv-slide #tv-map, .tv-slide #tv-map-regions { height: min(74vh, 760px); border-radius: 12px; }
+.tv-slide #tv-map, .tv-slide #tv-map-regions { height: min(76vh, 820px); border-radius: 12px; }
 .tv-map-legend { margin-top: 12px; font-size: 13px; }
 .tv-map-legend .legend-swatch { width: 12px; height: 12px; }
 .tv-priorities, .tv-ranking { display: grid; gap: 5px; margin-top: 10px; }

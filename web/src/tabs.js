@@ -115,9 +115,9 @@ export function renderVue(modele) {
       <article class="card"><div class="card-head"><div><h2>Répartition des districts</h2><p class="card-subtitle">Selon les seuils de complétude</p></div></div><div class="chartbox sm"><canvas id="ch-statuts" aria-label="Répartition des districts par statut : ${districts.length} districts au total"></canvas></div></article>
     </section>
     <section class="grid grid3">
-      <article class="card"><div class="card-head"><div><h2>Priorités de suivi</h2><p class="card-subtitle">Dist. classés par taux moyen croissant.</p></div><span class="status-chip critique">${nbCritiques} critique${nbCritiques > 1 ? "s" : ""}</span></div>${optionsAlertes}</article>
+      <article class="card"><div class="card-head"><div><h2>Priorités de suivi</h2><p class="card-subtitle">Districts en critique.</p></div><span class="status-chip critique">${nbCritiques} critique${nbCritiques > 1 ? "s" : ""}</span></div>${optionsAlertes}</article>
       <article class="card"><div class="card-head"><div><h2>Districts à surveiller</h2><p class="card-subtitle">Entre ${seuils.critique}% et ${seuils.conforme}%.</p></div><span class="status-chip surveiller">${districts.filter((district) => district.statut === "surveiller").length}</span></div>${optionsSurveiller}</article>
-      <article class="card"><div class="card-head"><div><h2>Districts conformes</h2><p class="card-subtitle">Taux moyen décroissant.</p></div><span class="status-chip conforme">${districts.filter((district) => district.statut === "conforme").length}</span></div>${optionsConformes}</article>
+      <article class="card"><div class="card-head"><div><h2>Districts conformes</h2><p class="card-subtitle">Districts au-dessus du seuil de conformité.</p></div><span class="status-chip conforme">${districts.filter((district) => district.statut === "conforme").length}</span></div>${optionsConformes}</article>
     </section>
     <section class="card"><div class="card-head"><div><h2>10 districts les plus performants</h2><p class="card-subtitle">Taux moyen décroissant, sans retirer les priorités de suivi.</p></div><span class="status-chip conforme">Top 10</span></div>${optionsMeilleurs}</section>
   </div>`;

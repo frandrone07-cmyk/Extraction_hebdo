@@ -141,7 +141,7 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
       } catch { /* contour incomplet */ }
       const region = district.region.replace(/^DRS[_ ]/, "");
       const taux = district.tauxMoyen === null || district.tauxMoyen === undefined ? "—" : `${afficherTaux(district.tauxMoyen)}%`;
-      layer.bindTooltip(`<strong>${escapeHtml(district.nom)}</strong><br>${escapeHtml(region)}<br>Taux moyen : ${taux}`, { sticky: true, direction: "top" });
+      layer.bindTooltip(`<strong>${escapeHtml(district.nom)}</strong><br>${escapeHtml(region)}<br>Taux moyen : ${taux}`, { sticky: true, direction: "top", offset: nomsEtiquettes ? [0, -34] : [0, 0] });
       if (onClicDistrict) layer.on("click", () => onClicDistrict(district));
     },
   }).addTo(carte);
@@ -180,7 +180,8 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
       const largeur = grand ? 46 : 40;
       const hauteur = grand ? 22 : 18;
       const places = [];
-      for (const entree of entrees) {
+      const ordre = [...entrees].sort((a, b) => (b.key === etiquetteDistrictActive) - (a.key === etiquetteDistrictActive));
+      for (const entree of ordre) {
         const present = coucheEtiquettes.hasLayer(entree.marqueur);
         if (regionEtiquettes && entree.region !== regionEtiquettes) {
           if (present) coucheEtiquettes.removeLayer(entree.marqueur);
@@ -190,12 +191,13 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         const sud = carte.latLngToContainerPoint(entree.limites.getSouthEast());
         const largeurEtiquette = nomsEtiquettes ? Math.min(138, Math.max(70, entree.nom.length * 6 + 14)) : largeur;
         const hauteurEtiquette = nomsEtiquettes ? 36 : hauteur;
-        const tient = (sud.x - nord.x) >= largeurEtiquette * (nomsEtiquettes ? 0.7 : 0.9)
-          && (sud.y - nord.y) >= hauteurEtiquette * (nomsEtiquettes ? 0.7 : 0.9);
-        const centre = carte.latLngToContainerPoint(entree.limites.getCenter());
-        const boite = { x: centre.x - largeurEtiquette / 2, y: centre.y - hauteurEtiquette / 2 };
         const active = entree.key === etiquetteDistrictActive;
-        const libre = active || (tient && !places.some((p) => Math.abs(p.x - boite.x) < largeurEtiquette + 2 && Math.abs(p.y - boite.y) < hauteurEtiquette + 2));
+        const tient = (sud.x - nord.x) >= largeurEtiquette * (nomsEtiquettes ? 0.5 : 0.9)
+          && (sud.y - nord.y) >= hauteurEtiquette * (nomsEtiquettes ? 0.5 : 0.9);
+        const centre = carte.latLngToContainerPoint(entree.limites.getCenter());
+        const boite = { x: centre.x - largeurEtiquette / 2, y: centre.y - hauteurEtiquette / 2, l: largeurEtiquette, h: hauteurEtiquette };
+        const chevauche = places.some((p) => boite.x < p.x + p.l + 3 && p.x < boite.x + boite.l + 3 && boite.y < p.y + p.h + 3 && p.y < boite.y + boite.h + 3);
+        const libre = active || (tient && !chevauche);
         if (libre) {
           places.push(boite);
           if (!present) coucheEtiquettes.addLayer(entree.marqueur);
