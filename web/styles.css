@@ -419,24 +419,28 @@ html[data-theme="dark"] .status-chip.conforme, html[data-theme="dark"] .empty-st
 .sokhnaci-character { display: grid; width: 94px; height: 92px; place-items: center; border-radius: 18px; background: var(--primary-soft); }
 .sokhnaci-svg { width: 90px; height: 90px; overflow: visible; }
 .sokhnaci-svg .baby-shadow { fill: rgba(15, 39, 30, .12); }
-.sokhnaci-svg .baby-skin { fill: #f2bf91; }
-.sokhnaci-svg .baby-shirt { fill: #11805b; }
-.sokhnaci-svg .baby-shirt-collar { fill: none; stroke: #d3f0dd; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.sokhnaci-svg .baby-skin { fill: #7d4a2d; }
+.sokhnaci-svg .baby-shirt, .sokhnaci-svg .baby-wax { fill: url(#sok-wax); }
+.sokhnaci-svg .baby-hair-back { fill: #1b110d; }
+.sokhnaci-svg .baby-wrap { fill: url(#sok-wax); stroke: #0f2a4a; stroke-width: .8; }
+.sokhnaci-svg .baby-wrap-knot { fill: url(#sok-wax); stroke: #0f2a4a; stroke-width: .8; }
+.sokhnaci-svg .baby-earring { fill: #f4c542; stroke: #b9871a; stroke-width: .6; }
+.sokhnaci-svg .baby-shirt-collar { fill: none; stroke: #7d4a2d; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .sokhnaci-svg .baby-shirt-mark { fill: none; stroke: #b5f1cf; stroke-width: 1.7; stroke-linecap: round; }
-.sokhnaci-svg .baby-face { stroke: #df9c6e; stroke-width: .8; }
-.sokhnaci-svg .baby-hair, .sokhnaci-svg .baby-tuft { fill: #493328; }
-.sokhnaci-svg .baby-brow { fill: none; stroke: #493328; stroke-width: 1.7; stroke-linecap: round; }
+.sokhnaci-svg .baby-face { stroke: #5e3620; stroke-width: .8; }
+.sokhnaci-svg .baby-hair { fill: #1b110d; }
+.sokhnaci-svg .baby-brow { fill: none; stroke: #1b110d; stroke-width: 1.7; stroke-linecap: round; }
 .sokhnaci-svg .baby-eye { fill: #17352b; transform-box: fill-box; transform-origin: center; animation: sokhnaci-blink 4.2s infinite; }
-.sokhnaci-svg .baby-cheek { fill: #df8d79; opacity: .65; }
-.sokhnaci-svg .baby-mouth-smile, .sokhnaci-svg .baby-mouth-flat { fill: none; stroke: #8b4d37; stroke-width: 1.9; stroke-linecap: round; }
-.sokhnaci-svg .baby-mouth-open { display: none; fill: #8b4d37; }
+.sokhnaci-svg .baby-cheek { fill: #b8644a; opacity: .55; }
+.sokhnaci-svg .baby-mouth-smile, .sokhnaci-svg .baby-mouth-flat { fill: none; stroke: #4a1712; stroke-width: 2.1; stroke-linecap: round; }
+.sokhnaci-svg .baby-mouth-open { display: none; fill: #4a1712; }
 .sokhnaci-svg .baby-mouth-flat { display: none; }
 .sokhnaci-svg[data-mood="alerte"] .baby-mouth-smile, .sokhnaci-svg[data-mood="attentif"] .baby-mouth-smile, .sokhnaci-svg[data-mood="vigilant"] .baby-mouth-smile { display: none; }
 .sokhnaci-svg[data-mood="alerte"] .baby-mouth-open { display: block; }
 .sokhnaci-svg[data-mood="vigilant"] .baby-mouth-flat, .sokhnaci-svg[data-mood="attentif"] .baby-mouth-flat { display: block; }
 .sokhnaci-svg .baby-arm { transform-box: view-box; }
-.sokhnaci-svg .baby-arm-left { transform-origin: 40px 72px; animation: baby-wave 3s ease-in-out infinite; }
-.sokhnaci-svg .baby-arm-right { transform-origin: 72px 72px; animation: baby-wave 3s ease-in-out -1.5s infinite; }
+.sokhnaci-svg .baby-arm-left { transform-origin: 40px 70px; animation: baby-wave 3s ease-in-out infinite; }
+.sokhnaci-svg .baby-arm-right { transform-origin: 72px 70px; animation: baby-wave 3s ease-in-out -1.5s infinite; }
 .sokhnaci-widget.speaking .baby-mouth-smile { display: none; }
 .sokhnaci-widget.speaking .baby-mouth-open { display: block; transform-origin: center; animation: speaking-mouth .28s ease-in-out infinite alternate; }
 .sokhnaci-widget.speaking .baby-arm-left { animation: baby-gesture .46s ease-in-out infinite alternate; }
@@ -452,7 +456,7 @@ html[data-theme="dark"] .status-chip.conforme, html[data-theme="dark"] .empty-st
 .sokhnaci-widget[data-geste="salut_main"].speaking .baby-arm-right { animation: baby-wave 1s ease-in-out infinite; }
 .sokhnaci-launcher { display: flex; align-items: center; gap: 8px; margin-left: auto; padding: 8px 12px 8px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); font-size: 10px; font-weight: 750; cursor: pointer; }
 .sokhnaci-mini { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 50%; background: var(--primary); color: var(--primary-contrast); font-family: Manrope, sans-serif; }
-.sokhnaci-mini::before { content: "👶"; font-size: 15px; }
+.sokhnaci-mini::before { content: "👩🏾"; font-size: 15px; }
 .sokhnaci-widget.collapsed .sokhnaci-card { display: none; }
 body.tv .sokhnaci-widget { display: none; }
 .trigger-dialog { width: min(440px, calc(100vw - 28px)); padding: 20px; border: 1px solid var(--border); border-radius: 19px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); }

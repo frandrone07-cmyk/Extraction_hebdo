@@ -177,9 +177,9 @@ test("permet le thème et le mode TV au clavier", async ({ page }) => {
   await expect(page.locator("body")).not.toHaveClass(/tv/);
 });
 
-test("parle avec le personnage bébé animé", async ({ page }) => {
+test("parle avec Sokhnaci animée", async ({ page }) => {
   const avatar = page.locator(".sokhnaci-svg");
-  await expect(avatar).toHaveAttribute("aria-label", "Bébé Sokhnaci, guide du tableau de bord");
+  await expect(avatar).toHaveAttribute("aria-label", "Sokhnaci, guide du tableau de bord");
   await expect(page.locator(".sokhnaci-bubble")).toContainText("Salaamalekum");
   await expect(page.locator(".sokhnaci-bubble")).toContainText(/Sokhna Ci/);
   await expect(page.locator(".sokhnaci-bubble")).toContainText(/\d+,\d %/);
