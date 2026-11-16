@@ -220,17 +220,17 @@ main { max-width: 1404px; min-height: 50vh; margin: 0 auto; padding: 22px 0 52px
 .legend-swatch { width: 9px; height: 9px; border-radius: 3px; }
 .map-card .legend-swatch { width: 11px; height: 11px; }
 .carte-etiquette { background: transparent; border: none; }
-.carte-etiquette span { display: inline-block; padding: 1px 5px; border-radius: 5px; color: #fff; font-family: Manrope, sans-serif; font-size: 10px; font-weight: 750; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.35); box-shadow: 0 1px 3px rgba(0,0,0,.25); transform: translate(-50%, -50%); }
-.carte-etiquette-nom span { display: grid; width: max-content; max-width: 138px; gap: 1px; padding: 3px 6px; white-space: normal; line-height: 1.05; text-align: center; }
-.carte-etiquette-nom strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.carte-etiquette-nom small { font-size: 9px; }
-.carte-etiquette-active span { outline: 3px solid #fff; box-shadow: 0 0 0 5px rgba(19, 51, 42, .72), 0 2px 8px rgba(0,0,0,.35); }
-.tv-slide .carte-etiquette span { font-size: 14px; padding: 2px 7px; }
+.carte-etiquette span { display: inline-block; padding: 0 4px; border-radius: 4px; color: #fff; font-family: Manrope, sans-serif; font-size: 8px; font-weight: 750; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.35); box-shadow: 0 1px 3px rgba(0,0,0,.25); transform: translate(-50%, -50%); }
+.carte-etiquette-nom span { display: grid; width: max-content; max-width: 104px; gap: 0; padding: 2px 5px; white-space: normal; line-height: 1.05; text-align: center; }
+.carte-etiquette-nom strong { overflow: hidden; font-size: 7.5px; text-overflow: ellipsis; white-space: nowrap; }
+.carte-etiquette-nom small { font-size: 8px; }
+.carte-etiquette-active span { outline: 2px solid #fff; box-shadow: 0 0 0 5px rgba(19, 51, 42, .72), 0 2px 8px rgba(0,0,0,.35); }
+.tv-slide .carte-etiquette span { font-size: 10px; padding: 1px 5px; }
 .region-rate-label { border: 0; background: transparent; }
 .region-rate-label span { display: grid; width: max-content; max-width: 132px; gap: 1px; padding: 3px 6px; transform: translate(-50%, -50%); border: 1px solid rgba(255,255,255,.9); border-radius: 6px; color: #fff; font-family: Manrope, sans-serif; text-align: center; text-shadow: 0 1px 2px rgba(0,0,0,.45); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
 .region-rate-label strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .region-rate-label small { font-size: 9px; font-weight: 800; white-space: nowrap; }
-.region-label-selected span { outline: 3px solid #fff; box-shadow: 0 0 0 5px rgba(19, 51, 42, .72), 0 2px 8px rgba(0,0,0,.35); }
+.region-label-selected span { outline: 2px solid #fff; box-shadow: 0 0 0 5px rgba(19, 51, 42, .72), 0 2px 8px rgba(0,0,0,.35); }
 .statut-puce { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; vertical-align: 1px; }
 .statut-critique { background: var(--critique); }
 .statut-surveiller { background: var(--surveiller); }
@@ -346,8 +346,8 @@ body.tv .tv-bar { position: fixed; top: 0; right: 0; left: 0; z-index: 2500; dis
 .tv-controls { display: flex; align-items: center; gap: 5px; }
 .tv-controls button, .tv-controls select { display: grid; min-width: 31px; height: 31px; place-items: center; padding: 0 7px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; background: rgba(255,255,255,.08); color: #f3f8f4; font-size: 12px; cursor: pointer; }
 .tv-clock { display: grid; margin-right: 8px; text-align: right; line-height: 1.1; white-space: nowrap; }
-.tv-clock strong { color: #fff; font-family: Manrope, sans-serif; font-size: 19px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-.tv-clock small { display: block; color: #b7c9c0; font-size: 9px; }
+.tv-clock strong { color: #fff; font-family: Manrope, sans-serif; font-size: 24px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.tv-clock small { display: block; color: #d3e1d9; font-size: 11px; }
 .tv-clock small::first-letter { text-transform: uppercase; }
 .tv-controls button:hover, .tv-controls select:hover { background: rgba(255,255,255,.16); }
 .tv-controls select { display: block; font-size: 9px; }
@@ -401,9 +401,9 @@ body.tv .tv-bar { position: fixed; top: 0; right: 0; left: 0; z-index: 2500; dis
 .tv-tour-district strong.surveiller { color: var(--surveiller); }
 .tv-tour-district strong.conforme { color: #0b5c42; }
 .tv-tour-district strong.inconnu { color: var(--inconnu); }
-.tv-slide .carte-etiquette-nom span { display: grid; width: 138px; gap: 1px; padding: 4px 6px; white-space: normal; line-height: 1.1; }
-.tv-slide .carte-etiquette-nom strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.tv-slide .carte-etiquette-nom small { font-size: 11px; }
+.tv-slide .carte-etiquette-nom span { display: grid; width: 104px; gap: 0; padding: 2px 5px; white-space: normal; line-height: 1.1; }
+.tv-slide .carte-etiquette-nom strong { overflow: hidden; font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
+.tv-slide .carte-etiquette-nom small { font-size: 9.5px; }
 body.tv .leaflet-container { height: 100%; }
 .tv-bar { display: none; }
 html[data-theme="dark"] .status-chip.conforme, html[data-theme="dark"] .empty-state, html[data-theme="dark"] .priority-rank-best { color: var(--conforme); }

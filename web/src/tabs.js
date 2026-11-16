@@ -237,7 +237,7 @@ export function renderEvolution(modele) {
   const libelleTendance = evolution.tendanceRepli || modele.selection.periode === "Toutes les périodes"
     ? `mois communs aux extractions (${evolution.periodesTendance.join(", ")})` : modele.selection.periode;
   const noteRepli = evolution.tendanceRepli
-    ? `<p class="note">${escapeHtml(modele.selection.periode)} n’apparaît que dans la dernière extraction : la tendance est calculée sur les mois présents dans toutes les extractions (${escapeHtml(evolution.periodesTendance.join(", "))}).</p>` : "";
+    ? `<p class="note">${evolution.motifRepli === "auto" ? "Par défaut, la tendance porte sur tous les mois présents dans toutes les extractions" : `${escapeHtml(modele.selection.periode)} n’apparaît pas dans toutes les extractions : la tendance porte sur les mois communs`} (${escapeHtml(evolution.periodesTendance.join(", "))}). Choisissez un mois dans « Période DHIS2 » pour le suivre seul.</p>` : "";
   const indexComparaison = modele.comparaisonCle ? weeks.indexOf(modele.comparaisonCle) : -1;
   const prev = modele.comparaisonCle ? indexComparaison : idx - 1;
   const lignesRegions = evolution.par_region.map((serie) => {

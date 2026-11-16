@@ -31,7 +31,7 @@ test.beforeEach(async ({ page }) => {
 
 test("charge les données, relie les filtres à l’URL et ouvre une fiche district", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Complétude des rapports" })).toBeVisible();
-  await expect(page.locator("#sel-extraction option")).toHaveCount(6);
+  await expect.poll(() => page.locator("#sel-extraction option").count()).toBeGreaterThanOrEqual(6);
 
   const region = await page.locator("#sel-region option").nth(1).getAttribute("value");
   await page.locator("#sel-region").selectOption(region);

@@ -177,8 +177,8 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
     gererZoomEtiquettes = () => {
       if (!carte || !coucheEtiquettes) return;
       const grand = carte.getSize().x >= 900;
-      const largeur = grand ? 46 : 40;
-      const hauteur = grand ? 22 : 18;
+      const largeur = grand ? 34 : 30;
+      const hauteur = grand ? 15 : 14;
       const places = [];
       const ordre = [...entrees].sort((a, b) => (b.key === etiquetteDistrictActive) - (a.key === etiquetteDistrictActive));
       for (const entree of ordre) {
@@ -189,8 +189,9 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         }
         const nord = carte.latLngToContainerPoint(entree.limites.getNorthWest());
         const sud = carte.latLngToContainerPoint(entree.limites.getSouthEast());
-        const largeurEtiquette = nomsEtiquettes ? Math.min(138, Math.max(70, entree.nom.length * 6 + 14)) : largeur;
-        const hauteurEtiquette = nomsEtiquettes ? 36 : hauteur;
+        const mesure = entree.marqueur.getElement()?.firstElementChild;
+        const largeurEtiquette = mesure?.offsetWidth || (nomsEtiquettes ? Math.min(104, Math.max(56, entree.nom.length * 4.6 + 12)) : largeur);
+        const hauteurEtiquette = mesure?.offsetHeight || (nomsEtiquettes ? 26 : hauteur);
         const active = entree.key === etiquetteDistrictActive;
         const tient = (sud.x - nord.x) >= largeurEtiquette * (nomsEtiquettes ? 0.5 : 0.9)
           && (sud.y - nord.y) >= hauteurEtiquette * (nomsEtiquettes ? 0.5 : 0.9);

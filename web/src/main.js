@@ -40,6 +40,7 @@ let ongletCourant = "vue";
 let stateCourant = {};
 let toastTimer = null;
 let sokhnaciInitialise = false;
+let periodeChoisie = false;
 
 function echapper(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -155,6 +156,7 @@ function rafraichir(filters, { writeHash = true } = {}) {
   modeleCourant = construireModele(donnees.snapshot, selected.extraction, selected.comparaison, {
     region: selected.region,
     periode: selected.periode,
+    periodeAuto: !periodeChoisie,
     formulaire: selected.formulaire,
   }, donnees.evolution, donnees.geo, donnees.geoRegions);
   stateCourant = { ...stateCourant, ...selected };
@@ -189,15 +191,18 @@ function initFilters() {
   Object.entries(SELECTORS).forEach(([key, id]) => {
     document.getElementById(id).addEventListener("change", () => {
       const requested = Object.fromEntries(Object.entries(SELECTORS).map(([name, selectorId]) => [name, document.getElementById(selectorId).value]));
+      if (key === "periode") periodeChoisie = true;
       if (key === "extraction") {
         requested.comparaison = weeksBefore(requested.extraction)[0] || "none";
         requested.periode = "latest";
+        periodeChoisie = false;
       }
       rafraichir(requested);
     });
   });
   document.getElementById("btn-reset").addEventListener("click", () => {
     ongletCourant = "vue";
+    periodeChoisie = false;
     rafraichir({ extraction: donnees.latest.semaine_cle, comparaison: "none", region: "", periode: "latest", formulaire: "" });
   });
   window.addEventListener("completude:filter", (event) => {
@@ -249,6 +254,7 @@ async function actualiserPendantDiaporama() {
   modeleCourant = construireModele(donnees.snapshot, selected.extraction, selected.comparaison, {
     region: selected.region,
     periode: selected.periode,
+    periodeAuto: !periodeChoisie,
     formulaire: selected.formulaire,
   }, donnees.evolution, donnees.geo, donnees.geoRegions);
   mettreAJourEntete();

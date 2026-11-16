@@ -213,7 +213,12 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
   let periodeTendance = selections.periodeIndex;
   let periodesCommunes = null;
   let tendanceRepli = false;
-  if (selections.periodeIndex !== null && periodesParSemaine.filter((presentes) => presentes.has(selections.periodeIndex)).length < 2 && communesBrutes?.size) {
+  let motifRepli = null;
+  if (selections.periodeIndex !== null && communesBrutes?.size) {
+    if (filters.periodeAuto) motifRepli = "auto";
+    else if (periodesParSemaine.filter((presentes) => presentes.has(selections.periodeIndex)).length < 2) motifRepli = "absent";
+  }
+  if (motifRepli) {
     periodeTendance = null;
     tendanceRepli = true;
   }
@@ -285,6 +290,7 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
       par_region: seriesRegion.map((serie) => ({ ...serie, valeurs: serie.valeurs.slice(0, currentWeekIndex + 1) })),
       par_region_formulaire_periode: evolution.par_region_formulaire_periode,
       tendanceRepli,
+      motifRepli,
       periodesTendance,
     },
   };
