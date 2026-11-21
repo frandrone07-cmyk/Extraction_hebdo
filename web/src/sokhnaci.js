@@ -65,13 +65,31 @@ function svgMarkup() {
   </svg>`;
 }
 
-// Meilleure voix féminine française disponible sur l'appareil (le navigateur n'en fournit pas de voix wolof).
-function choisirVoix() {
-  if (!("speechSynthesis" in window)) return null;
-  const francaises = window.speechSynthesis.getVoices().filter((voix) => /^fr/i.test(voix.lang));
-  const feminines = /(denise|eloise|vivienne|brigitte|hortense|julie|amelie|amélie|audrey|marie|aurelie|aurélie|google fran|female|femme)/i;
-  const masculines = /(paul|henri|claude|thomas|nicolas|male|homme)/i;
-  return francaises.find((voix) => feminines.test(voix.name) && !masculines.test(voix.name)) || francaises.find((voix) => !masculines.test(voix.name)) || francaises[0] || null;
+// Les voix du navigateur se chargent après le démarrage (Chrome) : on attend leur liste.
+const voixDisponibles = new Promise((resolve) => {
+  if (!("speechSynthesis" in window)) { resolve([]); return; }
+  const lister = () => window.speechSynthesis.getVoices();
+  if (lister().length) { resolve(lister()); return; }
+  window.speechSynthesis.addEventListener("voiceschanged", () => resolve(lister()), { once: true });
+  setTimeout(() => resolve(lister()), 1500);
+});
+const FEMININES = /(denise|eloise|éloïse|vivienne|brigitte|hortense|julie|amelie|amélie|audrey|marie|aurelie|aurélie|jacqueline|celeste|céleste|josephine|joséphine|sylvie|google fran|female|femme)/i;
+const MASCULINES = /(paul|henri|claude|thomas|nicolas|antoine|remy|rémy|mathieu|male|homme)/i;
+function noteVoix(voix) {
+  if (!/^fr/i.test(voix.lang)) return -1000;
+  let note = 0;
+  if (/natural|neural|online/i.test(voix.name)) note += 40;
+  if (FEMININES.test(voix.name)) note += 30;
+  if (MASCULINES.test(voix.name)) note -= 100;
+  if (/^fr[-_]fr$/i.test(voix.lang)) note += 5;
+  return note;
+}
+// Renvoie la meilleure voix féminine française et si elle est bien identifiée comme féminine.
+async function choisirVoix() {
+  const voix = (await voixDisponibles).filter((v) => /^fr/i.test(v.lang));
+  const classees = voix.map((v) => ({ voix: v, note: noteVoix(v) })).sort((x, y) => y.note - x.note);
+  const meilleure = classees[0];
+  return meilleure ? { voix: meilleure.voix, feminine: FEMININES.test(meilleure.voix.name) && !MASCULINES.test(meilleure.voix.name) } : { voix: null, feminine: false };
 }
 
 function arreterLecture() {
@@ -85,10 +103,9 @@ function arreterLecture() {
   }
 }
 
-// Un enregistrement réel (web/audio/wo/<nom>.mp3) est joué en priorité pour le wolof ;
+// Un enregistrement réel (web/audio/wo/<nom>.wav ou .mp3) est joué en priorité pour le wolof ;
 // à défaut, la voix de synthèse prend le relais.
-function jouerAudio(nom) {
-  const url = `${DOSSIER_AUDIO_WOLOF}${nom}.mp3`;
+function essayerAudio(url) {
   if (audiosAbsents.has(url)) return Promise.resolve(false);
   return new Promise((resolve) => {
     const audio = new Audio(url);
@@ -98,21 +115,28 @@ function jouerAudio(nom) {
     audio.play().catch(() => resolve(false));
   });
 }
+async function jouerAudio(nom) {
+  return (await essayerAudio(`${DOSSIER_AUDIO_WOLOF}${nom}.wav`)) || (await essayerAudio(`${DOSSIER_AUDIO_WOLOF}${nom}.mp3`));
+}
 
-function jouerVoix(segment) {
-  return new Promise((resolve) => {
-    if (!("speechSynthesis" in window)) { resolve(); return; }
-    const parole = new SpeechSynthesisUtterance(segment.oral);
-    parole.lang = "fr-FR";
-    const voix = choisirVoix();
-    if (voix) parole.voice = voix;
-    parole.rate = 0.94;
-    parole.pitch = 1.08;
-    const securite = setTimeout(resolve, Math.max(3500, segment.oral.length * 95));
-    const fin = () => { clearTimeout(securite); resolve(); };
-    parole.onend = parole.onerror = fin;
-    parole.onstart = () => widget?.classList.add("speaking");
-    window.speechSynthesis.speak(parole);
+async function jouerVoix(segment) {
+  if (!("speechSynthesis" in window)) return;
+  const { voix, feminine } = await choisirVoix();
+  await new Promise((resolve) => {
+    try {
+      const parole = new SpeechSynthesisUtterance(segment.oral);
+      parole.lang = "fr-FR";
+      if (voix) parole.voice = voix;
+      parole.rate = 0.94;
+      parole.pitch = feminine ? 1.04 : 1.14;
+      const securite = setTimeout(resolve, Math.max(3500, segment.oral.length * 95));
+      const fin = () => { clearTimeout(securite); resolve(); };
+      parole.onend = parole.onerror = fin;
+      parole.onstart = () => widget?.classList.add("speaking");
+      window.speechSynthesis.speak(parole);
+    } catch {
+      resolve();
+    }
   });
 }
 

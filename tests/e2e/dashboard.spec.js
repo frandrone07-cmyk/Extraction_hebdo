@@ -276,3 +276,21 @@ test("ne présente pas de violations axe-core WCAG A/AA sur la vue et le tableau
   const districts = await axe().analyze();
   expect(districts.violations, JSON.stringify(districts.violations, null, 2)).toEqual([]);
 });
+
+test("Sokhnaci comprend les noms approximatifs, les questions vagues et la suite de la conversation", async ({ page }) => {
+  const poser = async (question) => {
+    await page.locator(".sokhnaci-ask input").fill(question);
+    await page.locator(".sokhnaci-ask input").press("Enter");
+  };
+  const bulle = page.locator(".sokhnaci-bubble");
+  await poser("situation de Kolta");
+  await expect(bulle).toContainText("Je pense que vous parlez de Kolda");
+  await poser("et le detail");
+  await expect(bulle).toContainText("districts à relancer");
+  await poser("qui est en difficulté ?");
+  await expect(bulle).toContainText("les plus en retard");
+  await poser("blabla");
+  await expect(bulle).toContainText("Parlez-vous d’une région, d’un district ou d’un formulaire ?");
+  await poser("");
+  await expect(bulle).toContainText("Pardon, pouvez-vous répéter ?");
+});
