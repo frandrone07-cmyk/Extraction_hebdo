@@ -577,9 +577,12 @@ body.sna-actif .sokhnaci-widget, body.sna-actif .sokhnaci-acteur { display: none
 /* ===== Sokhna Ci AI ===== */
 :root { --sna-verre: rgba(255, 255, 255, .72); --sna-ciel-a: #e4f3ea; --sna-ciel-b: #fbf1dc; --sna-sol-a: #cfe3d6; --sna-sol-b: #eaf3ec; }
 :root[data-theme="dark"] { --sna-verre: rgba(23, 35, 36, .72); --sna-ciel-a: #153129; --sna-ciel-b: #1f2a22; --sna-sol-a: #1a2b27; --sna-sol-b: #243a32; }
-.sna { gap: 22px; }
+.sna { grid-template-columns: minmax(0, 1fr); gap: 22px; }
 .sna button, .sna select, .sna input { font-family: inherit; }
 .sna .eyebrow svg, .sna button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+.sna, .sna > *, .sna-grille > *, .sna-hero > * { min-width: 0; }
+.sna-controles > * { min-width: 0; max-width: 100%; }
+.sna-controles select { max-width: 100%; }
 .sna-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .sna-hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .sna-hero h2 { margin: 4px 0 8px; font: 800 clamp(30px, 4.2vw, 46px)/1.04 Manrope, sans-serif; letter-spacing: -.045em; }
@@ -593,7 +596,7 @@ body.sna-actif .sokhnaci-widget, body.sna-actif .sokhnaci-acteur { display: none
 .sna.sans-avatar .sna-grille { grid-template-columns: 1fr; }
 .sna.sans-avatar .sna-scene, .sna.sans-avatar .sna-indicateurs { display: none; }
 .sna-carte { border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 24px; background: var(--sna-verre); backdrop-filter: blur(16px) saturate(1.25); box-shadow: 0 18px 50px rgba(15, 39, 30, .1); }
-.sna-avatar-zone { display: grid; gap: 12px; padding: 14px; }
+.sna-avatar-zone { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; }
 .sna-scene { position: relative; height: clamp(300px, 48vh, 470px); overflow: hidden; border-radius: 18px; background: radial-gradient(120% 90% at 50% 6%, var(--sna-ciel-a), var(--sna-ciel-b) 72%); isolation: isolate; }
 .sna-halo { position: absolute; inset: 8% 14% auto; height: 55%; border-radius: 50%; background: radial-gradient(closest-side, rgba(242, 163, 27, .38), transparent); filter: blur(12px); animation: sna-halo 7s ease-in-out infinite; }
 .sna-sol { position: absolute; right: -12%; bottom: -3%; left: -12%; height: 40%; background: linear-gradient(to top, var(--sna-sol-a), var(--sna-sol-b)); border-top: 1px solid rgba(255, 255, 255, .4); transform: perspective(380px) rotateX(58deg); transform-origin: 50% 100%; }
@@ -616,7 +619,7 @@ body.sna-actif .sokhnaci-widget, body.sna-actif .sokhnaci-acteur { display: none
 .sna-controles .sna-bouton-micro[aria-pressed="true"], .sna-barre .sna-bouton-micro[aria-pressed="true"] { border-color: #c2362b; background: #fff0ed; color: #8f241b; animation: sok-micro 1s ease-in-out infinite alternate; }
 .sna-volume { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
 .sna-volume input { width: 96px; accent-color: var(--primary); }
-.sna-conversation { display: grid; gap: 10px; padding: 14px; }
+.sna-conversation { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px; }
 .sna-historique { display: flex; flex-direction: column; gap: 12px; min-height: 300px; max-height: min(58vh, 560px); padding: 2px 6px 2px 2px; overflow: auto; scrollbar-width: thin; }
 .sna-message { max-width: 92%; padding: 12px 14px; border-radius: 18px; font-size: 14px; line-height: 1.6; animation: sna-entree .28s ease both; }
 .sna-utilisateur { align-self: flex-end; border-bottom-right-radius: 6px; background: linear-gradient(135deg, #087f5b, #066a4d); color: #fff; }
@@ -630,7 +633,8 @@ body.sna-actif .sokhnaci-widget, body.sna-actif .sokhnaci-acteur { display: none
 .sna-texte .sok-phrase.actif { background: rgba(242, 163, 27, .3); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .sna-visuel:empty { display: none; }
 .sna-visuel h4 { margin: 10px 0 6px; font-size: 13px; }
-.sna-graphe { height: 240px; margin: 6px 0; }
+.sna-graphe { position: relative; min-width: 0; height: 240px; margin: 6px 0; overflow: hidden; }
+.sna-visuel, .sna-message, .sna-historique, .sna-texte { min-width: 0; }
 .sna-tableau { overflow: auto; border: 1px solid var(--border); border-radius: 12px; }
 .sna-tableau table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .sna-tableau th, .sna-tableau td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
@@ -675,7 +679,7 @@ body.sna-actif .sokhnaci-widget, body.sna-actif .sokhnaci-acteur { display: none
 .sna-note { flex-basis: 100%; min-height: 1em; }
 .sna :focus-visible { outline: 3px solid #1d6fd8; outline-offset: 2px; }
 @media (max-width: 960px) {
-  .sna-grille { grid-template-columns: 1fr; }
+  .sna-grille { grid-template-columns: minmax(0, 1fr); }
   .sna-scene { height: 320px; }
   .sna-acteur { width: 230px; height: 230px; margin-left: -115px; }
   .sna-historique { max-height: 50vh; }
@@ -754,6 +758,7 @@ body.sna-actif .sokhnaci-widget, body.sna-actif .sokhnaci-acteur { display: none
   .drawer { padding: 17px; }
 }
 @media (max-width: 390px) {
+  .masthead-actions { flex-wrap: wrap; justify-content: flex-start; }
   .filters { grid-template-columns: 1fr; }
   .filter-form { grid-column: auto; }
   .grid-kpi { grid-template-columns: 1fr 1fr; }

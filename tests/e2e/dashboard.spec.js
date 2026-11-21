@@ -504,10 +504,16 @@ test("espace Sokhna Ci AI : accessibilité WCAG, responsive et mode sombre", asy
   const v2 = (await axe().analyze()).violations;
   expect(v2.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
 
+  await page.addStyleTag({ content: "* { font-family: Verdana, sans-serif !important; }" });
   await page.setViewportSize({ width: 390, height: 780 });
+  await page.waitForTimeout(500);
   const debordement = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(debordement).toBeLessThanOrEqual(1);
+  await page.setViewportSize({ width: 320, height: 780 });
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
   await page.setViewportSize({ width: 820, height: 1000 });
+  await page.waitForTimeout(500);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
 });
 
