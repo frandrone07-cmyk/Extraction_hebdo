@@ -294,3 +294,10 @@ test("Sokhnaci comprend les noms approximatifs, les questions vagues et la suite
   await poser("");
   await expect(bulle).toContainText("Pardon, pouvez-vous répéter ?");
 });
+
+test("le bouton micro explique clairement le problème quand la dictée vocale est impossible", async ({ page }) => {
+  await page.evaluate(() => { delete window.SpeechRecognition; delete window.webkitSpeechRecognition; });
+  await page.locator(".sokhnaci-mic").click();
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Chrome ou Edge");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("touche Windows + H");
+});

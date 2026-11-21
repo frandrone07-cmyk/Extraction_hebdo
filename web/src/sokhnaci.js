@@ -211,11 +211,39 @@ function message(texte, emotion = "neutre") {
   afficherDialogue({ emotion, segments: [{ langue: "fr", texte, geste: "inclinaison_ecoute" }] }, null, { speak: voiceEnabled });
 }
 
-function ecouterQuestion(bouton) {
+const CONSEIL_SAISIE = "Vous pouvez aussi taper votre question, ou dicter avec le clavier de votre appareil (sous Windows : touche Windows + H).";
+const MESSAGES_MICRO = {
+  "not-allowed": "Le micro est bloqué pour ce site. Cliquez sur le cadenas à gauche de l’adresse, autorisez le micro, puis réessayez.",
+  "service-not-allowed": "Le navigateur refuse la dictée vocale sur cet appareil. Utilisez Chrome ou Edge à jour.",
+  "audio-capture": "Aucun micro n’est détecté. Vérifiez qu’il est branché et choisi dans les paramètres Windows, rubrique Son, entrée.",
+  "no-speech": "Je n’ai rien entendu. Parlez un peu plus fort, près du micro, puis réessayez.",
+  network: "La reconnaissance vocale a besoin d’Internet. Vérifiez votre connexion, puis réessayez.",
+  "language-not-supported": "Le navigateur ne reconnaît pas le français sur cet appareil.",
+  aborted: null,
+};
+
+async function microDetecte() {
+  if (!navigator.mediaDevices?.enumerateDevices) return true;
+  try {
+    const peripheriques = await navigator.mediaDevices.enumerateDevices();
+    return peripheriques.some((peripherique) => peripherique.kind === "audioinput");
+  } catch {
+    return true;
+  }
+}
+
+async function ecouterQuestion(bouton) {
   const Reconnaissance = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!Reconnaissance) return;
+  if (!Reconnaissance) {
+    message(`Ce navigateur ne gère pas la dictée vocale. Utilisez Chrome ou Edge. ${CONSEIL_SAISIE}`);
+    return;
+  }
   if (ecouteEnCours) { ecouteEnCours.stop(); return; }
   arreterLecture();
+  if (!(await microDetecte())) {
+    message(`${MESSAGES_MICRO["audio-capture"]} ${CONSEIL_SAISIE}`);
+    return;
+  }
   const reconnaissance = new Reconnaissance();
   reconnaissance.lang = "fr-FR";
   reconnaissance.interimResults = true;
@@ -236,19 +264,18 @@ function ecouterQuestion(bouton) {
   };
   reconnaissance.onerror = (event) => {
     erreur = true;
-    message(event.error === "not-allowed" || event.error === "service-not-allowed"
-      ? "Autorisez le micro dans votre navigateur pour que je puisse vous écouter."
-      : "Je n’ai pas bien entendu. Pouvez-vous répéter ?");
+    const conseil = event.error in MESSAGES_MICRO ? MESSAGES_MICRO[event.error] : "Le micro ne répond pas.";
+    if (conseil) message(`${conseil} ${CONSEIL_SAISIE}`);
   };
   reconnaissance.onend = () => {
     widget.classList.remove("listening");
     bouton.setAttribute("aria-pressed", "false");
     ecouteEnCours = null;
     if (finale.trim()) { champ.value = ""; poserQuestion(finale); }
-    else if (!erreur) message("Pardon, pouvez-vous répéter ?");
+    else if (!erreur) message(`Je n’ai rien entendu. ${CONSEIL_SAISIE}`);
   };
   ecouteEnCours = reconnaissance;
-  try { reconnaissance.start(); } catch { ecouteEnCours = null; }
+  try { reconnaissance.start(); } catch { ecouteEnCours = null; message(`Le micro n’a pas pu démarrer. ${CONSEIL_SAISIE}`); }
 }
 
 function majBoutonVoix(bouton) {
@@ -268,11 +295,10 @@ export function replierSokhnaci() {
 export function initSokhnaci(model) {
   if (widget) { render(model); return; }
   try { voiceEnabled = localStorage.getItem(CLE_VOIX) !== "false"; } catch { voiceEnabled = true; }
-  const microDisponible = Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
   widget = document.createElement("section");
   widget.className = "sokhnaci-widget";
   widget.setAttribute("aria-label", "Sokhnaci, guide vocal du tableau de bord");
-  widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div><form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute"${microDisponible ? "" : " hidden"} title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
+  widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div><form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
   document.body.appendChild(widget);
   widget.querySelector(".sokhnaci-collapse").addEventListener("click", replierSokhnaci);
   widget.querySelector(".sokhnaci-launcher").addEventListener("click", () => {
