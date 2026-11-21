@@ -305,8 +305,8 @@ async function creer(tenueInitiale) {
     rendu.setSize(largeur, hauteur, false);
     camera.aspect = largeur / hauteur;
     const buste = cadrage === "buste";
-    const visible = hauteurModele * (buste ? 0.31 : 0.86);
-    const centre = hauteurModele * (buste ? 0.905 : 0.5);
+    const visible = hauteurModele * (buste ? 0.31 : 1.16);
+    const centre = hauteurModele * (buste ? 0.905 : 0.52);
     distance = visible / 2 / Math.tan((camera.fov * Math.PI) / 360);
     if (!buste && largeur / hauteur < 0.7) distance *= 0.7 / (largeur / hauteur) * 0.9;
     camera.position.set(0, centre, distance);
@@ -341,7 +341,7 @@ async function creer(tenueInitiale) {
     yaw.v = lisser(yaw.v, yaw0, dt, 7);
     vrm.scene.rotation.y = orientationBase + yaw.v;
     // Rapprochement doux : une échelle 2D de 1,32 devient environ 1,10 en 3D pour garder la tête dans le cadre.
-    const echelle3d = 1 + (echelleLissee - 1) * 0.33;
+    const echelle3d = 1 + (echelleLissee - 1) * 0.2;
     vrm.scene.scale.setScalar(echelle3d);
     vrm.scene.position.set(xLisse, -0.36 * assiseLissee * echelle3d + (s.marche ? Math.abs(Math.sin(temps * 7)) * 0.012 : 0), 0);
     Object.assign(debogage, calculerExpression(s, dt, temps));
