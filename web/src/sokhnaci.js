@@ -1,6 +1,7 @@
 import { creerSituation, repondre, versAffichage, versOral } from "./sokhnaci-dialogue.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
+const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
 const DOSSIER_AUDIO_WOLOF = "audio/wo/";
 let widget = null;
 let currentText = "";
@@ -14,6 +15,7 @@ const audiosAbsents = new Set();
 const HUMEUR_PAR_EMOTION = { neutre: "attentif", souriante: "serein", preoccupee: "alerte", encourageante: "vigilant", felicitations: "content" };
 const LIBELLE_HUMEUR = { alerte: "Point d’attention", vigilant: "À surveiller", attentif: "Analyse en cours", content: "En progression", serein: "Situation conforme" };
 let voiceEnabled = true;
+let voixChoisie = null;
 
 function moyenne(values) {
   const usable = values.filter((value) => value !== null && value !== undefined);
@@ -87,6 +89,8 @@ function noteVoix(voix) {
 // Renvoie la meilleure voix féminine française et si elle est bien identifiée comme féminine.
 async function choisirVoix() {
   const voix = (await voixDisponibles).filter((v) => /^fr/i.test(v.lang));
+  const manuelle = voixChoisie && voix.find((v) => v.name === voixChoisie);
+  if (manuelle) return { voix: manuelle, feminine: true };
   const classees = voix.map((v) => ({ voix: v, note: noteVoix(v) })).sort((x, y) => y.note - x.note);
   const meilleure = classees[0];
   return meilleure ? { voix: meilleure.voix, feminine: FEMININES.test(meilleure.voix.name) && !MASCULINES.test(meilleure.voix.name) } : { voix: null, feminine: false };
@@ -298,7 +302,7 @@ export function initSokhnaci(model) {
   widget = document.createElement("section");
   widget.className = "sokhnaci-widget";
   widget.setAttribute("aria-label", "Sokhnaci, guide vocal du tableau de bord");
-  widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div><form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
+  widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div><div class="sokhnaci-chips" role="group" aria-label="Questions suggérées"><button type="button" data-question="fais une analyse des résultats">Analyse</button><button type="button" data-question="qui est en difficulté">Priorités</button><button type="button" data-question="les meilleurs districts">Meilleurs</button><button type="button" data-question="comment ça évolue">Évolution</button></div><form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form><label class="sokhnaci-voix-choix">Voix française <select aria-label="Choisir la voix française de Sokhnaci"><option value="">Automatique (féminine)</option></select></label></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
   document.body.appendChild(widget);
   widget.querySelector(".sokhnaci-collapse").addEventListener("click", replierSokhnaci);
   widget.querySelector(".sokhnaci-launcher").addEventListener("click", () => {
@@ -306,6 +310,20 @@ export function initSokhnaci(model) {
     widget.querySelector(".sokhnaci-launcher").hidden = true;
   });
   widget.querySelector(".sokhnaci-speak").addEventListener("click", parler);
+  try { voixChoisie = localStorage.getItem(CLE_VOIX_CHOISIE) || null; } catch { voixChoisie = null; }
+  const choix = widget.querySelector(".sokhnaci-voix-choix select");
+  voixDisponibles.then((voix) => {
+    for (const v of voix.filter((x) => /^fr/i.test(x.lang))) choix.add(new Option(`${v.name} (${v.lang})`, v.name));
+    if (voixChoisie) choix.value = voixChoisie;
+    if (!choix.value) choix.value = "";
+    if (choix.options.length <= 1) choix.closest("label").hidden = true;
+  });
+  choix.addEventListener("change", () => {
+    voixChoisie = choix.value || null;
+    try { if (voixChoisie) localStorage.setItem(CLE_VOIX_CHOISIE, voixChoisie); else localStorage.removeItem(CLE_VOIX_CHOISIE); } catch { /* stockage facultatif */ }
+    message("Voilà, c’est ma nouvelle voix. Vous l’entendez bien ?");
+  });
+  widget.querySelectorAll(".sokhnaci-chips button").forEach((bouton) => bouton.addEventListener("click", () => poserQuestion(bouton.dataset.question)));
   widget.querySelector(".sokhnaci-mic").addEventListener("click", (event) => ecouterQuestion(event.currentTarget));
   widget.querySelector(".sokhnaci-ask").addEventListener("submit", (event) => {
     event.preventDefault();

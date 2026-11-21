@@ -301,3 +301,17 @@ test("le bouton micro explique clairement le problème quand la dictée vocale e
   await expect(page.locator(".sokhnaci-bubble")).toContainText("Chrome ou Edge");
   await expect(page.locator(".sokhnaci-bubble")).toContainText("touche Windows + H");
 });
+
+test("Sokhnaci interprète les résultats : analyse territoriale, structure du retard et dynamique", async ({ page }) => {
+  const bulle = page.locator(".sokhnaci-bubble");
+  const poser = async (question) => {
+    await page.locator(".sokhnaci-ask input").fill(question);
+    await page.locator(".sokhnaci-ask input").press("Enter");
+  };
+  for (const question of ["fais une analyse des résultats", "pourquoi les taux sont si bas ?", "qu'est-ce qui ne va pas", "fè une analize des resultas"]) {
+    await poser(question);
+    await expect(bulle).toContainText("Voulez-vous que je détaille un de ces points ?");
+  }
+  await page.locator('.sokhnaci-chips button[data-question="qui est en difficulté"]').click();
+  await expect(bulle).toContainText("les plus en retard");
+});

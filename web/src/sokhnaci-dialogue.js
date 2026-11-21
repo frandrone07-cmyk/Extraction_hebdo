@@ -3,6 +3,8 @@
 // Les nombres sont écrits sous forme de marqueurs « T:12.5 » (taux), « E:7 » (entier),
 // « P:2.5 » (points), « D:2026-11-16 » (date) : affichage en chiffres, voix en lettres.
 
+import { analyser } from "./sokhnaci-analyse.js";
+
 const MARQUEUR = /«([TEPD]):([^»]+)»/g;
 const UNITES = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"];
 const DIZAINES = { 20: "vingt", 30: "trente", 40: "quarante", 50: "cinquante", 60: "soixante" };
@@ -95,7 +97,12 @@ function emotionPour(taux, seuils) {
   if (taux >= seuils.conforme) return "felicitations";
   return "encourageante";
 }
-function nomFormulaire(nom) { return String(nom).replace(/^R\d+_/, "").replace(/_/g, " "); }
+function nomFormulaire(nom) {
+  const net = String(nom).replace(/^R\d+_/, "").replace(/_/g, " ");
+  if (net.length <= 70) return net;
+  const coupe = net.slice(0, 70);
+  return `${coupe.slice(0, coupe.lastIndexOf(" "))}…`;
+}
 function liste(elements) {
   if (elements.length <= 1) return elements.join("");
   return `${elements.slice(0, -1).join(", ")} et ${elements.at(-1)}`;
@@ -252,8 +259,86 @@ function variationPhrase(variation, comparaison) {
   return `C’est stable par rapport à ${comparaison}.`;
 }
 
+export function interpreter(model) {
+  const seuils = model.seuils;
+  const a = analyser(model);
+  const cadre = cadreDonnees(model);
+  const segments = [];
+  if (!a.critiques.length) {
+    segments.push(segment(`${cadre}, aucun district n’est sous le seuil critique de ${E(seuils.critique)} pour cent : la situation est saine.`, "pouce_leve"));
+  } else if (a.regionsToutesRouges.length) {
+    const nb = a.regionsToutesRouges.length;
+    const cites = liste(a.regionsToutesRouges.slice(0, 3).map((r) => labelRegion(r.nom)));
+    segments.push(segment(nb > 3
+      ? `${cadre}, le retard est d’abord territorial : dans ${E(nb)} régions, tous les districts sont en rouge, notamment ${cites}.`
+      : `${cadre}, le retard est d’abord territorial : tous les districts de ${cites} sont en rouge.`, "pointer_ecran"));
+  } else if (a.principales.length) {
+    segments.push(segment(`${cadre}, ${E(a.critiques.length)} districts sont en rouge, dont ${T(Math.round(a.partPrincipales))} dans ${liste(a.principales.map((r) => labelRegion(r.nom)))}.`, "pointer_ecran"));
+  }
+  if (a.globaux.length) {
+    const cites = a.globaux.sort((x, y) => x.tauxMoyen - y.tauxMoyen).slice(0, 2).map((d) => d.nom);
+    segments.push(segment(`${E(a.globaux.length)} district${a.globaux.length > 1 ? "s sont" : " est"} en retard sur presque tous les formulaires, notamment ${liste(cites)} : c’est un problème de transmission global, pas d’un formulaire.`, "compter_doigts"));
+  } else if (a.cibles.length) {
+    segments.push(segment("Chez les districts en rouge, le retard touche surtout certains formulaires : une relance ciblée suffira.", "hochement_tete"));
+  }
+  const systemique = a.systemiques[0];
+  const local = a.locaux[0];
+  if (systemique) {
+    segments.push(segment(`« ${nomFormulaire(systemique.nom)} » est bas partout, autour de ${T(Math.round(systemique.moyenne * 10) / 10)} : c’est un problème d’organisation national, pas local.`, "geste_rassurant"));
+  } else if (local) {
+    segments.push(segment(`« ${nomFormulaire(local.nom)} » varie fortement selon les régions, de ${T(Math.round(local.min * 10) / 10)} à ${T(Math.round(local.max * 10) / 10)} : le retard est local.`, "pointer_ecran"));
+  }
+  if (a.atypiques.length && a.atypiques[0].ecart < 0) {
+    const cas = a.atypiques[0];
+    const memeNom = normaliser(cas.district.nom) === normaliser(labelRegion(cas.region.nom));
+    segments.push(segment(`${cas.district.nom} est ${P(cas.ecart)} sous la médiane de sa région${memeNom ? "" : `, ${labelRegion(cas.region.nom)}`} : une situation à vérifier en priorité.`, "geste_rassurant"));
+  }
+  if (a.zeros > 0) {
+    segments.push(segment(`${E(a.zeros)} valeur${a.zeros > 1 ? "s" : ""} district par formulaire ${a.zeros > 1 ? "sont" : "est"} à zéro : aucun rapport reçu, ou formulaire non applicable.`, "geste_rassurant"));
+  }
+  if (a.rythme !== null && a.nbExtractions >= 3) {
+    const phrase = a.rythme > 0.2 ? `Le taux progresse de ${P(a.rythme)} par extraction en moyenne` : a.rythme < -0.2 ? `Le taux recule de ${P(a.rythme)} par extraction en moyenne` : "Le taux est quasiment stable d’une extraction à l’autre";
+    const stagne = a.stagnantes.length ? `, mais ${liste(a.stagnantes.slice(0, 3).map((r) => labelRegion(r.nom)))} ${a.stagnantes.length > 1 ? "stagnent" : "stagne"}` : "";
+    segments.push(segment(`${phrase}${stagne}.`, "hochement_tete"));
+  }
+  segments.push(segment("Voulez-vous que je détaille un de ces points ?", "inclinaison_ecoute"));
+  while (segments.length > 6) segments.splice(segments.length - 2, 1);
+  return { etat: "parle", emotion: a.critiques.length > toutesDistricts(model).length / 2 ? "preoccupee" : "encourageante", segments, suivi: "Quel point détailler ?" };
+}
+
+// ---- compréhension tolérante : similarité de trigrammes avec des exemples de questions ----
+const EXEMPLES = {
+  analyse: ["fais une analyse des résultats", "analyse la situation", "interprète les chiffres", "pourquoi les taux sont bas", "quelle est la cause du retard", "explique moi la situation", "qu'est ce qui ne va pas", "que dois je comprendre", "donne ton avis", "que me conseilles tu", "quelles actions prioritaires", "que faut il faire", "quels sont les problèmes"],
+  pire: ["quels districts sont en difficulté", "où est le problème", "les plus mauvais résultats", "qui a le plus de retard", "les zones à risque", "qui est en rouge"],
+  meilleur: ["quels sont les meilleurs", "qui réussit le mieux", "les bons élèves", "qui a les meilleurs taux", "les districts conformes"],
+  evolution: ["comment ça évolue", "est ce que ça progresse", "la tendance depuis le début", "ça monte ou ça descend", "par rapport à la semaine dernière"],
+  periode: ["à quelle date sont les données", "quand est la dernière mise à jour", "quel mois est affiché", "les données sont elles récentes"],
+  situation: ["donne moi la situation", "fais le point", "où en est on", "quel est le taux national", "résume moi tout"],
+};
+function trigrammes(texte) {
+  const base = `  ${normaliser(texte)} `;
+  const sac = new Map();
+  for (let i = 0; i < base.length - 2; i += 1) sac.set(base.slice(i, i + 3), (sac.get(base.slice(i, i + 3)) || 0) + 1);
+  return sac;
+}
+function cosinus(a, b) {
+  let produit = 0;
+  let na = 0;
+  let nb = 0;
+  for (const [cle, v] of a) { na += v * v; produit += v * (b.get(cle) || 0); }
+  for (const v of b.values()) nb += v * v;
+  return na && nb ? produit / Math.sqrt(na * nb) : 0;
+}
+const EXEMPLES_VECTEURS = Object.entries(EXEMPLES).map(([intention_, phrases]) => [intention_, phrases.map(trigrammes)]);
+export function intentionProche(question) {
+  const vecteur = trigrammes(question);
+  const classes = EXEMPLES_VECTEURS.map(([nom, exemples]) => ({ nom, score: Math.max(...exemples.map((e) => cosinus(vecteur, e))) })).sort((x, y) => y.score - x.score);
+  return classes[0].score >= 0.42 && classes[0].score - (classes[1]?.score ?? 0) >= 0.03 ? classes[0].nom : null;
+}
+
 const contexte = { type: null, nom: null, region: null };
 const INTENTIONS = {
+  analyse: ["analys", "interpret", "pourquoi", "cause", "explique", "comprend", "conseil", "avis", "que faire", "que faut", "quoi faire", "action", "probleme principal", "synthese", "diagnostic de"],
   pire: ["retard", "faible", "critique", "rouge", "urgent", "grave", "probleme", "mauvais", "bas ", "pire", "difficult", "difficile", "alerte", "inquiet", "inquietant", "souci", "prioritaire", "manque", "pas bon", "mal", "aider", "relancer", "relance"],
   meilleur: ["meilleur", "bien", "bon ", "vert", "conforme", "reussi", "bravo", "top", "performant", "champion", "felicit", "reussite", "avance"],
   evolution: ["evolu", "progress", "baisse", "hausse", "tendance", "compar", "avant", "depuis", "ecart", "semaine", "derniere", "change", "monte", "descend", "amelior"],
@@ -304,11 +389,11 @@ export function repondre(questionBrute, model) {
     return reponse("souriante", [segment("Maa ngi fi rekk !", "salut_main", "wo", "maa-ngi-fi-rekk"), segment("Que voulez-vous savoir sur la complétude des rapports ?", "inclinaison_ecoute")]);
   }
   if (/\b(humain|humaine|robot|vraie personne|qui es tu|tu es qui|qui etes vous|ton nom|tu t appelles)\b/.test(question)) return reponse("souriante", [segment("Je suis Sokhna Ci, une assistante virtuelle. Je lis les chiffres du tableau de bord pour vous aider à agir.", "sourire")]);
-  if (/\b(politique|election|president|diagnostic|malade|maladie|medicament|traitement|symptome|grossesse|vaccin pour)\b/.test(question)) {
+  if (/\b(politique|election|president|diagnostic medical|malade|maladie|medicament|traitement|symptome|grossesse|vaccin pour)\b/.test(question)) {
     return reponse("neutre", [segment("Je suis là pour la complétude des rapports, pas pour cela. Voulez-vous que je vous donne la situation d’une région ?", "geste_ouvert")]);
   }
 
-  const suite = /\b(oui|ok|d accord|vas y|detail|details|plus|continue|explique|ensuite|et apres|pourquoi)\b/.test(question) && question.split(" ").length <= 6;
+  const suite = question.split(" ").length <= 4 && /^(oui|ok|d accord|vas y|detail|details|continue|ensuite|et apres|plus de details|et le detail|le detail)/.test(question);
   const districtTrouve = entiteCitee(districts, question, (d) => d.nom);
   const regionTrouvee = entiteCitee(model.toutesRegions || [], question, (r) => labelRegion(r.nom));
   const formulairesTrouves = formulairesCites(question, model);
@@ -363,7 +448,8 @@ export function repondre(questionBrute, model) {
     ], "Détail du formulaire le plus en retard ?");
   }
 
-  const but = intention(question);
+  const but = intention(question) || intentionProche(question);
+  if (but === "analyse") return interpreter(model);
   if (but === "meilleur") {
     const parRegion = /\bregion/.test(question);
     const classes = (parRegion ? (model.toutesRegions || []).map((r) => ({ nom: labelRegion(r.nom), taux: r.tauxMoyen })) : districts.map((d) => ({ nom: d.nom, taux: d.tauxMoyen })))
