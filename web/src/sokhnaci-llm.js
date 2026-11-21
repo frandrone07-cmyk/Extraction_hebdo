@@ -21,6 +21,7 @@ export function construireFaits(model) {
   const triees = [...districts].sort((a, b) => a.tauxMoyen - b.tauxMoyen);
   const ligne = (d) => ({ nom: d.nom, region: labelRegion(d.region), taux: arrondi(d.tauxMoyen), ecart: arrondi(d.variation) });
   const a = analyser(model);
+  const regionsTriees = [...(model.toutesRegions || [])].filter((r) => r.tauxMoyen !== null && r.tauxMoyen !== undefined).sort((x, y) => x.tauxMoyen - y.tauxMoyen);
   return {
     extraction_dhis2: model.semaineCle,
     comparaison_avec: model.comparaisonCle || null,
@@ -28,7 +29,9 @@ export function construireFaits(model) {
     seuils: { critique: seuils.critique, conforme: seuils.conforme },
     taux_moyen_districts: arrondi(districts.reduce((somme, d) => somme + d.tauxMoyen, 0) / (districts.length || 1)),
     districts: { total: districts.length, rouge: rouges, orange: oranges, vert: districts.length - rouges - oranges },
-    regions: (model.toutesRegions || []).map((r) => ({ nom: labelRegion(r.nom), taux: arrondi(r.tauxMoyen), districts: r.districts.length, en_rouge: r.nbCritique, ecart: arrondi(r.variation) })),
+    region_au_taux_le_plus_bas_a_aider_en_priorite: regionsTriees.length ? { nom: labelRegion(regionsTriees[0].nom), taux: arrondi(regionsTriees[0].tauxMoyen) } : null,
+    region_au_taux_le_plus_eleve: regionsTriees.length ? { nom: labelRegion(regionsTriees[regionsTriees.length - 1].nom), taux: arrondi(regionsTriees[regionsTriees.length - 1].tauxMoyen) } : null,
+    regions: regionsTriees.map((r) => ({ nom: labelRegion(r.nom), taux: arrondi(r.tauxMoyen), districts: r.districts.length, en_rouge: r.nbCritique, ecart: arrondi(r.variation) })),
     districts_les_plus_faibles: triees.slice(0, 10).map(ligne),
     districts_les_meilleurs: triees.slice(-5).reverse().map(ligne),
     formulaires: (model.tousFormulaires || []).map((f) => ({ nom: nomFormulaire(f.nom), taux: arrondi(f.tauxMoyen), ecart: arrondi(f.variation) })),

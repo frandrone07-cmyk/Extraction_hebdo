@@ -34,3 +34,13 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
 1. **Déployer `assistant-worker/`** (compte Cloudflare gratuit), puis renseigner `web/src/assistant-config.js`.
 2. **Avatar 3D plus réaliste** : remplacer `web/assets/avatar/sokhna.vrm` par un autre modèle VRM sous licence claire (mêmes noms d'expressions : aa, ih, ou, ee, oh, blink, happy, sad).
 3. **Salutation wolof** : faire enregistrer « Salaamalekum » par une locutrice consentante (`web/audio/wo/`).
+
+
+## Mise en service du Worker (21 novembre 2026)
+
+- Worker `sokhna-ci-assistant` déployé sur le compte Cloudflare gratuit, sous-domaine `sokhnaci-completude-sn` : `https://sokhna-ci-assistant.sokhnaci-completude-sn.workers.dev` (renseigné dans `web/src/assistant-config.js`).
+- Modèle : `@cf/meta/llama-3.2-3b-instruct` (variable `MODELE`, modifiable dans `wrangler.toml`). Le précédent `llama-3.1-8b-instruct` a été retiré par Cloudflare le 30 mai 2026. Comparé à Granite 4.0 micro et GLM 4.7 flash : Llama 3.2 3B est le plus fidèle aux faits et applique le refus exact quand la donnée manque.
+- Les petits modèles se trompent sur les comparaisons (ils ont désigné la meilleure région comme prioritaire) : le client pré-calcule donc la région au taux le plus bas et le plus élevé dans les faits envoyés, et la consigne rappelle qu'un taux bas est le problème.
+- Le client rejette de toute façon toute réponse contenant un nombre absent des faits.
+- Offre gratuite : environ 10 000 neurones par jour ; au-delà, le site retombe sur les réponses scriptées.
+- Déploiement : `wrangler deploy` depuis un dossier dont le nom est un sous-domaine workers.dev valide (le dossier `assistant-worker/` ne peut pas servir de sous-domaine).

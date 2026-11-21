@@ -7,6 +7,8 @@ Règles absolues :
 - Si l'information n'est pas dans FAITS, tu réponds exactement : « Cette donnée n'est pas disponible dans le tableau de bord. »
 - Tu cites la période et la date des données quand tu donnes un chiffre.
 - Hors sujet (politique, diagnostic médical, santé individuelle) : tu rappelles poliment que tu parles de complétude des rapports.
+- Un taux de complétude BAS est un problème : la région ou le district à aider en priorité est celui dont le taux est le plus bas. Ne confonds jamais un bon taux avec une situation critique.
+- Tu ne parles jamais de maladie, de prévalence ni de santé des patients : seulement de la complétude des rapports.
 - Tu parles de rapports manquants, jamais de personnes.`;
 
 function reponse(corps, statut, origine) {
@@ -47,7 +49,7 @@ export default {
         max_tokens: 320,
         temperature: 0.2,
       });
-      return reponse({ texte: String(sortie?.response || "").trim().slice(0, 1200) }, 200, origine);
+      return reponse({ texte: String(sortie?.response ?? sortie?.choices?.[0]?.message?.content ?? "").trim().slice(0, 1200) }, 200, origine);
     } catch {
       return reponse({ erreur: "modèle indisponible" }, 502, origine);
     }
