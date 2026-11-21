@@ -555,3 +555,46 @@ test("espace Sokhna Ci AI : cartes de compétences et ouverture depuis la carte 
   await page.locator("#sna-suggestions button").first().click();
   await expect(page.locator("#sna-historique .sna-assistante").last()).toContainText("devance");
 });
+
+test("avatar 3D libre (CC0) : chargement, ordres, gestes, bouche synchronisée, tenues et repli en 2D", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.addInitScript(() => { window.__sokhnaci3d = true; });
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await ouvrirEspace(page);
+  await expect(page.locator(".sna-scene.trois-d")).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator("canvas.sna-canvas-3d")).toHaveCount(1);
+  const pixels = await page.evaluate(() => window.__sna3d.lirePixels());
+  expect(pixels.opaques).toBeGreaterThan(800);
+
+  await poserEspace(page, "viens ici");
+  await expect.poll(() => page.evaluate(() => window.__sna3d.etat().echelle), { timeout: 15_000 }).toBeGreaterThan(1.1);
+
+  await page.evaluate(() => { const a = document.getElementById("sna-acteur"); a.classList.add("speaking"); a.dataset.geste = "salut_main"; a.dataset.emotion = "souriante"; a.dataset.sync = "audio"; a.style.setProperty("--bouche", "1.4"); });
+  await expect.poll(() => page.evaluate(() => window.__sna3d.etat().os.rightUpperArm[2]), { timeout: 8000 }).toBeGreaterThan(0.3);
+  await expect.poll(() => page.evaluate(() => window.__sna3d.etat().aa), { timeout: 8000 }).toBeGreaterThan(0.4);
+  await expect.poll(() => page.evaluate(() => window.__sna3d.etat().happy), { timeout: 8000 }).toBeGreaterThan(0.3);
+
+  await page.evaluate(() => { const a = document.getElementById("sna-acteur"); a.classList.remove("speaking"); a.dataset.sync = ""; a.classList.add("assise"); });
+  await expect.poll(() => page.evaluate(() => window.__sna3d.etat().assis), { timeout: 8000 }).toBeGreaterThan(0.5);
+  await page.evaluate(() => document.getElementById("sna-acteur").classList.remove("assise"));
+
+  await page.locator("#sna-tenue").selectOption("ankara");
+  await expect(page.locator("html")).toHaveAttribute("data-tenue", "ankara");
+  expect((await page.evaluate(() => window.__sna3d.lirePixels())).opaques).toBeGreaterThan(800);
+
+  await page.locator("#sna-3d-bascule").click();
+  await expect(page.locator(".sna-scene")).not.toHaveClass(/trois-d/);
+  await expect(page.locator("canvas.sna-canvas-3d")).toHaveCount(0);
+  await expect(page.locator("#sna-acteur .sokhnaci-svg")).toBeVisible();
+  await page.locator("#sna-3d-bascule").click();
+  await expect(page.locator(".sna-scene.trois-d")).toBeVisible({ timeout: 60_000 });
+});
+
+test("sans autorisation 3D (automatisation, économie de données), l'illustration 2D reste affichée", async ({ page }) => {
+  await ouvrirEspace(page);
+  await expect(page.locator(".sna-scene")).not.toHaveClass(/trois-d/);
+  await expect(page.locator("canvas.sna-canvas-3d")).toHaveCount(0);
+  await expect(page.locator("#sna-3d-bascule")).toBeHidden();
+  await expect(page.locator("#sna-acteur .sokhnaci-svg")).toBeVisible();
+});

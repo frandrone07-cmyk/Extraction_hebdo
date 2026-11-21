@@ -1,18 +1,12 @@
-Enregistrements wolof de Sokhnaci (facultatifs).
+Enregistrement wolof de Sokhnaci (facultatif).
 
-Si un fichier ci-dessous est present (.wav ou .mp3), Sokhnaci le joue a la place de la voix de
-synthese francaise (qui n'a pas d'accent wolof). Sans fichier, elle utilise la voix francaise
-feminine du navigateur.
+Seule la salutation est dite en wolof : "Salaamalekum !".
+Si le fichier salaamalekum.wav (ou .mp3) est present dans ce dossier, Sokhnaci le joue a la place de
+la voix de synthese francaise. Sans fichier, elle utilise la voix francaise feminine du navigateur.
 
-  salaamalekum     "Salaamalekum !"
-  nanga-def        "Nanga def ?"
-  maa-ngi-fi-rekk  "Maa ngi fi rekk !"
-  jerejef          "Jerejef !"
-  baal-ma-waxaat   "Baal ma, men nga ko waxaat ?"
-
-Deux facons de les obtenir, toutes deux gratuites :
-  1. Faire enregistrer ces 5 phrases par une femme wolophone qui accepte que sa voix soit publiee.
-  2. Les generer avec le modele libre wolof-pocket-tts : voir scripts/generer_audio_wolof.py
-     (necessite un compte Hugging Face gratuit et un court extrait de voix feminine consentante).
+Deux facons de l'obtenir, toutes deux gratuites :
+  1. Faire enregistrer cette phrase par une femme qui accepte que sa voix soit publiee.
+  2. La generer avec le modele libre wolof-pocket-tts : voir scripts/generer_audio_wolof.py
+     (compte Hugging Face gratuit et court extrait de voix feminine consentante).
 
 Si le modele wolof-pocket-tts est utilise (licence CC-BY-SA-4.0), mentionner le modele dans le site.

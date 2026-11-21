@@ -136,7 +136,7 @@ export function creerSituation(model) {
 
   segments.push(...choisir("salut", [
     [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum")],
-    [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum"), segment("Nanga def ?", "sourire", "wo", "nanga-def")],
+    [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum"), segment("Comment allez-vous ?", "sourire")],
     [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum"), segment("Bienvenue !", "sourire")],
   ]));
   segments.push(segment(choisir("presentation", [
@@ -383,10 +383,10 @@ export function repondre(questionBrute, model) {
   const districts = toutesDistricts(model);
   const comparaison = model.comparaisonCle ? `l’extraction du ${D(model.comparaisonCle)}` : "l’extraction précédente";
   const cadre = cadreDonnees(model);
-  if (!question) return reponse("neutre", [segment("Pardon, pouvez-vous répéter ?", "inclinaison_ecoute"), segment("Baal ma, mën nga ko waxaat ?", null, "wo", "baal-ma-waxaat")]);
-  if (/\b(merci|jerejef)\b/.test(question)) return reponse("souriante", [segment("Jërëjëf !", "main_sur_coeur", "wo", "jerejef"), segment(choisir("merci", ["C’est un plaisir de vous accompagner.", "Je reste là si vous avez d’autres questions."]), "sourire")]);
+  if (!question) return reponse("neutre", [segment("Pardon, pouvez-vous répéter ?", "inclinaison_ecoute")]);
+  if (/\b(merci|remercie)\b/.test(question)) return reponse("souriante", [segment(choisir("merci", ["Avec plaisir, c’est un plaisir de vous accompagner.", "Je vous en prie. Je reste là si vous avez d’autres questions."]), "main_sur_coeur")]);
   if (/\b(salaamalekum|salam|bonjour|bonsoir|salut|nanga def|hello|coucou)\b/.test(question)) {
-    return reponse("souriante", [segment("Maa ngi fi rekk !", "salut_main", "wo", "maa-ngi-fi-rekk"), segment("Que voulez-vous savoir sur la complétude des rapports ?", "inclinaison_ecoute")]);
+    return reponse("souriante", [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum"), segment("Que voulez-vous savoir sur la complétude des rapports ?", "inclinaison_ecoute")]);
   }
   if (/\b(humain|humaine|robot|vraie personne|qui es tu|tu es qui|qui etes vous|ton nom|tu t appelles)\b/.test(question)) return reponse("souriante", [segment("Je suis Sokhna Ci, une assistante virtuelle. Je lis les chiffres du tableau de bord pour vous aider à agir.", "sourire")]);
   if (/\b(politique|election|president|diagnostic medical|malade|maladie|medicament|traitement|symptome|grossesse|vaccin pour)\b/.test(question)) {

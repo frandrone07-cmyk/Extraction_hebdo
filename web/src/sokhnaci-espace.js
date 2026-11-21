@@ -8,6 +8,7 @@ import { definirNiveauExplication, lireNiveauExplication, pointsAttention, sourc
 import { chargerBibliothequeTableur, imprimerPdf, telechargerConversation, telechargerExcel, telechargerWord } from "./sokhnaci-rapport.js";
 import { grapheBarres, grapheDoughnut, grapheLigne } from "./charts.js";
 import { interrogerLLM, llmDisponible } from "./sokhnaci-llm.js";
+import { avatar3dAutorise, lire3D, obtenir3D } from "./sokhnaci-3d.js";
 
 const CLE_HISTORIQUE = "sokhna-ci-ai-historique-v1";
 const CLE_PREFERENCES = "sokhna-ci-ai-preferences-v1";
@@ -35,7 +36,8 @@ const heure = (t) => new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", 
 const etat = {
   model: null,
   messages: [],
-  preferences: { avatarActif: true, tenue: "wax", niveau: "simple", volume: 1 },
+  preferences: { avatarActif: true, tenue: "wax", niveau: "simple", volume: 1, avatar3d: null },
+  chargement3d: false,
   continu: false,
   ecoute: null,
   echecsEcoute: 0,
@@ -55,6 +57,7 @@ function charger() {
   definirNiveauExplication(etat.preferences.niveau);
   definirVolume(etat.preferences.volume);
   document.documentElement.dataset.tenue = etat.preferences.tenue;
+  if (etat.preferences.avatar3d === null || etat.preferences.avatar3d === undefined) etat.preferences.avatar3d = window.innerWidth >= 700 && (navigator.hardwareConcurrency || 4) >= 4;
 }
 function sauvegarder() {
   try {
@@ -92,6 +95,7 @@ export function renderEspace() {
         </ul>
         <div class="sna-controles">
           <button type="button" id="sna-avatar-bascule" aria-pressed="true">Avatar activé</button>
+          <button type="button" id="sna-3d-bascule" aria-pressed="false" title="Passer de l’avatar 3D à l’illustration 2D">Avatar 3D</button>
           <label>Tenue <select id="sna-tenue" aria-label="Tenue de Sokhna Ci">${TENUES.map((t) => `<option value="${t.id}">${t.libelle}</option>`).join("")}</select></label>
           <label class="sna-volume">${ICONES.volume}<span class="sna-sr">Volume</span><input id="sna-volume" type="range" min="0" max="100" step="5" aria-label="Volume de la voix"></label>
           <button type="button" id="sna-micro" class="sna-bouton-micro" aria-pressed="false">${ICONES.micro} Micro</button>
@@ -158,6 +162,7 @@ export function apresRenduEspace(modele, theme) {
   acteur.dataset.sens = "1";
 
   appliquerPreferences(racine);
+  activer3D(racine);
   racine.querySelector("#sna-points").innerHTML = pointsAttention(modele).map((p, i) => `<article class="sna-point sna-${p.gravite}"><h4>${echapper(versAffichage(p.titre))}</h4><p>${echapper(versAffichage(p.detail))}</p><button type="button" data-q="${echapper(p.question)}">Détailler</button></article>`).join("") || '<p class="sna-vide">Rien d’anormal à signaler pour cette sélection.</p>';
   racine.querySelector("#sna-competences").innerHTML = COMPETENCES.map((c) => `<button type="button" class="sna-competence" data-q="${echapper(c.q)}"><strong>${c.titre}</strong><span>${c.texte}</span></button>`).join("");
   racine.querySelector("#sna-volume").value = String(Math.round(etat.preferences.volume * 100));
@@ -182,6 +187,36 @@ function appliquerPreferences(racine) {
   bascule.setAttribute("aria-pressed", String(actif));
   bascule.textContent = actif ? "Avatar activé" : "Avatar désactivé";
   racine.querySelectorAll("[data-niveau]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.niveau === etat.preferences.niveau)));
+  const bouton3d = racine.querySelector("#sna-3d-bascule");
+  bouton3d.setAttribute("aria-pressed", String(Boolean(etat.preferences.avatar3d)));
+  bouton3d.textContent = etat.preferences.avatar3d ? "Avatar 3D" : "Avatar 2D";
+  bouton3d.hidden = !avatar3dAutorise();
+}
+
+// Avatar 3D : chargé en arrière-plan ; l'illustration 2D reste affichée pendant le chargement et en cas d'échec.
+async function activer3D(racine) {
+  const scene = racine.querySelector(".sna-scene");
+  const acteur = racine.querySelector("#sna-acteur");
+  if (!etat.preferences.avatar3d || !avatar3dAutorise()) {
+    scene.classList.remove("trois-d");
+    lire3D()?.arreter();
+    lire3D()?.canvas.remove();
+    return;
+  }
+  etat.chargement3d = true;
+  majIndicateurs();
+  try {
+    const controleur = await obtenir3D(etat.preferences.tenue);
+    if (!racine.isConnected || !etat.preferences.avatar3d) return;
+    controleur.habiller(etat.preferences.tenue);
+    controleur.relier(scene, acteur);
+    scene.classList.add("trois-d");
+  } catch {
+    scene.classList.remove("trois-d");
+  } finally {
+    etat.chargement3d = false;
+    majIndicateurs();
+  }
 }
 
 function message_accueil() {
@@ -235,8 +270,15 @@ function liaisons(racine) {
     sauvegarder();
     appliquerPreferences(racine);
   });
+  racine.querySelector("#sna-3d-bascule").addEventListener("click", () => {
+    etat.preferences.avatar3d = !etat.preferences.avatar3d;
+    sauvegarder();
+    appliquerPreferences(racine);
+    activer3D(racine);
+  });
   racine.querySelector("#sna-tenue").addEventListener("change", (evenement) => {
     etat.preferences.tenue = evenement.target.value;
+    lire3D()?.habiller(etat.preferences.tenue);
     document.documentElement.dataset.tenue = etat.preferences.tenue;
     sauvegarder();
   });
@@ -311,8 +353,9 @@ const LIBELLES = { attente: "Disponible", ecoute: "Je vous écoute…", reflechi
 function majIndicateurs() {
   const racine = document.getElementById("sna");
   if (!racine) return;
-  const actif = etat.chargement && etat.indicateur === "attente" ? "chargement" : etat.indicateur;
-  racine.querySelectorAll("[data-indicateur]").forEach((li) => li.classList.toggle("actif", li.dataset.indicateur === actif || (li.dataset.indicateur === "chargement" && etat.chargement)));
+  const enChargement = etat.chargement || etat.chargement3d;
+  const actif = enChargement && etat.indicateur === "attente" ? "chargement" : etat.indicateur;
+  racine.querySelectorAll("[data-indicateur]").forEach((li) => li.classList.toggle("actif", li.dataset.indicateur === actif || (li.dataset.indicateur === "chargement" && enChargement)));
   racine.querySelector(".sna-scene").dataset.etat = actif;
   const badge = racine.querySelector("#sna-badge");
   if (badge) badge.textContent = LIBELLES[actif] || "Disponible";
@@ -365,6 +408,8 @@ async function envoyer(question) {
 }
 
 function repondre(dialogue) {
+  const acteur = document.getElementById("sna-acteur");
+  if (acteur) acteur.dataset.emotion = dialogue.emotion || "neutre";
   const phrases = dialogue.segments.map((s) => versAffichage(s.texte));
   ajouter({ role: "assistante", phrases, segments: dialogue.segments.map(({ langue, texte, geste, audio }) => ({ langue, texte, geste, audio })), sources: dialogue.sources || [], visuel: dialogue.visuel || null, suggestions: dialogue.suggestions || [], emotion: dialogue.emotion });
   const index = etat.messages.length - 1;

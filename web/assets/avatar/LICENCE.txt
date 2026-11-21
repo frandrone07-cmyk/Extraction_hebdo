@@ -1,0 +1,16 @@
+Avatar 3D de Sokhna Ci
+======================
+
+Fichier : sokhna.vrm
+Origine : modèle d'exemple « HairSample_Female » de VRoid Studio (série bêta), obtenu depuis
+          https://github.com/madjin/vrm-samples (dossier vroid/beta).
+Licence : CC0 1.0 (dédicace au domaine public). La mention « licenseName: CC0 » est inscrite dans les
+          métadonnées du fichier. Usage libre, y compris commercial, sans attribution obligatoire.
+
+Le fichier n'est pas modifié sur le disque. Au chargement, le site change la couleur de la peau, remplace
+les textures de la robe par des motifs africains (wax, Ankara, bazin) et remplace la coiffure d'origine par
+un foulard de tête : ces modifications sont faites par le code, dans le navigateur.
+
+Bibliothèques 3D (licence MIT, copie incluse dans web/vendor/) :
+  - three.js            https://threejs.org
+  - @pixiv/three-vrm    https://github.com/pixiv/three-vrm

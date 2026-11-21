@@ -1,4 +1,4 @@
-"""Genere les phrases wolof de Sokhnaci avec le modele libre abdazizsall/wolof-pocket-tts.
+"""Genere la salutation wolof de Sokhnaci avec le modele libre abdazizsall/wolof-pocket-tts.
 
 Preparation (une seule fois, gratuite) :
   1. Creer un compte Hugging Face gratuit, ouvrir https://huggingface.co/abdazizsall/wolof-pocket-tts
@@ -21,10 +21,6 @@ from pathlib import Path
 
 PHRASES = {
     "salaamalekum": "Salaamalekum !",
-    "nanga-def": "Nanga def ?",
-    "maa-ngi-fi-rekk": "Maa ngi fi rekk !",
-    "jerejef": "Jërëjëf !",
-    "baal-ma-waxaat": "Baal ma, mën nga ko waxaat ?",
 }
 
 

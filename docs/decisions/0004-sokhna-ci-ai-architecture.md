@@ -12,9 +12,9 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
 |---|---|---|
 | React, TypeScript, Next.js, Tailwind, Framer Motion | **Non retenu** : JavaScript natif (modules ES) et CSS à variables | L'application existante n'a ni compilation ni serveur ; la réécrire détruirait des fonctions opérationnelles et ajouterait une chaîne de build sans gain pour les utilisateurs. Les animations utilisent CSS. |
 | Interface premium (verre dépoli, cartes flottantes, thèmes clair/sombre, responsive) | **Fait** : onglet « Sokhna Ci AI » | Vérifié automatiquement : accessibilité WCAG A/AA en clair et en sombre, aucun débordement sur mobile et tablette. |
-| Avatar 3D photoréaliste (Unreal Engine 5, capture faciale, Three.js) | **Non réalisé** | Un humain numérique photoréaliste exige des outils de studio, un modèle sous licence et un rendu serveur. Ce n'est pas faisable gratuitement dans une page statique. L'avatar actuel est une illustration vectorielle animée, avec scène en profondeur, 4 tenues, marche, gestes, respiration et bouche synchronisée sur le son. |
+| Avatar 3D (Three.js) | **Fait, en version stylisée** : modèle VRM libre « HairSample_Female » (CC0), animé de façon procédurale (three.js + three-vrm, MIT, hébergés dans `web/vendor/`) | Un humain photoréaliste (Unreal Engine, capture faciale) exige des outils de studio et des licences : non faisable gratuitement. Le modèle CC0 donne un vrai personnage 3D avec squelette et expressions du visage : peau, tenue (wax, Ankara, bazin, professionnelle) et foulard sont recolorés par le code ; marche, gestes, assise, danse, clignements et bouche synchronisée sur le son. Repli automatique sur l'illustration 2D (pas de WebGL, économie de données, échec de chargement). Licence et origine : `web/assets/avatar/LICENCE.txt`. |
 | Reconnaissance vocale | **Navigateur (Web Speech)**, français | Gratuit, sans clé. Chrome et Edge uniquement ; le wolof n'est pas reconnu. |
-| Synthèse vocale naturelle | **Piper « siwis » dans le navigateur** (voix féminine française), repli sur la voix de l'appareil | Gratuit, mis en cache après le premier téléchargement. Wolof : enregistrements réels déposés dans `web/audio/wo/`. |
+| Synthèse vocale naturelle | **Piper « siwis » dans le navigateur** (voix féminine française), repli sur la voix de l'appareil | Gratuit, mis en cache après le premier téléchargement. Wolof : seule la salutation « Salaamalekum » est dite en wolof (enregistrement facultatif dans `web/audio/wo/`). |
 | WebRTC | **Non retenu** | Utile seulement pour un flux audio vers un serveur ; il n'y en a pas. |
 | Modèle conversationnel | **Moteur local déterministe** + **option** `assistant-worker/` (Cloudflare Workers AI, offre gratuite) | Le moteur local couvre analyse, comparaison, recherche, statistiques, définitions, visualisations, rapports. Le Worker n'est appelé que si la question n'est pas comprise ; sa réponse est **rejetée si elle contient un chiffre absent des faits** transmis. |
 | Backend sécurisé | **Worker Cloudflare** (même modèle que `trigger-worker/`) | Aucune clé dans le navigateur ; origine autorisée unique ; limite de débit ; taille de requête bornée. |
@@ -32,5 +32,5 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
 ## Suite possible (décisions à prendre)
 
 1. **Déployer `assistant-worker/`** (compte Cloudflare gratuit), puis renseigner `web/src/assistant-config.js`.
-2. **Avatar 3D stylisé** : bibliothèque libre de personnage parlant en Three.js ; nécessite un fichier d'avatar fourni (licence claire).
-3. **Voix wolof** : faire enregistrer 5 phrases par une locutrice consentante (`web/audio/wo/`).
+2. **Avatar 3D plus réaliste** : remplacer `web/assets/avatar/sokhna.vrm` par un autre modèle VRM sous licence claire (mêmes noms d'expressions : aa, ih, ou, ee, oh, blink, happy, sad).
+3. **Salutation wolof** : faire enregistrer « Salaamalekum » par une locutrice consentante (`web/audio/wo/`).

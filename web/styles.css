@@ -691,6 +691,9 @@ body.sna-actif .sokhnaci-widget, body.sna-actif .sokhnaci-acteur { display: none
   .sna-message { max-width: 100%; }
   .sna-niveau span { display: none; }
 }
+.sna-canvas-3d { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
+.sna-scene.trois-d .sna-acteur { visibility: hidden; }
+.sna-sol, .sna-halo, .sna-ombre { z-index: 0; }
 @keyframes sna-halo { 0%, 100% { opacity: .75; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
 @keyframes sna-entree { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes sokhnaci-blink { 0%, 43%, 47%, 100% { transform: scaleY(1); } 45% { transform: scaleY(.12); } }
