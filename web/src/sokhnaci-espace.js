@@ -209,7 +209,7 @@ async function activer3D(racine) {
     const controleur = await obtenir3D(etat.preferences.tenue);
     if (!racine.isConnected || !etat.preferences.avatar3d) return;
     controleur.habiller(etat.preferences.tenue);
-    controleur.relier(scene, acteur);
+    controleur.relier(scene, acteur, { cadrage: "plein" });
     scene.classList.add("trois-d");
   } catch {
     scene.classList.remove("trois-d");
@@ -759,6 +759,7 @@ function boucleScene(maintenant) {
 
 // ------------------------------------------------------------------ appel depuis l'extérieur (carte flottante)
 export function poserDansEspace(question) {
+  if (!question) return;
   if (document.getElementById("sna") && etat.model) envoyer(question);
 }
 

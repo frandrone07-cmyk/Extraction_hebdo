@@ -316,58 +316,34 @@ test("Sokhnaci interprète les résultats : analyse territoriale, structure du r
   await expect(bulle).toContainText("les plus en retard");
 });
 
-test("la voix originale est automatique : aucune case à cocher et la conversation marche même sans elle", async ({ page }) => {
-  await expect(page.locator(".sokhnaci-voix-originale")).toHaveCount(0);
-  await expect(page.locator(".sokhnaci-voix-choix select option").first()).toHaveText("Automatique (voix originale)");
+test("la voix originale est automatique : pas de choix manuel, l'ancien choix mémorisé est effacé", async ({ page }) => {
+  await page.evaluate(() => localStorage.setItem("completude-sokhnaci-voix-nom", "Microsoft Julie - French (France)"));
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await expect(page.locator(".sokhnaci-voix-choix, .sokhnaci-reglages")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("completude-sokhnaci-voix-nom"))).toBeNull();
   await page.locator(".sokhnaci-ask input").fill("les meilleurs districts");
   await page.locator(".sokhnaci-ask input").press("Enter");
   await expect(page.locator(".sokhnaci-bubble")).toContainText("les meilleurs districts");
   await expect(page.locator(".sokhnaci-voix-statut")).toBeHidden();
 });
 
-test("Sokhnaci obéit aux ordres : venir, s'arrêter, s'asseoir, danser, suivre et rentrer", async ({ page }) => {
+test("ordres donnés à la carte flottante : les déplacements s'exécutent dans l'espace 3D, le reste sur place", async ({ page }) => {
   const poser = async (question) => {
     await page.locator(".sokhnaci-ask input").fill(question);
     await page.locator(".sokhnaci-ask input").press("Enter");
   };
-  const acteur = page.locator(".sokhnaci-acteur");
-  await expect(acteur).toHaveCount(0);
-
-  await page.mouse.move(300, 400);
-  await poser("viens ici");
-  await expect(acteur).toHaveCount(1);
-  await expect(page.locator(".sokhnaci-widget")).toHaveClass(/acteur-dehors/);
-  await expect(page.locator(".sokhnaci-bubble")).toContainText(/J’arrive|Me voici/);
-  const avant = await acteur.evaluate((element) => element.style.transform);
-  await expect(acteur).toHaveClass(/walking/);
-  await expect.poll(() => acteur.evaluate((element) => element.style.transform)).not.toBe(avant);
-
-  await poser("arrête-toi !");
-  await expect(acteur).not.toHaveClass(/walking/);
-  const figee = await acteur.evaluate((element) => element.style.transform);
-  await page.waitForTimeout(400);
-  expect(await acteur.evaluate((element) => element.style.transform)).toBe(figee);
-
-  await poser("assieds-toi");
-  await expect(acteur).toHaveClass(/assise/);
-  await poser("lève-toi");
-  await expect(acteur).not.toHaveClass(/assise/);
-
-  await poser("danse");
-  await expect(acteur).toHaveClass(/danse/);
-  await poser("arrête-toi");
-  await expect(acteur).not.toHaveClass(/danse/);
-
-  await poser("suis-moi");
-  await page.mouse.move(900, 500);
-  await expect(acteur).toHaveClass(/walking/);
-
-  await poser("rentre");
-  await expect(acteur).toHaveCount(0);
-  await expect(page.locator(".sokhnaci-widget")).not.toHaveClass(/acteur-dehors/);
-
+  await poser("souris");
+  await expect(page.locator(".sokhnaci-widget")).toHaveClass(/grand-sourire/);
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Avec plaisir");
   await poser("comment ça marche");
   await expect(page.locator(".sokhnaci-bubble")).toContainText("Demandez-moi");
+
+  await poser("viens ici");
+  await expect(page.locator("#sna")).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Sokhna Ci AI/ })).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => page.locator("#sna-acteur").evaluate((e) => Number(e.style.getPropertyValue("--echelle")))).toBeGreaterThan(1.1);
+  await expect(page.locator(".sokhnaci-acteur")).toHaveCount(0);
 });
 
 test("interface de Sokhnaci : phrase lue surlignée, bouton arrêter, réduite par défaut sur mobile", async ({ page }) => {
@@ -597,4 +573,21 @@ test("sans autorisation 3D (automatisation, économie de données), l'illustrati
   await expect(page.locator("canvas.sna-canvas-3d")).toHaveCount(0);
   await expect(page.locator("#sna-3d-bascule")).toBeHidden();
   await expect(page.locator("#sna-acteur .sokhnaci-svg")).toBeVisible();
+});
+
+test("avatar 3D en buste dans la carte flottante, qui voyage vers l'espace puis revient", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.addInitScript(() => { window.__sokhnaci3d = true; });
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await expect(page.locator(".sokhnaci-character.trois-d canvas.sna-canvas-3d")).toHaveCount(1, { timeout: 120_000 });
+  await expect(page.locator(".sokhnaci-character .sokhnaci-svg")).toBeHidden();
+  expect((await page.evaluate(() => window.__sna3d.lirePixels())).opaques).toBeGreaterThan(300);
+
+  await page.locator(".sokhnaci-espace").click();
+  await expect(page.locator("#sna .sna-scene.trois-d canvas.sna-canvas-3d")).toHaveCount(1, { timeout: 30_000 });
+  await expect(page.locator("canvas.sna-canvas-3d")).toHaveCount(1);
+
+  await page.getByRole("tab", { name: /Vue d’ensemble/ }).click();
+  await expect(page.locator(".sokhnaci-character.trois-d canvas.sna-canvas-3d")).toHaveCount(1, { timeout: 30_000 });
 });

@@ -1,6 +1,7 @@
 import { creerSituation, versAffichage, versOral } from "./sokhnaci-dialogue.js";
 import { phraseAction } from "./sokhnaci-actions.js";
 import { interpreterEntree } from "./sokhnaci-cerveau.js";
+import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
 const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
@@ -21,19 +22,15 @@ const audiosAbsents = new Set();
 const HUMEUR_PAR_EMOTION = { neutre: "attentif", souriante: "serein", preoccupee: "alerte", encourageante: "vigilant", felicitations: "content" };
 const LIBELLE_HUMEUR = { alerte: "Point d’attention", vigilant: "À surveiller", attentif: "Analyse en cours", content: "En progression", serein: "Situation conforme" };
 let voiceEnabled = true;
-let voixChoisie = null;
 let piper = null;
 let piperPromesse = null;
 let piperEnCache = false;
 let piperAbandonne = false;
 let echecsSynthese = 0;
 let statutVoix = null;
-let acteur = null;
-let pointeur = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 let contexteAudio = null;
 let volume = 1;
 const avatarsExternes = new Set();
-const VITESSE_MARCHE = 120;
 let fileSynthese = Promise.resolve();
 const syntheses = new Map();
 
@@ -110,8 +107,6 @@ function noteVoix(voix) {
 // Renvoie la meilleure voix féminine française et si elle est bien identifiée comme féminine.
 async function choisirVoix() {
   const voix = (await voixDisponibles).filter((v) => /^fr/i.test(v.lang));
-  const manuelle = voixChoisie && voix.find((v) => v.name === voixChoisie);
-  if (manuelle) return { voix: manuelle, feminine: true };
   const classees = voix.map((v) => ({ voix: v, note: noteVoix(v) })).sort((x, y) => y.note - x.note);
   const meilleure = classees[0];
   return meilleure ? { voix: meilleure.voix, feminine: FEMININES.test(meilleure.voix.name) && !MASCULINES.test(meilleure.voix.name) } : { voix: null, feminine: false };
@@ -161,7 +156,7 @@ function chargerPiper() {
 
 // Démarrage automatique, avec nouvelles tentatives espacées et reprise quand la connexion revient.
 function demarrerPiperAutomatique(tentative = 0) {
-  if (piperAbandonne || piper || voixChoisie) return;
+  if (piperAbandonne || piper) return;
   if (navigator.connection?.saveData) return;
   if (navigator.webdriver && !window.__sokhnaciPiper) return; // tests automatisés : pas de téléchargement
   chargerPiper().then(() => {
@@ -226,7 +221,7 @@ function jouerBlob(blob) {
   });
 }
 
-function avatars() { return [widget, ...(acteur ? [acteur.el] : []), ...avatarsExternes].filter(Boolean); }
+function avatars() { return [widget, ...avatarsExternes].filter(Boolean); }
 function emettre(type, detail = {}) { document.dispatchEvent(new CustomEvent("sokhnaci:evenement", { detail: { type, ...detail } })); }
 export function lierAvatarExterne(element) { avatarsExternes.add(element); }
 export function delierAvatarExterne(element) { avatarsExternes.delete(element); }
@@ -344,7 +339,13 @@ async function jouerVoix(segment) {
 async function lire(segments) {
   arreterLecture();
   const id = lectureId;
-  const originale = piper && !piperAbandonne && !voixChoisie ? segments.map((segment) => (segment.audio ? null : synthetiser(segment.oral, id))) : null;
+  demarrerPiperAutomatique();
+  if (!piper && piperPromesse && !piperAbandonne) {
+    emettre("etat", { etat: "prepare" });
+    await Promise.race([piperPromesse.catch(() => null), delai(20000)]);
+    if (id !== lectureId) return;
+  }
+  const originale = piper && !piperAbandonne ? segments.map((segment) => (segment.audio ? null : synthetiser(segment.oral, id))) : null;
   for (const [index, segment] of segments.entries()) {
     if (id !== lectureId) return;
     definirParole(true, segment.geste || "");
@@ -362,7 +363,7 @@ async function lire(segments) {
 }
 
 async function attendrePuisParler() {
-  if (!piper && !piperEnCache && !piperAbandonne && !voixChoisie && !(navigator.webdriver && !window.__sokhnaciPiper)) {
+  if (!piper && !piperEnCache && !piperAbandonne && !(navigator.webdriver && !window.__sokhnaciPiper)) {
     let enCache = false;
     try { enCache = (await (await importerMoteur()).stored?.())?.includes(VOIX_PIPER) ?? false; } catch { /* repli */ }
     if (enCache) {
@@ -384,58 +385,7 @@ function parler() {
   lire(segmentsCourants);
 }
 
-function sortirActeur() {
-  if (acteur) return;
-  const zone = widget.querySelector(".sokhnaci-character").getBoundingClientRect();
-  const element = document.createElement("div");
-  element.className = "sokhnaci-acteur";
-  element.setAttribute("aria-hidden", "true");
-  element.innerHTML = `<div class="sokhnaci-acteur-sens">${svgMarkup(true)}</div>`;
-  element.querySelector(".sokhnaci-svg").setAttribute("data-mood", widget.querySelector(".sokhnaci-svg").getAttribute("data-mood") || "attentif");
-  document.body.appendChild(element);
-  const x = Math.max(0, zone.left - 10);
-  acteur = { el: element, x, cible: x, mode: "arret", sens: -1, dernier: performance.now() };
-  widget.classList.add("acteur-dehors");
-  for (const classe of ["speaking"]) if (widget.classList.contains(classe)) element.classList.add(classe);
-  element.dataset.geste = widget.dataset.geste || "";
-  element.style.transform = `translate3d(${x}px, 0, 0)`;
-  element.style.setProperty("--sens", String(acteur.sens));
-  requestAnimationFrame(boucleActeur);
-}
-
-function rentrerActeur() {
-  if (!acteur) return;
-  acteur.el.remove();
-  acteur = null;
-  widget.classList.remove("acteur-dehors");
-}
-
-function boucleActeur(maintenant) {
-  if (!acteur) return;
-  const dt = Math.min(0.1, (maintenant - acteur.dernier) / 1000);
-  acteur.dernier = maintenant;
-  const largeurActeur = 150;
-  if (acteur.mode === "suit") {
-    const distance = 110;
-    acteur.cible = pointeur.x - largeurActeur / 2 + (acteur.x + largeurActeur / 2 > pointeur.x ? distance : -distance);
-  }
-  acteur.cible = Math.max(0, Math.min(window.innerWidth - largeurActeur, acteur.cible));
-  const ecart = acteur.cible - acteur.x;
-  const enMarche = Math.abs(ecart) > 3 && !acteur.el.classList.contains("assise");
-  if (enMarche) {
-    acteur.sens = ecart > 0 ? 1 : -1;
-    acteur.x += Math.sign(ecart) * Math.min(Math.abs(ecart), VITESSE_MARCHE * dt);
-    acteur.el.style.setProperty("--sens", String(acteur.sens));
-  } else if (acteur.mode === "va") {
-    acteur.mode = "arret";
-  }
-  acteur.el.classList.toggle("walking", enMarche);
-  acteur.el.style.transform = `translate3d(${acteur.x}px, 0, 0)`;
-  requestAnimationFrame(boucleActeur);
-}
-
 function arreterMouvement() {
-  if (acteur) { acteur.mode = "arret"; acteur.cible = acteur.x; }
   for (const element of avatars()) element.classList.remove("walking", "danse", "listening");
 }
 
@@ -445,62 +395,16 @@ function etatTemporaire(classe, duree) {
   setTimeout(() => { for (const element of cibles) element.classList.remove(classe); }, duree);
 }
 
-function allerVers(x) {
-  sortirActeur();
-  acteur.mode = "va";
-  acteur.cible = x;
-}
+// Les déplacements (marche, assise, danse...) se font dans l'espace 3D : la carte les lui confie.
+const MOUVEMENTS = new Set(["viens", "suis", "avance", "recule", "tourne", "demitour", "marche", "rentre", "presente", "danse", "assis", "debout"]);
 
 function executerCommande(commande) {
   const dialogue = phraseAction(commande);
   if (!dialogue) return false;
-  const maintenant = acteur ? acteur.x : widget.getBoundingClientRect().left;
   switch (commande.action) {
     case "stop":
       arreterLecture();
       arreterMouvement();
-      break;
-    case "rentre":
-      arreterMouvement();
-      rentrerActeur();
-      break;
-    case "viens":
-      for (const element of avatars()) element.classList.remove("assise");
-      allerVers(pointeur.x - 75);
-      break;
-    case "suis":
-      sortirActeur();
-      for (const element of avatars()) element.classList.remove("assise");
-      acteur.mode = "suit";
-      break;
-    case "avance":
-      allerVers(maintenant + (acteur?.sens ?? -1) * 220);
-      break;
-    case "recule":
-      allerVers(maintenant - (acteur?.sens ?? -1) * 160);
-      break;
-    case "tourne":
-      sortirActeur();
-      acteur.sens = commande.direction ?? acteur.sens;
-      acteur.cible = acteur.x + acteur.sens * 180;
-      acteur.mode = "va";
-      break;
-    case "demitour":
-      sortirActeur();
-      acteur.sens = -acteur.sens;
-      acteur.el.style.setProperty("--sens", String(acteur.sens));
-      break;
-    case "assis":
-      arreterMouvement();
-      for (const element of avatars()) element.classList.add("assise");
-      break;
-    case "debout":
-      for (const element of avatars()) element.classList.remove("assise");
-      break;
-    case "danse":
-      arreterMouvement();
-      for (const element of avatars()) element.classList.remove("assise");
-      etatTemporaire("danse", 7000);
       break;
     case "sourire":
       etatTemporaire("grand-sourire", 4500);
@@ -509,20 +413,12 @@ function executerCommande(commande) {
       arreterMouvement();
       etatTemporaire("listening", 6000);
       break;
-    case "marche":
-      allerVers(Math.random() * Math.max(0, window.innerWidth - 200));
-      break;
-    case "presente":
-      document.dispatchEvent(new CustomEvent("sokhnaci:ouvrir-espace", { detail: { question: "présente les résultats" } }));
-      return true;
     case "montre": {
       const element = commande.cible ? document.querySelector(commande.cible.selecteur) : null;
       if (element) {
         element.scrollIntoView({ behavior: "smooth", block: "center" });
         element.classList.add("sokhnaci-mise-en-evidence");
         setTimeout(() => element.classList.remove("sokhnaci-mise-en-evidence"), 3000);
-        const zone = element.getBoundingClientRect();
-        if (acteur) allerVers(Math.max(0, zone.left + zone.width / 2 - 75));
       }
       break;
     }
@@ -567,6 +463,7 @@ function afficherDialogue(dialogue, humeurForcee = null, { speak = false } = {})
     return [phrase, document.createTextNode(" ")];
   }));
   bubble.scrollTop = 0;
+  widget.dataset.emotion = dialogue.emotion || "neutre";
   widget.querySelector(".sokhnaci-svg").setAttribute("data-mood", mood);
   widget.querySelector(".sokhnaci-state").textContent = LIBELLE_HUMEUR[mood];
   if (speak) parler();
@@ -581,6 +478,10 @@ function render(model, { speak = false } = {}) {
 function poserQuestion(texte) {
   if (!modeleCourant) return;
   const entree = interpreterEntree(texte, modeleCourant);
+  if (entree.commande && MOUVEMENTS.has(entree.commande.action)) {
+    document.dispatchEvent(new CustomEvent("sokhnaci:ouvrir-espace", { detail: { question: texte } }));
+    return;
+  }
   if (entree.commande && executerCommande(entree.commande)) return;
   if (entree.dialogue?.visuel || entree.dialogue?.action) {
     document.dispatchEvent(new CustomEvent("sokhnaci:ouvrir-espace", { detail: { question: texte } }));
@@ -697,14 +598,13 @@ export function initSokhnaci(model) {
       <button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button>
     </div>
     <div class="sokhnaci-bubble" tabindex="0" role="region" aria-label="Propos de Sokhnaci" aria-live="polite"></div>
-    <div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter</button><button class="sokhnaci-stop" type="button">■ Arrêter</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div>
+    <div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter</button><button class="sokhnaci-stop" type="button">■ Arrêter</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button><button class="sokhnaci-espace" type="button" title="Ouvrir l’espace Sokhna Ci AI : avatar 3D, graphiques, rapports">✦ Espace complet</button></div>
     <div class="sokhnaci-chips" role="group" aria-label="Questions suggérées"><button type="button" data-question="fais une analyse des résultats">Analyse</button><button type="button" data-question="qui est en difficulté">Priorités</button><button type="button" data-question="les meilleurs districts">Meilleurs</button><button type="button" data-question="comment ça évolue">Évolution</button></div>
     <form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form>
-    <details class="sokhnaci-reglages"><summary>Réglages de la voix</summary><p class="sokhnaci-voix-statut" role="status"></p><label class="sokhnaci-voix-choix">Voix française <select aria-label="Choisir la voix française de Sokhnaci"><option value="">Automatique (voix originale)</option></select></label></details>
+    <p class="sokhnaci-voix-statut" role="status"></p>
   </div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
   document.body.appendChild(widget);
   document.body.insertAdjacentHTML("beforeend", DEFS_WAX);
-  window.addEventListener("pointermove", (event) => { pointeur = { x: event.clientX, y: event.clientY }; }, { passive: true });
   // Mouvements naturels permanents : l'avatar change subtilement de posture de temps en temps.
   const posture = () => {
     for (const element of avatars()) {
@@ -721,20 +621,8 @@ export function initSokhnaci(model) {
   });
   widget.querySelector(".sokhnaci-speak").addEventListener("click", parler);
   widget.querySelector(".sokhnaci-stop").addEventListener("click", arreterLecture);
-  try { voixChoisie = localStorage.getItem(CLE_VOIX_CHOISIE) || null; } catch { voixChoisie = null; }
-  const choix = widget.querySelector(".sokhnaci-voix-choix select");
-  voixDisponibles.then((voix) => {
-    for (const v of voix.filter((x) => /^fr/i.test(x.lang))) choix.add(new Option(`${v.name} (${v.lang})`, v.name));
-    if (voixChoisie) choix.value = voixChoisie;
-    if (!choix.value) choix.value = "";
-    if (choix.options.length <= 1) choix.closest("label").hidden = true;
-  });
-  choix.addEventListener("change", () => {
-    voixChoisie = choix.value || null;
-    try { if (voixChoisie) localStorage.setItem(CLE_VOIX_CHOISIE, voixChoisie); else localStorage.removeItem(CLE_VOIX_CHOISIE); } catch { /* stockage facultatif */ }
-    if (voixChoisie) message("Voilà, c’est ma nouvelle voix. Vous l’entendez bien ?");
-    else demarrerPiperAutomatique();
-  });
+  try { localStorage.removeItem(CLE_VOIX_CHOISIE); } catch { /* stockage facultatif */ }
+  widget.querySelector(".sokhnaci-espace").addEventListener("click", () => document.dispatchEvent(new CustomEvent("sokhnaci:ouvrir-espace", { detail: { question: "" } })));
   statutVoix = widget.querySelector(".sokhnaci-voix-statut");
   widget.querySelectorAll(".sokhnaci-chips button").forEach((bouton) => bouton.addEventListener("click", () => poserQuestion(bouton.dataset.question)));
   widget.querySelector(".sokhnaci-mic").addEventListener("click", (event) => ecouterQuestion(event.currentTarget));
@@ -758,6 +646,7 @@ export function initSokhnaci(model) {
   idle(() => demarrerPiperAutomatique(), { timeout: 3000 });
   window.addEventListener("online", () => demarrerPiperAutomatique());
   render(model);
+  idle(() => rattacherAvatarWidget(), { timeout: 2500 });
   // Les navigateurs interdisent la parole avant le premier geste de l'utilisateur : on attend ce geste.
   // Sur petit écran, l'assistante démarre réduite pour ne pas masquer le tableau de bord.
   if (window.matchMedia("(max-width: 700px)").matches) replierSokhnaci();
@@ -776,4 +665,27 @@ export function initSokhnaci(model) {
 
 export function mettreAJourSokhnaci(model) {
   if (widget) render(model);
+}
+
+function preferencesEspace() {
+  try { return JSON.parse(localStorage.getItem("sokhna-ci-ai-preferences-v1") || "{}"); } catch { return {}; }
+}
+
+// Avatar 3D en buste dans la carte flottante. Le même rendu 3D se déplace vers l'espace Sokhna Ci AI
+// (corps entier) puis revient ici quand on quitte cet onglet ; l'illustration 2D sert de repli.
+export async function rattacherAvatarWidget() {
+  if (!widget || !avatar3dAutorise()) return;
+  const preferences = preferencesEspace();
+  const voulu = preferences.avatar3d ?? (window.innerWidth >= 700 && (navigator.hardwareConcurrency || 4) >= 4);
+  const zone = widget.querySelector(".sokhnaci-character");
+  if (!voulu) { zone.classList.remove("trois-d"); return; }
+  try {
+    const controleur = await obtenir3D(preferences.tenue || "wax");
+    if (!widget.isConnected || document.body.classList.contains("sna-actif")) return;
+    controleur.habiller(preferences.tenue || "wax");
+    controleur.relier(zone, widget, { cadrage: "buste" });
+    zone.classList.add("trois-d");
+  } catch {
+    zone.classList.remove("trois-d");
+  }
 }

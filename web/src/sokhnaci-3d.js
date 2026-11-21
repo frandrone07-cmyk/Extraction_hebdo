@@ -184,6 +184,7 @@ async function creer(tenueInitiale) {
   let blink = 0;
   let acteur = null;
   let zone = null;
+  let cadrage = "plein";
   let largeur = 1;
   let hauteur = 1;
   let distance = 4;
@@ -198,11 +199,12 @@ async function creer(tenueInitiale) {
   function lireEtat() {
     const e = acteur;
     const cl = e.classList;
+    const buste = cadrage === "buste";
     const nombre = (nom, defaut) => { const v = parseFloat(e.style.getPropertyValue(nom)); return Number.isFinite(v) ? v : defaut; };
     return {
-      parle: cl.contains("speaking"), ecoute: cl.contains("listening"), marche: cl.contains("walking"), assise: cl.contains("assise"), danse: cl.contains("danse"),
+      parle: cl.contains("speaking"), ecoute: cl.contains("listening"), marche: !buste && cl.contains("walking"), assise: !buste && cl.contains("assise"), danse: !buste && cl.contains("danse"),
       sourire: cl.contains("grand-sourire"), geste: e.dataset.geste || "", emotion: e.dataset.emotion || "neutre",
-      bouche: e.dataset.sync === "audio" ? nombre("--bouche", 0.4) : null, x: nombre("--x", 0), echelle: nombre("--echelle", 1), sens: nombre("--sens", 1),
+      bouche: e.dataset.sync === "audio" ? nombre("--bouche", 0.4) : null, x: buste ? 0 : nombre("--x", 0), echelle: buste ? 1 : nombre("--echelle", 1), sens: buste ? 1 : nombre("--sens", 1),
       posture: cl.contains("posture-a") ? 1 : cl.contains("posture-b") ? -1 : 0,
     };
   }
@@ -302,11 +304,13 @@ async function creer(tenueInitiale) {
     hauteur = Math.max(1, zone.clientHeight);
     rendu.setSize(largeur, hauteur, false);
     camera.aspect = largeur / hauteur;
-    const visible = hauteurModele * 0.86;
+    const buste = cadrage === "buste";
+    const visible = hauteurModele * (buste ? 0.31 : 0.86);
+    const centre = hauteurModele * (buste ? 0.905 : 0.5);
     distance = visible / 2 / Math.tan((camera.fov * Math.PI) / 360);
-    if (largeur / hauteur < 0.7) distance *= 0.7 / (largeur / hauteur) * 0.9;
-    camera.position.set(0, hauteurModele * 0.5, distance);
-    camera.lookAt(0, hauteurModele * 0.5, 0);
+    if (!buste && largeur / hauteur < 0.7) distance *= 0.7 / (largeur / hauteur) * 0.9;
+    camera.position.set(0, centre, distance);
+    camera.lookAt(0, centre, 0);
     camera.updateProjectionMatrix();
   }
 
@@ -315,7 +319,7 @@ async function creer(tenueInitiale) {
     if (!boucle) return;
     requestAnimationFrame(image);
     if (document.hidden) return;
-    if (!acteur?.isConnected || !rendu.domElement.isConnected) { horsEcran += 1; if (horsEcran > 90) boucle = false; return; }
+    if (!acteur?.isConnected || !rendu.domElement.isConnected || !zone?.clientWidth) { horsEcran += 1; if (horsEcran > 90) boucle = false; return; }
     horsEcran = 0;
     const dt = Math.min(0.05, (maintenant - dernier) / 1000 || 0.016);
     dernier = maintenant;
@@ -348,9 +352,11 @@ async function creer(tenueInitiale) {
   const observateur = new ResizeObserver(cadrer);
   const controleur = {
     canvas: rendu.domElement,
-    relier(elementScene, elementActeur) {
+    relier(elementScene, elementActeur, options = {}) {
       zone = elementScene;
       acteur = elementActeur;
+      cadrage = options.cadrage || "plein";
+      rendu.domElement.classList.toggle("sna-canvas-buste", cadrage === "buste");
       if (rendu.domElement.parentElement !== zone) zone.prepend(rendu.domElement);
       observateur.disconnect();
       observateur.observe(zone);
