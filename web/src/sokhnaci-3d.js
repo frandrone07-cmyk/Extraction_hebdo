@@ -336,8 +336,10 @@ async function creer(tenueInitiale) {
     const yaw0 = s.marche && !s.assise ? s.sens * 1.15 : s.danse ? 0.25 * Math.sin(temps * 2.5) : 0;
     yaw.v = lisser(yaw.v, yaw0, dt, 7);
     vrm.scene.rotation.y = orientationBase + yaw.v;
-    vrm.scene.scale.setScalar(echelleLissee);
-    vrm.scene.position.set(xLisse, -0.36 * assiseLissee * echelleLissee + (s.marche ? Math.abs(Math.sin(temps * 7)) * 0.012 : 0), 0);
+    // Rapprochement doux : une échelle 2D de 1,32 devient environ 1,10 en 3D pour garder la tête dans le cadre.
+    const echelle3d = 1 + (echelleLissee - 1) * 0.33;
+    vrm.scene.scale.setScalar(echelle3d);
+    vrm.scene.position.set(xLisse, -0.36 * assiseLissee * echelle3d + (s.marche ? Math.abs(Math.sin(temps * 7)) * 0.012 : 0), 0);
     Object.assign(debogage, calculerExpression(s, dt, temps));
     vrm.update(dt);
     rendu.render(scene, camera);

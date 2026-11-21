@@ -568,7 +568,7 @@ test("avatar 3D libre (CC0) : chargement, ordres, gestes, bouche synchronisée, 
   expect(pixels.opaques).toBeGreaterThan(800);
 
   await poserEspace(page, "viens ici");
-  await expect.poll(() => page.evaluate(() => window.__sna3d.etat().echelle), { timeout: 15_000 }).toBeGreaterThan(1.1);
+  await expect.poll(() => page.evaluate(() => window.__sna3d.etat().echelle), { timeout: 15_000 }).toBeGreaterThan(1.05);
 
   await page.evaluate(() => { const a = document.getElementById("sna-acteur"); a.classList.add("speaking"); a.dataset.geste = "salut_main"; a.dataset.emotion = "souriante"; a.dataset.sync = "audio"; a.style.setProperty("--bouche", "1.4"); });
   await expect.poll(() => page.evaluate(() => window.__sna3d.etat().os.rightUpperArm[2]), { timeout: 8000 }).toBeGreaterThan(0.3);
