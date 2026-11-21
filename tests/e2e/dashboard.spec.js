@@ -315,3 +315,15 @@ test("Sokhnaci interprète les résultats : analyse territoriale, structure du r
   await page.locator('.sokhnaci-chips button[data-question="qui est en difficulté"]').click();
   await expect(bulle).toContainText("les plus en retard");
 });
+
+test("la voix originale est facultative et retombe sur la voix de l'appareil si le téléchargement échoue", async ({ page }) => {
+  await page.route("https://esm.sh/**", (route) => route.abort());
+  const caseVoix = page.locator(".sokhnaci-voix-originale input");
+  await expect(caseVoix).not.toBeChecked();
+  await caseVoix.check();
+  await expect(page.locator(".sokhnaci-voix-statut")).toContainText("Voix originale indisponible");
+  await expect(caseVoix).not.toBeChecked();
+  await page.locator(".sokhnaci-ask input").fill("les meilleurs districts");
+  await page.locator(".sokhnaci-ask input").press("Enter");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("les meilleurs districts");
+});

@@ -2,6 +2,9 @@ import { creerSituation, repondre, versAffichage, versOral } from "./sokhnaci-di
 
 const CLE_VOIX = "completude-sokhnaci-voice";
 const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
+const CLE_VOIX_ORIGINALE = "completude-sokhnaci-voix-originale";
+const MODULE_PIPER = "https://esm.sh/@diffusionstudio/vits-web@1.0.3";
+const VOIX_PIPER = "fr_FR-siwis-medium";
 const DOSSIER_AUDIO_WOLOF = "audio/wo/";
 let widget = null;
 let currentText = "";
@@ -16,6 +19,11 @@ const HUMEUR_PAR_EMOTION = { neutre: "attentif", souriante: "serein", preoccupee
 const LIBELLE_HUMEUR = { alerte: "Point d’attention", vigilant: "À surveiller", attentif: "Analyse en cours", content: "En progression", serein: "Situation conforme" };
 let voiceEnabled = true;
 let voixChoisie = null;
+let piperActif = false;
+let piper = null;
+let piperPromesse = null;
+let fileSynthese = Promise.resolve();
+const syntheses = new Map();
 
 function moyenne(values) {
   const usable = values.filter((value) => value !== null && value !== undefined);
@@ -96,6 +104,60 @@ async function choisirVoix() {
   return meilleure ? { voix: meilleure.voix, feminine: FEMININES.test(meilleure.voix.name) && !MASCULINES.test(meilleure.voix.name) } : { voix: null, feminine: false };
 }
 
+// Voix originale : modèle Piper « siwis » (voix féminine française) exécuté dans le navigateur,
+// téléchargé une seule fois (~63 Mo) puis mis en cache. En cas d'échec, la voix de l'appareil reprend.
+function chargerPiper(rapport) {
+  if (piperPromesse) return piperPromesse;
+  piperPromesse = (async () => {
+    rapport("Téléchargement de ma voix, une seule fois…");
+    const moteur = await import(/* @vite-ignore */ MODULE_PIPER);
+    await moteur.predict({ text: "Bonjour.", voiceId: VOIX_PIPER }, (avancement) => {
+      if (avancement?.total) rapport(`Téléchargement de ma voix : ${Math.round((100 * avancement.loaded) / avancement.total)} %`);
+    });
+    piper = moteur;
+    rapport("Voix originale prête.");
+    return moteur;
+  })().catch((erreur) => {
+    piperPromesse = null;
+    piper = null;
+    throw erreur;
+  });
+  return piperPromesse;
+}
+
+const delai = (ms) => new Promise((resolve) => setTimeout(() => resolve(null), ms));
+
+// Les phrases sont fabriquées une à une, dans l'ordre, pendant que la précédente est lue.
+function synthetiser(texte, id) {
+  if (syntheses.has(texte)) return syntheses.get(texte);
+  const promesse = fileSynthese
+    .then(async () => {
+      if (id !== lectureId || !piper) return null;
+      return Promise.race([piper.predict({ text: texte, voiceId: VOIX_PIPER }), delai(30000)]);
+    })
+    .catch(() => null)
+    .then((blob) => {
+      if (!blob) syntheses.delete(texte);
+      return blob;
+    });
+  fileSynthese = promesse;
+  syntheses.set(texte, promesse);
+  if (syntheses.size > 40) syntheses.delete(syntheses.keys().next().value);
+  return promesse;
+}
+
+function jouerBlob(blob) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audioCourant = audio;
+    const fin = (ok) => { URL.revokeObjectURL(url); resolve(ok); };
+    audio.onended = () => fin(true);
+    audio.onerror = () => fin(false);
+    audio.play().catch(() => fin(false));
+  });
+}
+
 function arreterLecture() {
   lectureId += 1;
   window.speechSynthesis?.cancel();
@@ -147,12 +209,17 @@ async function jouerVoix(segment) {
 async function lire(segments) {
   arreterLecture();
   const id = lectureId;
-  for (const segment of segments) {
+  const originale = piperActif && piper ? segments.map((segment) => (segment.audio ? null : synthetiser(segment.oral, id))) : null;
+  for (const [index, segment] of segments.entries()) {
     if (id !== lectureId) return;
     widget.classList.add("speaking");
     widget.dataset.geste = segment.geste || "";
     let joue = false;
     if (segment.audio) joue = await jouerAudio(segment.audio);
+    if (!joue && originale?.[index]) {
+      const blob = await originale[index];
+      if (blob && id === lectureId) joue = await jouerBlob(blob);
+    }
     if (!joue && id === lectureId) await jouerVoix(segment);
   }
   if (id === lectureId) {
@@ -302,7 +369,7 @@ export function initSokhnaci(model) {
   widget = document.createElement("section");
   widget.className = "sokhnaci-widget";
   widget.setAttribute("aria-label", "Sokhnaci, guide vocal du tableau de bord");
-  widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div><div class="sokhnaci-chips" role="group" aria-label="Questions suggérées"><button type="button" data-question="fais une analyse des résultats">Analyse</button><button type="button" data-question="qui est en difficulté">Priorités</button><button type="button" data-question="les meilleurs districts">Meilleurs</button><button type="button" data-question="comment ça évolue">Évolution</button></div><form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form><label class="sokhnaci-voix-choix">Voix française <select aria-label="Choisir la voix française de Sokhnaci"><option value="">Automatique (féminine)</option></select></label></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
+  widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div><div class="sokhnaci-chips" role="group" aria-label="Questions suggérées"><button type="button" data-question="fais une analyse des résultats">Analyse</button><button type="button" data-question="qui est en difficulté">Priorités</button><button type="button" data-question="les meilleurs districts">Meilleurs</button><button type="button" data-question="comment ça évolue">Évolution</button></div><form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form><label class="sokhnaci-voix-originale"><input type="checkbox"> Voix originale (téléchargement unique, environ 63 Mo)</label><p class="sokhnaci-voix-statut" role="status"></p><label class="sokhnaci-voix-choix">Voix française <select aria-label="Choisir la voix française de Sokhnaci"><option value="">Automatique (féminine)</option></select></label></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
   document.body.appendChild(widget);
   widget.querySelector(".sokhnaci-collapse").addEventListener("click", replierSokhnaci);
   widget.querySelector(".sokhnaci-launcher").addEventListener("click", () => {
@@ -322,6 +389,29 @@ export function initSokhnaci(model) {
     voixChoisie = choix.value || null;
     try { if (voixChoisie) localStorage.setItem(CLE_VOIX_CHOISIE, voixChoisie); else localStorage.removeItem(CLE_VOIX_CHOISIE); } catch { /* stockage facultatif */ }
     message("Voilà, c’est ma nouvelle voix. Vous l’entendez bien ?");
+  });
+  const caseOriginale = widget.querySelector(".sokhnaci-voix-originale input");
+  const statutVoix = widget.querySelector(".sokhnaci-voix-statut");
+  const activerOriginale = async () => {
+    try {
+      await chargerPiper((texte) => { statutVoix.textContent = texte; });
+      return true;
+    } catch {
+      piperActif = false;
+      caseOriginale.checked = false;
+      try { localStorage.setItem(CLE_VOIX_ORIGINALE, "false"); } catch { /* stockage facultatif */ }
+      statutVoix.textContent = "Voix originale indisponible : j’utilise la voix de votre appareil.";
+      return false;
+    }
+  };
+  try { piperActif = localStorage.getItem(CLE_VOIX_ORIGINALE) === "true"; } catch { piperActif = false; }
+  caseOriginale.checked = piperActif;
+  if (piperActif) activerOriginale();
+  caseOriginale.addEventListener("change", async () => {
+    piperActif = caseOriginale.checked;
+    try { localStorage.setItem(CLE_VOIX_ORIGINALE, String(piperActif)); } catch { /* stockage facultatif */ }
+    if (!piperActif) { statutVoix.textContent = ""; return; }
+    if (await activerOriginale()) message("Voilà ma voix originale. Vous l’entendez bien ?");
   });
   widget.querySelectorAll(".sokhnaci-chips button").forEach((bouton) => bouton.addEventListener("click", () => poserQuestion(bouton.dataset.question)));
   widget.querySelector(".sokhnaci-mic").addEventListener("click", (event) => ecouterQuestion(event.currentTarget));
