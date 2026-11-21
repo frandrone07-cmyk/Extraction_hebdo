@@ -369,3 +369,23 @@ test("Sokhnaci obéit aux ordres : venir, s'arrêter, s'asseoir, danser, suivre 
   await poser("comment ça marche");
   await expect(page.locator(".sokhnaci-bubble")).toContainText("Demandez-moi");
 });
+
+test("interface de Sokhnaci : phrase lue surlignée, bouton arrêter, réduite par défaut sur mobile", async ({ page }) => {
+  await page.evaluate(() => {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak = (utterance) => utterance.onstart?.();
+  });
+  await page.locator(".sokhnaci-speak").click();
+  await expect(page.locator(".sokhnaci-bubble .sok-phrase.actif")).toHaveCount(1);
+  await expect(page.locator(".sokhnaci-widget")).toHaveClass(/speaking/);
+  await page.locator(".sokhnaci-stop").click();
+  await expect(page.locator(".sokhnaci-bubble .sok-phrase.actif")).toHaveCount(0);
+  await expect(page.locator(".sokhnaci-widget")).not.toHaveClass(/speaking/);
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await expect(page.locator(".sokhnaci-widget")).toHaveClass(/collapsed/);
+  await page.locator(".sokhnaci-launcher").click();
+  await expect(page.locator(".sokhnaci-card")).toBeVisible();
+});

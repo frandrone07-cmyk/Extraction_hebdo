@@ -264,6 +264,16 @@ function lierBouche(audio) {
   }
 }
 
+function marquerPhrase(index) {
+  const bulle = widget?.querySelector(".sokhnaci-bubble");
+  if (!bulle) return;
+  bulle.querySelectorAll(".sok-phrase.actif").forEach((element) => element.classList.remove("actif"));
+  const phrase = index === null ? null : bulle.querySelector(`.sok-phrase[data-index="${index}"]`);
+  if (!phrase) return;
+  phrase.classList.add("actif");
+  bulle.scrollTo({ top: Math.max(0, phrase.offsetTop - bulle.clientHeight / 3), behavior: "smooth" });
+}
+
 function arreterLecture() {
   lectureId += 1;
   window.speechSynthesis?.cancel();
@@ -272,6 +282,7 @@ function arreterLecture() {
   if (widget) {
     definirParole(false);
     definirBouche(null);
+    marquerPhrase(null);
   }
 }
 
@@ -321,6 +332,7 @@ async function lire(segments) {
   for (const [index, segment] of segments.entries()) {
     if (id !== lectureId) return;
     definirParole(true, segment.geste || "");
+    marquerPhrase(index);
     let joue = false;
     if (segment.audio) joue = await jouerAudio(segment.audio);
     if (!joue && originale?.[index]) {
@@ -329,7 +341,7 @@ async function lire(segments) {
     }
     if (!joue && id === lectureId) await jouerVoix(segment);
   }
-  if (id === lectureId) definirParole(false);
+  if (id === lectureId) { definirParole(false); marquerPhrase(null); }
 }
 
 async function attendrePuisParler() {
@@ -518,8 +530,13 @@ function afficherDialogue(dialogue, humeurForcee = null, { speak = false } = {})
   currentText = segmentsCourants.map((segment) => segment.affichage).join(" ");
   const mood = humeurForcee || HUMEUR_PAR_EMOTION[dialogue.emotion] || "attentif";
   const bubble = widget.querySelector(".sokhnaci-bubble");
-  bubble.textContent = currentText;
-  bubble.setAttribute("aria-label", currentText);
+  bubble.replaceChildren(...segmentsCourants.flatMap((segment, index) => {
+    const phrase = document.createElement("span");
+    phrase.className = "sok-phrase";
+    phrase.dataset.index = String(index);
+    phrase.textContent = segment.affichage;
+    return [phrase, document.createTextNode(" ")];
+  }));
   bubble.scrollTop = 0;
   widget.querySelector(".sokhnaci-svg").setAttribute("data-mood", mood);
   widget.querySelector(".sokhnaci-state").textContent = LIBELLE_HUMEUR[mood];
@@ -631,7 +648,18 @@ export function initSokhnaci(model) {
   widget = document.createElement("section");
   widget.className = "sokhnaci-widget";
   widget.setAttribute("aria-label", "Sokhnaci, guide vocal du tableau de bord");
-  widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div><div class="sokhnaci-chips" role="group" aria-label="Questions suggérées"><button type="button" data-question="fais une analyse des résultats">Analyse</button><button type="button" data-question="qui est en difficulté">Priorités</button><button type="button" data-question="les meilleurs districts">Meilleurs</button><button type="button" data-question="comment ça évolue">Évolution</button></div><form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form><p class="sokhnaci-voix-statut" role="status"></p><label class="sokhnaci-voix-choix">Voix française <select aria-label="Choisir la voix française de Sokhnaci"><option value="">Automatique (voix originale)</option></select></label></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
+  widget.innerHTML = `<div class="sokhnaci-card">
+    <div class="sokhnaci-top">
+      <div class="sokhnaci-character">${svgMarkup()}</div>
+      <div class="sokhnaci-identite"><p class="eyebrow">Assistante virtuelle</p><strong>Sokhna Ci</strong><span class="sokhnaci-state"></span></div>
+      <button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button>
+    </div>
+    <div class="sokhnaci-bubble" tabindex="0" role="region" aria-label="Propos de Sokhnaci" aria-live="polite"></div>
+    <div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter</button><button class="sokhnaci-stop" type="button">■ Arrêter</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div>
+    <div class="sokhnaci-chips" role="group" aria-label="Questions suggérées"><button type="button" data-question="fais une analyse des résultats">Analyse</button><button type="button" data-question="qui est en difficulté">Priorités</button><button type="button" data-question="les meilleurs districts">Meilleurs</button><button type="button" data-question="comment ça évolue">Évolution</button></div>
+    <form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form>
+    <details class="sokhnaci-reglages"><summary>Réglages de la voix</summary><p class="sokhnaci-voix-statut" role="status"></p><label class="sokhnaci-voix-choix">Voix française <select aria-label="Choisir la voix française de Sokhnaci"><option value="">Automatique (voix originale)</option></select></label></details>
+  </div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
   document.body.appendChild(widget);
   document.body.insertAdjacentHTML("beforeend", DEFS_WAX);
   window.addEventListener("pointermove", (event) => { pointeur = { x: event.clientX, y: event.clientY }; }, { passive: true });
@@ -650,6 +678,7 @@ export function initSokhnaci(model) {
     widget.querySelector(".sokhnaci-launcher").hidden = true;
   });
   widget.querySelector(".sokhnaci-speak").addEventListener("click", parler);
+  widget.querySelector(".sokhnaci-stop").addEventListener("click", arreterLecture);
   try { voixChoisie = localStorage.getItem(CLE_VOIX_CHOISIE) || null; } catch { voixChoisie = null; }
   const choix = widget.querySelector(".sokhnaci-voix-choix select");
   voixDisponibles.then((voix) => {
@@ -688,7 +717,9 @@ export function initSokhnaci(model) {
   window.addEventListener("online", () => demarrerPiperAutomatique());
   render(model);
   // Les navigateurs interdisent la parole avant le premier geste de l'utilisateur : on attend ce geste.
-  const parlerOuverture = () => { if (voiceEnabled) attendrePuisParler(); };
+  // Sur petit écran, l'assistante démarre réduite pour ne pas masquer le tableau de bord.
+  if (window.matchMedia("(max-width: 700px)").matches) replierSokhnaci();
+  const parlerOuverture = () => { if (voiceEnabled && !widget.classList.contains("collapsed")) attendrePuisParler(); };
   if (navigator.userActivation?.hasBeenActive === false) {
     const premierGeste = () => {
       for (const nom of ["pointerdown", "keydown", "touchstart"]) window.removeEventListener(nom, premierGeste, true);
