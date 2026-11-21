@@ -441,11 +441,11 @@ html[data-theme="dark"] .status-chip.conforme, html[data-theme="dark"] .empty-st
 .sokhnaci-svg .baby-arm { transform-box: view-box; }
 .sokhnaci-svg .baby-arm-left { transform-origin: 40px 70px; animation: baby-wave 3s ease-in-out infinite; }
 .sokhnaci-svg .baby-arm-right { transform-origin: 72px 70px; animation: baby-wave 3s ease-in-out -1.5s infinite; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-mouth-smile { display: none; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-mouth-open { display: block; transform-origin: center; animation: speaking-mouth .28s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-arm-left { animation: baby-gesture .46s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-arm-right { animation: baby-gesture .46s ease-in-out -.23s infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-shirt { animation: baby-bounce .7s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking .baby-mouth-smile { display: none; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking .baby-mouth-open { display: block; transform-origin: center; animation: speaking-mouth .28s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking .baby-arm-left { animation: baby-gesture .46s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking .baby-arm-right { animation: baby-gesture .46s ease-in-out -.23s infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking .baby-shirt { animation: baby-bounce .7s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
 .sokhnaci-bubble { position: relative; max-height: 230px; margin: 0; padding: 12px 14px; overflow: auto; border-radius: 14px; background: var(--surface-soft); color: var(--text); font-size: 13px; line-height: 1.62; scrollbar-width: thin; }
 .sokhnaci-bubble .sok-phrase { border-radius: 4px; transition: background-color .25s ease; }
 .sokhnaci-bubble .sok-phrase.actif { background: rgba(242, 163, 27, .28); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
@@ -492,25 +492,25 @@ body.tv .sokhnaci-widget { display: none; }
 .sokhnaci-svg .sok-body { transform-origin: 56px 100px; }
 .sokhnaci-svg .sok-head { transform-origin: 56px 64px; }
 .sokhnaci-svg .sok-leg { transform-origin: 56px 94px; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).walking .sok-leg-l { animation: sok-pas .5s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).walking .sok-leg-r { animation: sok-pas-inverse .5s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).walking .sok-body { animation: sok-rebond .25s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).walking .sok-leg-l { animation: sok-pas .5s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).walking .sok-leg-r { animation: sok-pas-inverse .5s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).walking .sok-body { animation: sok-rebond .25s ease-in-out infinite alternate; }
 .sokhnaci-widget.walking:not(.entering) .sokhnaci-character { animation: sok-va-et-vient 2.6s ease-in-out; }
 .sokhnaci-widget.entering { animation: sok-entree 2.4s cubic-bezier(.3, .7, .3, 1) both; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="pointer_ecran"] .baby-arm-right { animation: sok-pointe 1.1s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="compter_doigts"] .baby-arm-right { animation: sok-compte .4s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="pouce_leve"] .baby-arm-right { animation: sok-pouce .6s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="salut_main"] .baby-arm-right { animation: sok-salut .35s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="main_sur_coeur"] .baby-arm-left { animation: sok-coeur 1s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="geste_ouvert"] .baby-arm-left { animation: sok-ouvre-g .8s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="geste_ouvert"] .baby-arm-right { animation: sok-ouvre-d .8s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="geste_rassurant"] .baby-arm-left { animation: sok-rassure-g .8s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="geste_rassurant"] .baby-arm-right { animation: sok-rassure-d .8s ease-in-out -.4s infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="mains_jointes"] .baby-arm-left { animation: none; transform: rotate(-45deg); }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="mains_jointes"] .baby-arm-right { animation: none; transform: rotate(45deg); }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="hochement_tete"] .sok-head { animation: sok-hoche .45s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="inclinaison_ecoute"] .sok-head, :is(.sokhnaci-widget, .sokhnaci-acteur).listening .sok-head { animation: sok-ecoute 1.4s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="sourire"] .sok-head { animation: sok-hoche .9s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="pointer_ecran"] .baby-arm-right { animation: sok-pointe 1.1s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="compter_doigts"] .baby-arm-right { animation: sok-compte .4s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="pouce_leve"] .baby-arm-right { animation: sok-pouce .6s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="salut_main"] .baby-arm-right { animation: sok-salut .35s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="main_sur_coeur"] .baby-arm-left { animation: sok-coeur 1s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="geste_ouvert"] .baby-arm-left { animation: sok-ouvre-g .8s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="geste_ouvert"] .baby-arm-right { animation: sok-ouvre-d .8s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="geste_rassurant"] .baby-arm-left { animation: sok-rassure-g .8s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="geste_rassurant"] .baby-arm-right { animation: sok-rassure-d .8s ease-in-out -.4s infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="mains_jointes"] .baby-arm-left { animation: none; transform: rotate(-45deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="mains_jointes"] .baby-arm-right { animation: none; transform: rotate(45deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="hochement_tete"] .sok-head { animation: sok-hoche .45s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="inclinaison_ecoute"] .sok-head, :is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).listening .sok-head { animation: sok-ecoute 1.4s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).speaking[data-geste="sourire"] .sok-head { animation: sok-hoche .9s ease-in-out infinite alternate; }
 .sokhnaci-ask .sokhnaci-mic { flex: none; width: 40px; padding: 0; font-size: 15px; }
 .sokhnaci-ask .sokhnaci-mic[aria-pressed="true"] { border-color: #c2362b; background: #fff0ed; animation: sok-micro 1s ease-in-out infinite alternate; }
 @keyframes sok-pas { from { transform: rotate(-22deg); } to { transform: rotate(22deg); } }
@@ -536,23 +536,23 @@ body.tv .sokhnaci-widget { display: none; }
 .sokhnaci-acteur .sokhnaci-svg { width: 150px; height: 150px; overflow: visible; }
 .sokhnaci-widget.acteur-dehors .sokhnaci-character { visibility: hidden; }
 body.tv .sokhnaci-acteur { display: none; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).assise .sok-body { animation: none; transform: translateY(9px); }
-:is(.sokhnaci-widget, .sokhnaci-acteur).assise .sok-leg-l { transform: rotate(78deg); }
-:is(.sokhnaci-widget, .sokhnaci-acteur).assise .sok-leg-r { transform: rotate(-78deg); }
-:is(.sokhnaci-widget, .sokhnaci-acteur).danse .sok-body { animation: sok-danse .42s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).danse .baby-arm-left { animation: sok-danse-bras-g .42s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).danse .baby-arm-right { animation: sok-danse-bras-d .42s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).danse .sok-leg-l { animation: sok-pas .42s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).danse .sok-leg-r { animation: sok-pas-inverse .42s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).danse .sok-head { animation: sok-hoche .42s ease-in-out infinite alternate; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).grand-sourire .baby-mouth-smile { display: block; stroke-width: 2.8; transform: scale(1.35, 1.5); transform-box: fill-box; transform-origin: center; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).grand-sourire .baby-cheek { opacity: .95; }
-:is(.sokhnaci-widget, .sokhnaci-acteur)[data-sync="audio"] .baby-mouth-open { animation: none; transform: scaleY(var(--bouche, .4)); transform-box: fill-box; transform-origin: center; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).assise .sok-body { animation: none; transform: translateY(9px); }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).assise .sok-leg-l { transform: rotate(78deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).assise .sok-leg-r { transform: rotate(-78deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).danse .sok-body { animation: sok-danse .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).danse .baby-arm-left { animation: sok-danse-bras-g .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).danse .baby-arm-right { animation: sok-danse-bras-d .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).danse .sok-leg-l { animation: sok-pas .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).danse .sok-leg-r { animation: sok-pas-inverse .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).danse .sok-head { animation: sok-hoche .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).grand-sourire .baby-mouth-smile { display: block; stroke-width: 2.8; transform: scale(1.35, 1.5); transform-box: fill-box; transform-origin: center; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).grand-sourire .baby-cheek { opacity: .95; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur)[data-sync="audio"] .baby-mouth-open { animation: none; transform: scaleY(var(--bouche, .4)); transform-box: fill-box; transform-origin: center; }
 .sokhnaci-svg .sok-body { animation: sok-respire 4.4s ease-in-out infinite; }
 .sokhnaci-svg .sok-head { animation: sok-tete-libre 9s ease-in-out infinite; }
-:is(.sokhnaci-widget, .sokhnaci-acteur) .sokhnaci-svg { transition: transform 1.4s ease-in-out; }
-:is(.sokhnaci-widget, .sokhnaci-acteur).posture-a .sokhnaci-svg { transform: translateX(1.6px) rotate(.9deg); }
-:is(.sokhnaci-widget, .sokhnaci-acteur).posture-b .sokhnaci-svg { transform: translateX(-1.6px) rotate(-.9deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur) .sokhnaci-svg { transition: transform 1.4s ease-in-out; }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).posture-a .sokhnaci-svg { transform: translateX(1.6px) rotate(.9deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur, .sna-acteur).posture-b .sokhnaci-svg { transform: translateX(-1.6px) rotate(-.9deg); }
 .sokhnaci-mise-en-evidence { outline: 3px solid #f2a31b; outline-offset: 4px; transition: outline-color .3s; }
 @keyframes sok-respire { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, 1.02); } }
 @keyframes sok-tete-libre { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(1.6deg) translateY(.4px); } 65% { transform: rotate(-1.4deg); } }
@@ -567,6 +567,128 @@ body.tv .sokhnaci-acteur { display: none; }
   .sokhnaci-card { max-height: 74vh; }
   .sokhnaci-bubble { max-height: 190px; }
 }
+/* ===== Tenues ===== */
+:root[data-tenue="ankara"] .sokhnaci-svg :is(.baby-shirt, .baby-wax, .baby-wrap, .baby-wrap-knot) { fill: url(#sok-ankara); }
+:root[data-tenue="bazin"] .sokhnaci-svg :is(.baby-shirt, .baby-wax, .baby-wrap, .baby-wrap-knot) { fill: url(#sok-bazin); }
+:root[data-tenue="bazin"] .sokhnaci-svg .baby-shirt { scale: 1.18 1; transform-box: fill-box; transform-origin: 50% 100%; }
+:root[data-tenue="pro"] .sokhnaci-svg :is(.baby-shirt, .baby-wax) { fill: #0f6b57; }
+body.sna-actif .sokhnaci-widget, body.sna-actif .sokhnaci-acteur { display: none; }
+
+/* ===== Sokhna Ci AI ===== */
+:root { --sna-verre: rgba(255, 255, 255, .72); --sna-ciel-a: #e4f3ea; --sna-ciel-b: #fbf1dc; --sna-sol-a: #cfe3d6; --sna-sol-b: #eaf3ec; }
+:root[data-theme="dark"] { --sna-verre: rgba(23, 35, 36, .72); --sna-ciel-a: #153129; --sna-ciel-b: #1f2a22; --sna-sol-a: #1a2b27; --sna-sol-b: #243a32; }
+.sna { gap: 22px; }
+.sna button, .sna select, .sna input { font-family: inherit; }
+.sna .eyebrow svg, .sna button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+.sna-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sna-hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.sna-hero h2 { margin: 4px 0 8px; font: 800 clamp(30px, 4.2vw, 46px)/1.04 Manrope, sans-serif; letter-spacing: -.045em; }
+.sna-ai { background: linear-gradient(120deg, #087f5b, #d98b00 75%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sna-lede { max-width: 64ch; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; }
+.sna-niveau { display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--sna-verre); backdrop-filter: blur(10px); }
+.sna-niveau span { padding: 0 10px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.sna-niveau button { min-height: 32px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--text); font-size: 13px; font-weight: 700; cursor: pointer; }
+.sna-niveau button[aria-pressed="true"] { background: var(--primary); color: var(--primary-contrast); }
+.sna-grille { display: grid; grid-template-columns: minmax(300px, .85fr) minmax(0, 1.4fr); align-items: start; gap: 20px; }
+.sna.sans-avatar .sna-grille { grid-template-columns: 1fr; }
+.sna.sans-avatar .sna-scene, .sna.sans-avatar .sna-indicateurs { display: none; }
+.sna-carte { border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 24px; background: var(--sna-verre); backdrop-filter: blur(16px) saturate(1.25); box-shadow: 0 18px 50px rgba(15, 39, 30, .1); }
+.sna-avatar-zone { display: grid; gap: 12px; padding: 14px; }
+.sna-scene { position: relative; height: clamp(300px, 48vh, 470px); overflow: hidden; border-radius: 18px; background: radial-gradient(120% 90% at 50% 6%, var(--sna-ciel-a), var(--sna-ciel-b) 72%); isolation: isolate; }
+.sna-halo { position: absolute; inset: 8% 14% auto; height: 55%; border-radius: 50%; background: radial-gradient(closest-side, rgba(242, 163, 27, .38), transparent); filter: blur(12px); animation: sna-halo 7s ease-in-out infinite; }
+.sna-sol { position: absolute; right: -12%; bottom: -3%; left: -12%; height: 40%; background: linear-gradient(to top, var(--sna-sol-a), var(--sna-sol-b)); border-top: 1px solid rgba(255, 255, 255, .4); transform: perspective(380px) rotateX(58deg); transform-origin: 50% 100%; }
+.sna-sol::before { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(8, 127, 91, .12) 0 1px, transparent 1px 64px), repeating-linear-gradient(0deg, rgba(8, 127, 91, .1) 0 1px, transparent 1px 48px); content: ""; }
+.sna-ombre { position: absolute; bottom: 8%; left: 50%; width: 170px; height: 24px; margin-left: -85px; border-radius: 50%; background: rgba(8, 32, 24, .3); filter: blur(6px); transform: translateX(var(--x, 0)) scale(calc(var(--echelle, 1) * 1.05)); }
+.sna-acteur { position: absolute; bottom: 6%; left: 50%; width: 290px; height: 290px; margin-left: -145px; transform: translateX(var(--x, 0)) scale(var(--echelle, 1)) scaleX(var(--sens, 1)); transform-origin: 50% 100%; will-change: transform; }
+.sna-acteur .sokhnaci-svg { width: 100%; height: 100%; overflow: visible; }
+.sna-badge { position: absolute; top: 12px; left: 12px; z-index: 2; margin: 0; padding: 5px 12px 5px 22px; border: 1px solid var(--border); border-radius: 999px; background: var(--sna-verre); backdrop-filter: blur(8px); color: var(--text); font-size: 12px; font-weight: 800; }
+.sna-badge::before { position: absolute; top: 50%; left: 9px; width: 8px; height: 8px; border-radius: 50%; background: #087f5b; transform: translateY(-50%); content: ""; }
+.sna-scene[data-etat="ecoute"] .sna-badge::before { background: #c2362b; animation: sok-micro 1s ease-in-out infinite alternate; }
+.sna-scene[data-etat="reflechit"] .sna-badge::before, .sna-scene[data-etat="chargement"] .sna-badge::before { background: #d98b00; }
+.sna-scene[data-etat="parle"] .sna-badge::before { background: #1d6fd8; }
+.sna-indicateurs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sna-indicateurs li { padding: 4px 11px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 700; transition: all .25s; }
+.sna-indicateurs li.actif { border-color: var(--primary); background: var(--primary); color: var(--primary-contrast); opacity: 1; }
+.sna-controles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sna-controles button, .sna-controles select, .sna-outils button, .sna-actions-msg button, .sna-point button, .sna-rapports button, .sna-menu button, .sna-fichier { min-height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: var(--text); font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.sna-controles button:hover, .sna-outils button:hover, .sna-actions-msg button:hover, .sna-point button:hover, .sna-rapports button:hover, .sna-menu button:hover, .sna-fichier:hover { border-color: var(--primary); }
+.sna-controles [aria-pressed="true"] { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-strong); }
+.sna-controles .sna-bouton-micro[aria-pressed="true"], .sna-barre .sna-bouton-micro[aria-pressed="true"] { border-color: #c2362b; background: #fff0ed; color: #8f241b; animation: sok-micro 1s ease-in-out infinite alternate; }
+.sna-volume { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.sna-volume input { width: 96px; accent-color: var(--primary); }
+.sna-conversation { display: grid; gap: 10px; padding: 14px; }
+.sna-historique { display: flex; flex-direction: column; gap: 12px; min-height: 300px; max-height: min(58vh, 560px); padding: 2px 6px 2px 2px; overflow: auto; scrollbar-width: thin; }
+.sna-message { max-width: 92%; padding: 12px 14px; border-radius: 18px; font-size: 14px; line-height: 1.6; animation: sna-entree .28s ease both; }
+.sna-utilisateur { align-self: flex-end; border-bottom-right-radius: 6px; background: linear-gradient(135deg, #087f5b, #066a4d); color: #fff; }
+.sna-utilisateur p { margin: 0; }
+.sna-utilisateur time { display: block; margin-top: 3px; color: rgba(255, 255, 255, .88); font-size: 11px; text-align: right; }
+.sna-assistante { align-self: flex-start; border: 1px solid var(--border); border-bottom-left-radius: 6px; background: var(--surface); box-shadow: 0 4px 14px rgba(15, 39, 30, .06); }
+.sna-entete-msg { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
+.sna-entete-msg time { margin-left: auto; }
+.sna-pastille { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: linear-gradient(135deg, #d98b00, #b93e34); color: #fff; font-size: 12px; font-weight: 800; }
+.sna-texte .sok-phrase { border-radius: 4px; transition: background-color .25s; }
+.sna-texte .sok-phrase.actif { background: rgba(242, 163, 27, .3); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.sna-visuel:empty { display: none; }
+.sna-visuel h4 { margin: 10px 0 6px; font-size: 13px; }
+.sna-graphe { height: 240px; margin: 6px 0; }
+.sna-tableau { overflow: auto; border: 1px solid var(--border); border-radius: 12px; }
+.sna-tableau table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sna-tableau th, .sna-tableau td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.sna-tableau th { background: var(--surface-soft); color: var(--muted); font-weight: 700; }
+.sna-sources summary { margin-top: 8px; color: var(--muted); font-size: 12px; font-weight: 700; cursor: pointer; }
+.sna-sources ul { margin: 6px 0 0 16px; padding: 0; color: var(--muted); font-size: 12px; }
+.sna-actions-msg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sna-actions-msg button { min-height: 30px; font-size: 12px; font-weight: 600; }
+.sna-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sna-suggestions button { min-height: 32px; padding: 0 13px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.sna-suggestions button:hover { border-color: var(--primary); color: var(--primary-strong); }
+.sna-barre-ligne { display: flex; align-items: center; gap: 8px; padding: 6px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: 0 6px 20px rgba(15, 39, 30, .08); }
+.sna-barre-ligne:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(8, 127, 91, .18); }
+.sna-barre-ligne input { flex: 1; min-width: 0; min-height: 40px; padding: 0 8px; border: 0; background: transparent; color: var(--text); font-size: 14px; outline: 0; }
+.sna-icone { display: grid; width: 40px; height: 40px; place-items: center; flex: none; border: 0; border-radius: 12px; background: var(--surface-soft); color: var(--text); cursor: pointer; }
+.sna-icone svg { width: 20px; height: 20px; }
+.sna-envoyer { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border: 0; border-radius: 12px; background: var(--primary); color: var(--primary-contrast); font-size: 13px; font-weight: 800; cursor: pointer; }
+.sna-menu { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.sna-menu[hidden] { display: none; }
+.sna-fichier input { display: none; }
+.sna-outils { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.sna-outils button { min-height: 30px; font-size: 12px; font-weight: 600; }
+.sna-section h3 { margin: 0 0 10px; font: 800 18px Manrope, sans-serif; letter-spacing: -.02em; }
+.sna-points, .sna-competences { display: grid; gap: 12px; }
+.sna-points { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.sna-competences { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.sna-point { padding: 14px; border: 1px solid var(--border); border-left: 5px solid var(--primary); border-radius: 18px; background: var(--sna-verre); backdrop-filter: blur(12px); transition: transform .3s, outline-color .3s; }
+.sna-point.sna-critique { border-left-color: #b93e34; }
+.sna-point.sna-attention { border-left-color: #9c6500; }
+.sna-point h4 { margin: 0 0 4px; font-size: 14px; }
+.sna-point p, .sna-vide { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; }
+.sna-point button { min-height: 30px; font-size: 12px; }
+.sna-mise-en-avant { outline: 3px solid #f2a31b; outline-offset: 3px; transform: translateY(-3px); }
+.sna-competence { display: grid; gap: 4px; padding: 14px; border: 1px solid var(--border); border-radius: 18px; background: var(--sna-verre); backdrop-filter: blur(12px); color: var(--text); text-align: left; cursor: pointer; transition: transform .2s, box-shadow .2s; }
+.sna-competence:hover { box-shadow: 0 12px 28px rgba(15, 39, 30, .14); transform: translateY(-2px); }
+.sna-competence strong { font: 800 15px Manrope, sans-serif; }
+.sna-competence span { color: var(--muted); font-size: 12.5px; }
+.sna-rapports { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 18px; background: var(--sna-verre); backdrop-filter: blur(12px); }
+.sna-rapports p { margin: 0; color: var(--muted); font-size: 13px; }
+.sna-rapports div { display: flex; gap: 8px; }
+.sna-rapports button { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
+.sna-note { flex-basis: 100%; min-height: 1em; }
+.sna :focus-visible { outline: 3px solid #1d6fd8; outline-offset: 2px; }
+@media (max-width: 960px) {
+  .sna-grille { grid-template-columns: 1fr; }
+  .sna-scene { height: 320px; }
+  .sna-acteur { width: 230px; height: 230px; margin-left: -115px; }
+  .sna-historique { max-height: 50vh; }
+}
+@media (max-width: 560px) {
+  .sna-scene { height: 250px; }
+  .sna-acteur { width: 175px; height: 175px; margin-left: -87px; }
+  .sna-envoyer span { display: none; }
+  .sna-message { max-width: 100%; }
+  .sna-niveau span { display: none; }
+}
+@keyframes sna-halo { 0%, 100% { opacity: .75; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+@keyframes sna-entree { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes sokhnaci-blink { 0%, 43%, 47%, 100% { transform: scaleY(1); } 45% { transform: scaleY(.12); } }
 @keyframes speaking-mouth { from { transform: scaleY(.75); } to { transform: scaleY(1.3); } }
 

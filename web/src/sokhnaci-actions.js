@@ -19,7 +19,9 @@ const COMMANDES = [
   { action: "tourne", motif: /\b(tourne( toi)? a (gauche|droite)|va a (gauche|droite)|vers la (gauche|droite))\b/ },
   { action: "demitour", motif: /\b(retourne toi|fais demi tour|demi tour|tourne toi)\b/ },
   { action: "recule", motif: /\b(recule|va en arriere|marche en arriere)\b/ },
-  { action: "avance", motif: /(\b(avance|va en avant|fais quelques pas|marche un peu|marche devant)\b|^marche$)/ },
+  { action: "marche", motif: /(^marche$|\b(commence a marcher|marche un peu|promene toi|balade toi|marche dans)\b)/ },
+  { action: "avance", motif: /\b(avance|va en avant|fais quelques pas|marche devant)\b/ },
+  { action: "presente", motif: /\b(presente( moi)? les resultats|presente la situation|fais la presentation|presente les indicateurs)\b/ },
   { action: "montre", motif: /\b(montre( moi)?|designe|indique|pointe)\b/ },
 ];
 
@@ -64,6 +66,8 @@ export function phraseAction(commande) {
     case "demitour": return { emotion: "neutre", segments: [s("Je fais demi-tour.", "hochement_tete")] };
     case "recule": return { emotion: "neutre", segments: [s("Je recule un peu.", "geste_rassurant")] };
     case "avance": return { emotion: "neutre", segments: [s("J’avance.", "hochement_tete")] };
+    case "marche": return { emotion: "souriante", segments: [s(aleatoire(["Je vais me promener un peu.", "D’accord, je marche."]), "hochement_tete")] };
+    case "presente": return { emotion: "encourageante", segments: [s("Je vous présente les points importants, un par un.", "pointer_ecran")] };
     case "montre": return { emotion: "encourageante", segments: [s(commande.cible ? `Regardez, voici ${commande.cible.libelle}.` : "Regardez ici.", "pointer_ecran")] };
     default: return null;
   }

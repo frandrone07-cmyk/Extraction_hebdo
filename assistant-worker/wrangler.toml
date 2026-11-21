@@ -1,0 +1,20 @@
+name = "sokhna-ci-assistant"
+main = "index.js"
+compatibility_date = "2026-11-10"
+workers_dev = true
+
+# Modèle de langage hébergé par Cloudflare (offre gratuite journalière) : aucune clé à stocker.
+[ai]
+binding = "AI"
+
+[vars]
+ALLOWED_ORIGIN = "https://frandrone07-cmyk.github.io"
+MODELE = "@cf/meta/llama-3.1-8b-instruct"
+
+[[ratelimits]]
+name = "ASSISTANT_RATE_LIMIT"
+namespace_id = "2026112101"
+
+[ratelimits.simple]
+limit = 12
+period = 60

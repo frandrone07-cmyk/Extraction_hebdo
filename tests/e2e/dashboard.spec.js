@@ -389,3 +389,163 @@ test("interface de Sokhnaci : phrase lue surlignée, bouton arrêter, réduite p
   await page.locator(".sokhnaci-launcher").click();
   await expect(page.locator(".sokhnaci-card")).toBeVisible();
 });
+
+async function ouvrirEspace(page) {
+  await page.getByRole("tab", { name: /Sokhna Ci AI/ }).click();
+  await expect(page.locator("#sna")).toBeVisible();
+  await expect(page.locator(".sokhnaci-widget")).toBeHidden();
+}
+async function poserEspace(page, question) {
+  await page.locator("#sna-question").fill(question);
+  await page.locator("#sna-question").press("Enter");
+}
+
+test("espace Sokhna Ci AI : conversation, visualisations, comparaison, recherche, définition et sources", async ({ page }) => {
+  await ouvrirEspace(page);
+  const historique = page.locator("#sna-historique");
+  await expect(historique).toContainText("Bonjour, je suis Sokhna Ci");
+  await expect(page.locator(".sna-point").first()).toBeVisible();
+
+  await poserEspace(page, "fais un graphique des régions");
+  await expect(historique.locator(".sna-assistante").last().locator(".sna-graphe canvas")).toHaveCount(1);
+  await expect(historique.locator(".sna-assistante").last().locator(".sna-sources summary")).toContainText("Sources utilisées");
+
+  await poserEspace(page, "compare Kolda et Thiès");
+  await expect(historique.locator(".sna-assistante").last()).toContainText("devance");
+  await expect(historique.locator(".sna-assistante").last().locator("table")).toContainText("Kolda");
+
+  await poserEspace(page, "statistiques");
+  await expect(historique.locator(".sna-assistante").last().locator("table")).toContainText("Médiane");
+
+  await poserEspace(page, "cherche paludisme");
+  await expect(historique.locator(".sna-assistante").last().locator("tbody tr")).toHaveCount(3);
+
+  await poserEspace(page, "c'est quoi un seuil critique");
+  await expect(historique.locator(".sna-assistante").last()).toContainText("70");
+  await page.locator('[data-niveau="expert"]').click();
+  await poserEspace(page, "c'est quoi un seuil critique");
+  await expect(historique.locator(".sna-assistante").last()).toContainText("configurables");
+
+  await poserEspace(page, "fais une analyse territoriale");
+  await expect(historique.locator(".sna-assistante").last().locator(".sna-graphe canvas")).toHaveCount(1);
+});
+
+test("espace Sokhna Ci AI : l'avatar obéit aux ordres dans sa scène, change de tenue et peut être masqué", async ({ page }) => {
+  await ouvrirEspace(page);
+  const acteur = page.locator("#sna-acteur");
+  await expect(acteur.locator(".sokhnaci-svg")).toHaveCount(1);
+
+  await poserEspace(page, "viens ici");
+  await expect.poll(() => acteur.evaluate((e) => Number(e.style.getPropertyValue("--echelle")))).toBeGreaterThan(1.1);
+  await poserEspace(page, "marche");
+  await expect(acteur).toHaveClass(/walking/, { timeout: 8000 });
+  await poserEspace(page, "arrête-toi");
+  await expect(acteur).not.toHaveClass(/walking/, { timeout: 8000 });
+  await poserEspace(page, "assieds-toi");
+  await expect(acteur).toHaveClass(/assise/);
+  await poserEspace(page, "lève-toi");
+  await expect(acteur).not.toHaveClass(/assise/);
+  await poserEspace(page, "danse");
+  await expect(acteur).toHaveClass(/danse/);
+  await poserEspace(page, "présente les résultats");
+  await expect(page.locator("#sna-historique .sna-assistante").last()).toContainText("Salaamalekum");
+
+  await page.locator("#sna-tenue").selectOption("bazin");
+  await expect(page.locator("html")).toHaveAttribute("data-tenue", "bazin");
+  await page.locator("#sna-avatar-bascule").click();
+  await expect(page.locator("#sna")).toHaveClass(/sans-avatar/);
+  await expect(page.locator(".sna-scene")).toBeHidden();
+  await poserEspace(page, "les meilleurs districts");
+  await expect(page.locator("#sna-historique .sna-assistante").last()).toContainText("meilleurs");
+});
+
+test("espace Sokhna Ci AI : rapports Word, PDF et Excel, export de la conversation et mémoire locale", async ({ page }) => {
+  await ouvrirEspace(page);
+  const [word] = await Promise.all([page.waitForEvent("download"), page.locator('[data-rapport="word"]').click()]);
+  expect(word.suggestedFilename()).toMatch(/^Rapport_completude_.*\.doc$/);
+  const [excel] = await Promise.all([page.waitForEvent("download"), page.locator('[data-rapport="excel"]').click()]);
+  expect(excel.suggestedFilename()).toMatch(/^Rapport_completude_.*\.(xlsx|csv)$/);
+  await expect(page.locator("#sna-note-rapport")).not.toHaveText("");
+
+  await poserEspace(page, "statistiques");
+  const [conversation] = await Promise.all([page.waitForEvent("download"), page.locator("#sna-exporter-conv").click()]);
+  expect(conversation.suggestedFilename()).toMatch(/^Conversation_Sokhna_Ci_.*\.md$/);
+
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await ouvrirEspace(page);
+  await expect(page.locator("#sna-historique")).toContainText("statistiques");
+  await page.locator("#sna-nouvelle").click();
+  await expect(page.locator("#sna-historique .sna-utilisateur")).toHaveCount(0);
+});
+
+test("espace Sokhna Ci AI : fichiers joints analysés localement et images signalées comme non interprétées", async ({ page }) => {
+  await ouvrirEspace(page);
+  await page.setInputFiles("#sna-fichier", { name: "test.csv", mimeType: "text/csv", buffer: Buffer.from("district;taux\nA;10\nB;30\nC;50\n") });
+  await expect(page.locator("#sna-historique")).toContainText("J’ai lu « test.csv » : 3 lignes et 2 colonnes");
+  await expect(page.locator("#sna-historique .sna-assistante").last().locator("table")).toContainText("30");
+  await poserEspace(page, "cherche B dans le fichier");
+  await expect(page.locator("#sna-historique .sna-assistante").last()).toContainText("1 ligne");
+  await page.setInputFiles("#sna-image", { name: "photo.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgo=", "base64") });
+  await expect(page.locator("#sna-historique")).toContainText("ne sais pas encore interpréter les images");
+});
+
+test("espace Sokhna Ci AI : accessibilité WCAG, responsive et mode sombre", async ({ page }) => {
+  const axe = () => new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]);
+  await ouvrirEspace(page);
+  await poserEspace(page, "fais un graphique des régions");
+  await expect(page.locator(".sna-graphe canvas")).toHaveCount(1);
+  const v1 = (await axe().analyze()).violations;
+  expect(v1.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+
+  await page.locator("#btn-theme").click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.waitForTimeout(700);
+  const v2 = (await axe().analyze()).violations;
+  expect(v2.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+
+  await page.setViewportSize({ width: 390, height: 780 });
+  const debordement = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(debordement).toBeLessThanOrEqual(1);
+  await page.setViewportSize({ width: 820, height: 1000 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+});
+
+test("modèle de langage facultatif : réponse acceptée si les chiffres sont vérifiés, rejetée sinon", async ({ page }) => {
+  await page.addInitScript(() => { window.__SOKHNACI_ASSISTANT_URL__ = "https://assistant.test/api"; });
+  let mode = "vrai";
+  await page.route("https://assistant.test/**", async (route) => {
+    if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type" } });
+    const { faits } = JSON.parse(route.request().postData());
+    const texte = mode === "vrai"
+      ? `Selon l’extraction du ${faits.extraction_dhis2}, le taux moyen des districts est de ${String(faits.taux_moyen_districts).replace(".", ",")} %. Cela reste en dessous du seuil de ${faits.seuils.conforme} %.`
+      : "Le taux moyen est de 99,9 % selon mes calculs.";
+    return route.fulfill({ status: 200, contentType: "application/json", headers: { "Access-Control-Allow-Origin": "*" }, body: JSON.stringify({ texte }) });
+  });
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await ouvrirEspace(page);
+  await poserEspace(page, "blabla zorglub");
+  const derniere = page.locator("#sna-historique .sna-assistante").last();
+  await expect(derniere).toContainText("Selon l’extraction du");
+  await expect(derniere.locator(".sna-sources")).toContainText("modèle de langage", { useInnerText: false });
+  mode = "faux";
+  await poserEspace(page, "gloubi boulga");
+  await expect(page.locator("#sna-historique .sna-assistante").last()).toContainText("Je n’ai pas bien saisi");
+  await expect(page.locator("#sna-historique")).not.toContainText("99,9");
+});
+
+test("espace Sokhna Ci AI : cartes de compétences et ouverture depuis la carte flottante", async ({ page }) => {
+  await page.locator(".sokhnaci-ask input").fill("fais un graphique des régions");
+  await page.locator(".sokhnaci-ask input").press("Enter");
+  await expect(page.locator("#sna")).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Sokhna Ci AI/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#sna-historique .sna-assistante").last().locator(".sna-graphe canvas")).toHaveCount(1);
+
+  await page.locator(".sna-competence", { hasText: "Historique" }).click();
+  await expect(page.locator("#sna-historique .sna-assistante").last().locator("table")).toContainText("16 novembre 2026");
+  await page.locator(".sna-competence", { hasText: "Comparaisons" }).click();
+  await expect(page.locator("#sna-suggestions button").first()).toContainText("compare");
+  await page.locator("#sna-suggestions button").first().click();
+  await expect(page.locator("#sna-historique .sna-assistante").last()).toContainText("devance");
+});

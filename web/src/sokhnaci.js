@@ -1,5 +1,6 @@
-import { creerSituation, repondre, versAffichage, versOral } from "./sokhnaci-dialogue.js";
-import { detecterCommande, phraseAction } from "./sokhnaci-actions.js";
+import { creerSituation, versAffichage, versOral } from "./sokhnaci-dialogue.js";
+import { phraseAction } from "./sokhnaci-actions.js";
+import { interpreterEntree } from "./sokhnaci-cerveau.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
 const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
@@ -30,6 +31,8 @@ let statutVoix = null;
 let acteur = null;
 let pointeur = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 let contexteAudio = null;
+let volume = 1;
+const avatarsExternes = new Set();
 const VITESSE_MARCHE = 120;
 let fileSynthese = Promise.resolve();
 const syntheses = new Map();
@@ -54,9 +57,9 @@ function tendanceRecente(serie) {
   return null;
 }
 
-const DEFS_WAX = `<svg class="sokhnaci-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"><defs><pattern id="sok-wax" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="#f2a31b"/><circle cx="4" cy="4" r="3.3" fill="#17365d"/><circle cx="4" cy="4" r="1.3" fill="#f6e3b0"/><path d="M12 8l3 3-3 3-3-3z" fill="#c2362b"/><circle cx="12" cy="2" r="1.1" fill="#1b7f4f"/><circle cx="2" cy="13" r="1.1" fill="#1b7f4f"/></pattern></defs></svg>`;
+const DEFS_WAX = `<svg class="sokhnaci-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"><defs><pattern id="sok-wax" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="#f2a31b"/><circle cx="4" cy="4" r="3.3" fill="#17365d"/><circle cx="4" cy="4" r="1.3" fill="#f6e3b0"/><path d="M12 8l3 3-3 3-3-3z" fill="#c2362b"/><circle cx="12" cy="2" r="1.1" fill="#1b7f4f"/><circle cx="2" cy="13" r="1.1" fill="#1b7f4f"/></pattern><pattern id="sok-ankara" width="18" height="18" patternUnits="userSpaceOnUse"><rect width="18" height="18" fill="#1b4fa3"/><circle cx="9" cy="9" r="6.5" fill="#d6336c"/><circle cx="9" cy="9" r="4" fill="#fff4d6"/><circle cx="9" cy="9" r="1.8" fill="#1b4fa3"/><path d="M0 0l4 4M18 0l-4 4M0 18l4-4M18 18l-4-4" stroke="#f59f00" stroke-width="1.6"/></pattern><pattern id="sok-bazin" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="14" height="14" fill="#233f8f"/><path d="M0 14L14 0M-3 3L3 -3M11 17L17 11" stroke="#e8c963" stroke-width=".7" opacity=".75"/><path d="M7 3.5l2 3.5-2 3.5-2-3.5z" fill="#e8c963"/></pattern></defs></svg>`;
 
-function svgMarkup(decoratif = false) {
+export function svgMarkup(decoratif = false) {
   return `<svg class="sokhnaci-svg" viewBox="0 0 112 112" ${decoratif ? 'aria-hidden="true"' : 'role="img" aria-label="Sokhnaci, guide du tableau de bord"'}>
     <ellipse class="baby-shadow" cx="56" cy="108" rx="28" ry="4"/>
     <g class="sok-leg sok-leg-l"><rect class="baby-skin" x="47" y="94" width="6" height="11" rx="2.5"/><ellipse class="sok-shoe" cx="48" cy="106.5" rx="5.5" ry="2.6"/></g>
@@ -118,6 +121,7 @@ async function choisirVoix() {
 // Tout est automatique : préchargement en arrière-plan, cache persistant (téléchargement une seule fois),
 // nouvelles tentatives, hébergeur de secours, et retour à la voix de l'appareil au moindre problème.
 function annoncerVoix(texte, duree = 0) {
+  emettre("voix", { texte });
   if (!statutVoix) return;
   statutVoix.textContent = texte;
   if (duree) setTimeout(() => { if (statutVoix.textContent === texte) statutVoix.textContent = ""; }, duree);
@@ -211,17 +215,26 @@ function jouerBlob(blob) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    audio.volume = volume;
     audioCourant = audio;
     let delier = () => {};
     const fin = (ok) => { delier(); URL.revokeObjectURL(url); resolve(ok); };
-    audio.onplaying = () => { delier = lierBouche(audio); };
+    audio.onplaying = () => { delier = lierBouche(audio); emettre("etat", { etat: "parle" }); };
     audio.onended = () => fin(true);
     audio.onerror = () => fin(false);
     audio.play().catch(() => fin(false));
   });
 }
 
-function avatars() { return acteur ? [widget, acteur.el] : [widget]; }
+function avatars() { return [widget, ...(acteur ? [acteur.el] : []), ...avatarsExternes].filter(Boolean); }
+function emettre(type, detail = {}) { document.dispatchEvent(new CustomEvent("sokhnaci:evenement", { detail: { type, ...detail } })); }
+export function lierAvatarExterne(element) { avatarsExternes.add(element); }
+export function delierAvatarExterne(element) { avatarsExternes.delete(element); }
+export function definirVolume(valeur) {
+  volume = Math.max(0, Math.min(1, Number(valeur)));
+  if (audioCourant) audioCourant.volume = volume;
+}
+export function lireVolume() { return volume; }
 function definirParole(actif, geste = "") {
   for (const element of avatars()) {
     element.classList.toggle("speaking", actif);
@@ -265,6 +278,7 @@ function lierBouche(audio) {
 }
 
 function marquerPhrase(index) {
+  emettre("phrase", { index });
   const bulle = widget?.querySelector(".sokhnaci-bubble");
   if (!bulle) return;
   bulle.querySelectorAll(".sok-phrase.actif").forEach((element) => element.classList.remove("actif"));
@@ -292,9 +306,10 @@ function essayerAudio(url) {
   if (audiosAbsents.has(url)) return Promise.resolve(false);
   return new Promise((resolve) => {
     const audio = new Audio(url);
+    audio.volume = volume;
     audioCourant = audio;
     let delier = () => {};
-    audio.onplaying = () => { delier = lierBouche(audio); };
+    audio.onplaying = () => { delier = lierBouche(audio); emettre("etat", { etat: "parle" }); };
     audio.onended = () => { delier(); resolve(true); };
     audio.onerror = () => { delier(); audiosAbsents.add(url); resolve(false); };
     audio.play().catch(() => resolve(false));
@@ -314,10 +329,11 @@ async function jouerVoix(segment) {
       if (voix) parole.voice = voix;
       parole.rate = 0.94;
       parole.pitch = feminine ? 1.04 : 1.14;
+      parole.volume = volume;
       const securite = setTimeout(resolve, Math.max(3500, segment.oral.length * 95));
       const fin = () => { clearTimeout(securite); resolve(); };
       parole.onend = parole.onerror = fin;
-      parole.onstart = () => { for (const element of avatars()) element.classList.add("speaking"); };
+      parole.onstart = () => { for (const element of avatars()) element.classList.add("speaking"); emettre("etat", { etat: "parle" }); };
       window.speechSynthesis.speak(parole);
     } catch {
       resolve();
@@ -332,6 +348,7 @@ async function lire(segments) {
   for (const [index, segment] of segments.entries()) {
     if (id !== lectureId) return;
     definirParole(true, segment.geste || "");
+    emettre("etat", { etat: "prepare" });
     marquerPhrase(index);
     let joue = false;
     if (segment.audio) joue = await jouerAudio(segment.audio);
@@ -341,7 +358,7 @@ async function lire(segments) {
     }
     if (!joue && id === lectureId) await jouerVoix(segment);
   }
-  if (id === lectureId) { definirParole(false); marquerPhrase(null); }
+  if (id === lectureId) { definirParole(false); marquerPhrase(null); emettre("etat", { etat: "attente" }); emettre("fin"); }
 }
 
 async function attendrePuisParler() {
@@ -355,6 +372,12 @@ async function attendrePuisParler() {
   }
   parler();
 }
+
+export function lireDialogue(dialogue) {
+  const segments = dialogue.segments.map((segment) => ({ ...segment, affichage: versAffichage(segment.texte), oral: versOral(segment.texte) }));
+  return lire(segments);
+}
+export { arreterLecture };
 
 function parler() {
   if (!voiceEnabled || !segmentsCourants.length) return;
@@ -486,6 +509,12 @@ function executerCommande(commande) {
       arreterMouvement();
       etatTemporaire("listening", 6000);
       break;
+    case "marche":
+      allerVers(Math.random() * Math.max(0, window.innerWidth - 200));
+      break;
+    case "presente":
+      document.dispatchEvent(new CustomEvent("sokhnaci:ouvrir-espace", { detail: { question: "présente les résultats" } }));
+      return true;
     case "montre": {
       const element = commande.cible ? document.querySelector(commande.cible.selecteur) : null;
       if (element) {
@@ -551,10 +580,14 @@ function render(model, { speak = false } = {}) {
 
 function poserQuestion(texte) {
   if (!modeleCourant) return;
-  const commande = detecterCommande(texte);
-  if (commande && executerCommande(commande)) return;
+  const entree = interpreterEntree(texte, modeleCourant);
+  if (entree.commande && executerCommande(entree.commande)) return;
+  if (entree.dialogue?.visuel || entree.dialogue?.action) {
+    document.dispatchEvent(new CustomEvent("sokhnaci:ouvrir-espace", { detail: { question: texte } }));
+    return;
+  }
   marcher(2200);
-  afficherDialogue(repondre(texte, modeleCourant), null, { speak: voiceEnabled });
+  afficherDialogue(entree.dialogue, null, { speak: voiceEnabled });
 }
 
 function message(texte, emotion = "neutre") {
@@ -582,50 +615,59 @@ async function microDetecte() {
   }
 }
 
-async function ecouterQuestion(bouton) {
+export function reconnaissanceDisponible() { return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition); }
+export function messageMicro(code) {
+  return `${code in MESSAGES_MICRO ? MESSAGES_MICRO[code] : "Le micro ne répond pas."} ${CONSEIL_SAISIE}`;
+}
+
+// Écoute vocale commune au widget et à l'espace Sokhna Ci AI.
+export async function demarrerEcoute({ onDebut, onTexte, onFinal, onFin, onErreur }) {
   const Reconnaissance = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!Reconnaissance) {
-    message(`Ce navigateur ne gère pas la dictée vocale. Utilisez Chrome ou Edge. ${CONSEIL_SAISIE}`);
-    return;
-  }
-  if (ecouteEnCours) { ecouteEnCours.stop(); return; }
+  if (!Reconnaissance) { onErreur?.("navigateur"); return null; }
   arreterLecture();
-  if (!(await microDetecte())) {
-    message(`${MESSAGES_MICRO["audio-capture"]} ${CONSEIL_SAISIE}`);
-    return;
-  }
+  if (!(await microDetecte())) { onErreur?.("audio-capture"); return null; }
   const reconnaissance = new Reconnaissance();
   reconnaissance.lang = "fr-FR";
   reconnaissance.interimResults = true;
   reconnaissance.continuous = false;
-  const champ = widget.querySelector(".sokhnaci-ask input");
   let finale = "";
   let erreur = false;
-  reconnaissance.onstart = () => {
-    widget.classList.add("listening");
-    bouton.setAttribute("aria-pressed", "true");
-    widget.querySelector(".sokhnaci-state").textContent = "Je vous écoute…";
-  };
+  reconnaissance.onstart = () => { for (const element of avatars()) element.classList.add("listening"); emettre("etat", { etat: "ecoute" }); onDebut?.(); };
   reconnaissance.onresult = (event) => {
     let texte = "";
     for (const resultat of event.results) texte += resultat[0].transcript;
-    champ.value = texte;
+    onTexte?.(texte);
     if (event.results[event.results.length - 1].isFinal) finale = texte;
   };
-  reconnaissance.onerror = (event) => {
-    erreur = true;
-    const conseil = event.error in MESSAGES_MICRO ? MESSAGES_MICRO[event.error] : "Le micro ne répond pas.";
-    if (conseil) message(`${conseil} ${CONSEIL_SAISIE}`);
-  };
+  reconnaissance.onerror = (event) => { erreur = true; onErreur?.(event.error); };
   reconnaissance.onend = () => {
-    widget.classList.remove("listening");
-    bouton.setAttribute("aria-pressed", "false");
-    ecouteEnCours = null;
-    if (finale.trim()) { champ.value = ""; poserQuestion(finale); }
-    else if (!erreur) message(`Je n’ai rien entendu. ${CONSEIL_SAISIE}`);
+    for (const element of avatars()) element.classList.remove("listening");
+    emettre("etat", { etat: "attente" });
+    if (finale.trim()) onFinal?.(finale);
+    onFin?.({ texte: finale, erreur });
   };
-  ecouteEnCours = reconnaissance;
-  try { reconnaissance.start(); } catch { ecouteEnCours = null; message(`Le micro n’a pas pu démarrer. ${CONSEIL_SAISIE}`); }
+  try { reconnaissance.start(); } catch { onErreur?.("demarrage"); return null; }
+  return { arreter: () => reconnaissance.stop() };
+}
+
+async function ecouterQuestion(bouton) {
+  if (!reconnaissanceDisponible()) {
+    message(`Ce navigateur ne gère pas la dictée vocale. Utilisez Chrome ou Edge. ${CONSEIL_SAISIE}`);
+    return;
+  }
+  if (ecouteEnCours) { ecouteEnCours.arreter(); return; }
+  const champ = widget.querySelector(".sokhnaci-ask input");
+  ecouteEnCours = await demarrerEcoute({
+    onDebut: () => { bouton.setAttribute("aria-pressed", "true"); widget.querySelector(".sokhnaci-state").textContent = "Je vous écoute…"; },
+    onTexte: (texte) => { champ.value = texte; },
+    onFinal: (texte) => { champ.value = ""; poserQuestion(texte); },
+    onFin: ({ texte, erreur }) => {
+      bouton.setAttribute("aria-pressed", "false");
+      ecouteEnCours = null;
+      if (!texte.trim() && !erreur) message(`Je n’ai rien entendu. ${CONSEIL_SAISIE}`);
+    },
+    onErreur: (code) => { if (MESSAGES_MICRO[code] !== null) message(messageMicro(code)); },
+  });
 }
 
 function majBoutonVoix(bouton) {

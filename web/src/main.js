@@ -12,6 +12,7 @@ import {
   renderDistricts, apresRenduDistricts,
   renderQualite, apresRenduQualite,
 } from "./tabs.js";
+import { apresRenduEspace, poserDansEspace, renderEspace } from "./sokhnaci-espace.js";
 
 const RENDUS = {
   vue: { render: renderVue, apres: apresRenduVue },
@@ -19,6 +20,7 @@ const RENDUS = {
   evolution: { render: renderEvolution, apres: apresRenduEvolution },
   districts: { render: renderDistricts, apres: apresRenduDistricts },
   qualite: { render: renderQualite, apres: apresRenduQualite },
+  assistante: { render: renderEspace, apres: apresRenduEspace },
 };
 const SELECTORS = {
   extraction: "sel-extraction",
@@ -87,6 +89,7 @@ function afficherOnglet(name) {
   content.innerHTML = definition.render(modeleCourant);
   if (definition.apres) definition.apres(modeleCourant, themeCourant);
   if (ongletCourant !== "vue") replierSokhnaci();
+  document.body.classList.toggle("sna-actif", ongletCourant === "assistante");
   content.setAttribute("aria-busy", "false");
   document.querySelectorAll('[role="tab"][data-tab]').forEach((button) => {
     const active = button.dataset.tab === ongletCourant;
@@ -174,6 +177,11 @@ function selectionInitiale() {
   if (REINITIALISER_APRES_RECHARGEMENT) requestAnimationFrame(() => window.scrollTo(0, 0));
 }
 function initTabs() {
+  document.addEventListener("sokhnaci:ouvrir-espace", (evenement) => {
+    ongletCourant = "assistante";
+    afficherOnglet("assistante");
+    poserDansEspace(evenement.detail?.question || "");
+  });
   document.querySelectorAll('[role="tab"][data-tab]').forEach((button) => {
     button.addEventListener("click", () => { ongletCourant = button.dataset.tab; afficherOnglet(ongletCourant); });
     button.addEventListener("keydown", (event) => {

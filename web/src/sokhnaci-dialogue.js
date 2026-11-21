@@ -47,10 +47,10 @@ function dateParties(iso) {
   return { annee, mois, jour };
 }
 
-const T = (x) => (x === null || x === undefined ? "une valeur non disponible" : `«T:${x}»`);
-const E = (x) => `«E:${x}»`;
-const P = (x) => `«P:${Math.abs(x)}»`;
-const D = (iso) => `«D:${iso}»`;
+export const T = (x) => (x === null || x === undefined ? "une valeur non disponible" : `«T:${x}»`);
+export const E = (x) => `«E:${x}»`;
+export const P = (x) => `«P:${Math.abs(x)}»`;
+export const D = (iso) => `«D:${iso}»`;
 
 export function versAffichage(texte) {
   return texte.replace(MARQUEUR, (_, type, valeur) => {
@@ -78,41 +78,41 @@ function choisir(cle, options) {
   derniers.set(cle, index);
   return options[index];
 }
-function segment(texte, geste = null, langue = "fr", audio = null) { return { langue, texte, geste, audio }; }
+export function segment(texte, geste = null, langue = "fr", audio = null) { return { langue, texte, geste, audio }; }
 function moyenne(valeurs) {
   const utiles = valeurs.filter((v) => v !== null && v !== undefined);
   return utiles.length ? utiles.reduce((a, b) => a + b, 0) / utiles.length : null;
 }
-const labelRegion = (nom) => String(nom).replace(/^DRS[_ ]/, "");
+export const labelRegion = (nom) => String(nom).replace(/^DRS[_ ]/, "");
 const normaliser = (texte) => String(texte ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-function niveau(taux, seuils) {
+export function niveau(taux, seuils) {
   if (taux === null || taux === undefined) return "sans niveau";
   if (taux < seuils.critique) return "en rouge, donc prioritaire";
   if (taux < seuils.conforme) return "en orange, à surveiller";
   return "en vert, conforme";
 }
-function emotionPour(taux, seuils) {
+export function emotionPour(taux, seuils) {
   if (taux === null || taux === undefined) return "neutre";
   if (taux < seuils.critique) return "preoccupee";
   if (taux >= seuils.conforme) return "felicitations";
   return "encourageante";
 }
-function nomFormulaire(nom) {
+export function nomFormulaire(nom) {
   const net = String(nom).replace(/^R\d+_/, "").replace(/_/g, " ");
   if (net.length <= 70) return net;
   const coupe = net.slice(0, 70);
   return `${coupe.slice(0, coupe.lastIndexOf(" "))}…`;
 }
-function liste(elements) {
+export function liste(elements) {
   if (elements.length <= 1) return elements.join("");
   return `${elements.slice(0, -1).join(", ")} et ${elements.at(-1)}`;
 }
-function toutesDistricts(model) { return (model.toutesRegions || []).flatMap((region) => region.districts); }
-function periodeTexte(model) {
+export function toutesDistricts(model) { return (model.toutesRegions || []).flatMap((region) => region.districts); }
+export function periodeTexte(model) {
   const periode = model.selection?.periode;
   return !periode || periode === "Toutes les périodes" ? "tous les mois suivis" : periode;
 }
-function cadreDonnees(model) {
+export function cadreDonnees(model) {
   return `Selon l’extraction du ${D(model.semaineCle)}, pour ${periodeTexte(model)}`;
 }
 function joursDepuis(iso) {
@@ -251,8 +251,8 @@ function entiteCitee(liste_, question, cle) {
   }
   return meilleur;
 }
-function reponse(emotion, segments, suivi = null) { return { etat: "parle", emotion, segments, suivi }; }
-function variationPhrase(variation, comparaison) {
+export function reponse(emotion, segments, suivi = null) { return { etat: "parle", emotion, segments, suivi }; }
+export function variationPhrase(variation, comparaison) {
   if (variation === null || variation === undefined) return null;
   if (variation >= 0.5) return `C’est ${P(variation)} de mieux que ${comparaison}.`;
   if (variation <= -0.5) return `C’est ${P(variation)} de moins que ${comparaison}.`;
@@ -493,8 +493,8 @@ export function repondre(questionBrute, model) {
 
   // Question trop vague : je donne le point national en une phrase, puis UNE précision.
   const national = moyenne(model.districts.map((d) => d.tauxMoyen));
-  return reponse("neutre", [
+  return { incomprise: true, ...reponse("neutre", [
     segment(`Je n’ai pas bien saisi, mais voici l’essentiel : le taux moyen est de ${T(national)}, ${niveau(national, seuils)}.`, "pointer_ecran"),
     segment("Parlez-vous d’une région, d’un district ou d’un formulaire ?", "inclinaison_ecoute"),
-  ], "Région, district ou formulaire ?");
+  ], "Région, district ou formulaire ?") };
 }
