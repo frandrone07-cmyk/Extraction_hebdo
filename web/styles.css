@@ -441,11 +441,11 @@ html[data-theme="dark"] .status-chip.conforme, html[data-theme="dark"] .empty-st
 .sokhnaci-svg .baby-arm { transform-box: view-box; }
 .sokhnaci-svg .baby-arm-left { transform-origin: 40px 70px; animation: baby-wave 3s ease-in-out infinite; }
 .sokhnaci-svg .baby-arm-right { transform-origin: 72px 70px; animation: baby-wave 3s ease-in-out -1.5s infinite; }
-.sokhnaci-widget.speaking .baby-mouth-smile { display: none; }
-.sokhnaci-widget.speaking .baby-mouth-open { display: block; transform-origin: center; animation: speaking-mouth .28s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking .baby-arm-left { animation: baby-gesture .46s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking .baby-arm-right { animation: baby-gesture .46s ease-in-out -.23s infinite alternate; }
-.sokhnaci-widget.speaking .baby-shirt { animation: baby-bounce .7s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-mouth-smile { display: none; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-mouth-open { display: block; transform-origin: center; animation: speaking-mouth .28s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-arm-left { animation: baby-gesture .46s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-arm-right { animation: baby-gesture .46s ease-in-out -.23s infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking .baby-shirt { animation: baby-bounce .7s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
 .sokhnaci-bubble { max-height: 114px; margin: 0; overflow: auto; color: var(--text); font-size: 10px; line-height: 1.55; scrollbar-width: thin; }
 .sokhnaci-actions { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 7px; margin-top: 2px; }
 .sokhnaci-actions button { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-soft); color: var(--muted); font-size: 9px; font-weight: 700; cursor: pointer; }
@@ -489,25 +489,25 @@ body.tv .sokhnaci-widget { display: none; }
 .sokhnaci-svg .sok-body { transform-origin: 56px 100px; }
 .sokhnaci-svg .sok-head { transform-origin: 56px 64px; }
 .sokhnaci-svg .sok-leg { transform-origin: 56px 94px; }
-.sokhnaci-widget.walking .sok-leg-l { animation: sok-pas .5s ease-in-out infinite alternate; }
-.sokhnaci-widget.walking .sok-leg-r { animation: sok-pas-inverse .5s ease-in-out infinite alternate; }
-.sokhnaci-widget.walking .sok-body { animation: sok-rebond .25s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).walking .sok-leg-l { animation: sok-pas .5s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).walking .sok-leg-r { animation: sok-pas-inverse .5s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).walking .sok-body { animation: sok-rebond .25s ease-in-out infinite alternate; }
 .sokhnaci-widget.walking:not(.entering) .sokhnaci-character { animation: sok-va-et-vient 2.6s ease-in-out; }
 .sokhnaci-widget.entering { animation: sok-entree 2.4s cubic-bezier(.3, .7, .3, 1) both; }
-.sokhnaci-widget.speaking[data-geste="pointer_ecran"] .baby-arm-right { animation: sok-pointe 1.1s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="compter_doigts"] .baby-arm-right { animation: sok-compte .4s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="pouce_leve"] .baby-arm-right { animation: sok-pouce .6s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="salut_main"] .baby-arm-right { animation: sok-salut .35s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="main_sur_coeur"] .baby-arm-left { animation: sok-coeur 1s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="geste_ouvert"] .baby-arm-left { animation: sok-ouvre-g .8s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="geste_ouvert"] .baby-arm-right { animation: sok-ouvre-d .8s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="geste_rassurant"] .baby-arm-left { animation: sok-rassure-g .8s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="geste_rassurant"] .baby-arm-right { animation: sok-rassure-d .8s ease-in-out -.4s infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="mains_jointes"] .baby-arm-left { animation: none; transform: rotate(-45deg); }
-.sokhnaci-widget.speaking[data-geste="mains_jointes"] .baby-arm-right { animation: none; transform: rotate(45deg); }
-.sokhnaci-widget.speaking[data-geste="hochement_tete"] .sok-head { animation: sok-hoche .45s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="inclinaison_ecoute"] .sok-head, .sokhnaci-widget.listening .sok-head { animation: sok-ecoute 1.4s ease-in-out infinite alternate; }
-.sokhnaci-widget.speaking[data-geste="sourire"] .sok-head { animation: sok-hoche .9s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="pointer_ecran"] .baby-arm-right { animation: sok-pointe 1.1s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="compter_doigts"] .baby-arm-right { animation: sok-compte .4s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="pouce_leve"] .baby-arm-right { animation: sok-pouce .6s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="salut_main"] .baby-arm-right { animation: sok-salut .35s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="main_sur_coeur"] .baby-arm-left { animation: sok-coeur 1s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="geste_ouvert"] .baby-arm-left { animation: sok-ouvre-g .8s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="geste_ouvert"] .baby-arm-right { animation: sok-ouvre-d .8s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="geste_rassurant"] .baby-arm-left { animation: sok-rassure-g .8s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="geste_rassurant"] .baby-arm-right { animation: sok-rassure-d .8s ease-in-out -.4s infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="mains_jointes"] .baby-arm-left { animation: none; transform: rotate(-45deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="mains_jointes"] .baby-arm-right { animation: none; transform: rotate(45deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="hochement_tete"] .sok-head { animation: sok-hoche .45s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="inclinaison_ecoute"] .sok-head, :is(.sokhnaci-widget, .sokhnaci-acteur).listening .sok-head { animation: sok-ecoute 1.4s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).speaking[data-geste="sourire"] .sok-head { animation: sok-hoche .9s ease-in-out infinite alternate; }
 .sokhnaci-ask .sokhnaci-mic { flex: none; width: 34px; padding: 0; font-size: 14px; }
 .sokhnaci-ask .sokhnaci-mic[aria-pressed="true"] { border-color: #c2362b; background: #fff0ed; animation: sok-micro 1s ease-in-out infinite alternate; }
 @keyframes sok-pas { from { transform: rotate(-22deg); } to { transform: rotate(22deg); } }
@@ -527,6 +527,35 @@ body.tv .sokhnaci-widget { display: none; }
 @keyframes sok-hoche { from { transform: translateY(0) rotate(-1deg); } to { transform: translateY(2px) rotate(1deg); } }
 @keyframes sok-ecoute { from { transform: rotate(3deg); } to { transform: rotate(8deg); } }
 @keyframes sok-micro { from { box-shadow: 0 0 0 0 rgba(194, 54, 43, .45); } to { box-shadow: 0 0 0 6px rgba(194, 54, 43, 0); } }
+/* Acteur : l'avatar sort de la carte, marche, s'assoit, danse */
+.sokhnaci-acteur { position: fixed; bottom: 10px; left: 0; z-index: 36; width: 150px; height: 150px; pointer-events: none; will-change: transform; }
+.sokhnaci-acteur-sens { width: 100%; height: 100%; transform: scaleX(var(--sens, 1)); }
+.sokhnaci-acteur .sokhnaci-svg { width: 150px; height: 150px; overflow: visible; }
+.sokhnaci-widget.acteur-dehors .sokhnaci-character { visibility: hidden; }
+body.tv .sokhnaci-acteur { display: none; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).assise .sok-body { animation: none; transform: translateY(9px); }
+:is(.sokhnaci-widget, .sokhnaci-acteur).assise .sok-leg-l { transform: rotate(78deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur).assise .sok-leg-r { transform: rotate(-78deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur).danse .sok-body { animation: sok-danse .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).danse .baby-arm-left { animation: sok-danse-bras-g .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).danse .baby-arm-right { animation: sok-danse-bras-d .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).danse .sok-leg-l { animation: sok-pas .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).danse .sok-leg-r { animation: sok-pas-inverse .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).danse .sok-head { animation: sok-hoche .42s ease-in-out infinite alternate; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).grand-sourire .baby-mouth-smile { display: block; stroke-width: 2.8; transform: scale(1.35, 1.5); transform-box: fill-box; transform-origin: center; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).grand-sourire .baby-cheek { opacity: .95; }
+:is(.sokhnaci-widget, .sokhnaci-acteur)[data-sync="audio"] .baby-mouth-open { animation: none; transform: scaleY(var(--bouche, .4)); transform-box: fill-box; transform-origin: center; }
+.sokhnaci-svg .sok-body { animation: sok-respire 4.4s ease-in-out infinite; }
+.sokhnaci-svg .sok-head { animation: sok-tete-libre 9s ease-in-out infinite; }
+:is(.sokhnaci-widget, .sokhnaci-acteur) .sokhnaci-svg { transition: transform 1.4s ease-in-out; }
+:is(.sokhnaci-widget, .sokhnaci-acteur).posture-a .sokhnaci-svg { transform: translateX(1.6px) rotate(.9deg); }
+:is(.sokhnaci-widget, .sokhnaci-acteur).posture-b .sokhnaci-svg { transform: translateX(-1.6px) rotate(-.9deg); }
+.sokhnaci-mise-en-evidence { outline: 3px solid #f2a31b; outline-offset: 4px; transition: outline-color .3s; }
+@keyframes sok-respire { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.012, 1.02); } }
+@keyframes sok-tete-libre { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(1.6deg) translateY(.4px); } 65% { transform: rotate(-1.4deg); } }
+@keyframes sok-danse { from { transform: rotate(-4deg) translateY(0); } to { transform: rotate(4deg) translateY(-2px); } }
+@keyframes sok-danse-bras-g { from { transform: rotate(55deg); } to { transform: rotate(125deg); } }
+@keyframes sok-danse-bras-d { from { transform: rotate(-125deg); } to { transform: rotate(-55deg); } }
 @keyframes sokhnaci-blink { 0%, 43%, 47%, 100% { transform: scaleY(1); } 45% { transform: scaleY(.12); } }
 @keyframes speaking-mouth { from { transform: scaleY(.75); } to { transform: scaleY(1.3); } }
 

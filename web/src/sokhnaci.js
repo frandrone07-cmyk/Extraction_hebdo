@@ -1,4 +1,5 @@
 import { creerSituation, repondre, versAffichage, versOral } from "./sokhnaci-dialogue.js";
+import { detecterCommande, phraseAction } from "./sokhnaci-actions.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
 const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
@@ -26,6 +27,10 @@ let piperEnCache = false;
 let piperAbandonne = false;
 let echecsSynthese = 0;
 let statutVoix = null;
+let acteur = null;
+let pointeur = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+let contexteAudio = null;
+const VITESSE_MARCHE = 120;
 let fileSynthese = Promise.resolve();
 const syntheses = new Map();
 
@@ -49,9 +54,10 @@ function tendanceRecente(serie) {
   return null;
 }
 
-function svgMarkup() {
-  return `<svg class="sokhnaci-svg" viewBox="0 0 112 112" role="img" aria-label="Sokhnaci, guide du tableau de bord">
-    <defs><pattern id="sok-wax" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="#f2a31b"/><circle cx="4" cy="4" r="3.3" fill="#17365d"/><circle cx="4" cy="4" r="1.3" fill="#f6e3b0"/><path d="M12 8l3 3-3 3-3-3z" fill="#c2362b"/><circle cx="12" cy="2" r="1.1" fill="#1b7f4f"/><circle cx="2" cy="13" r="1.1" fill="#1b7f4f"/></pattern></defs>
+const DEFS_WAX = `<svg class="sokhnaci-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"><defs><pattern id="sok-wax" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="#f2a31b"/><circle cx="4" cy="4" r="3.3" fill="#17365d"/><circle cx="4" cy="4" r="1.3" fill="#f6e3b0"/><path d="M12 8l3 3-3 3-3-3z" fill="#c2362b"/><circle cx="12" cy="2" r="1.1" fill="#1b7f4f"/><circle cx="2" cy="13" r="1.1" fill="#1b7f4f"/></pattern></defs></svg>`;
+
+function svgMarkup(decoratif = false) {
+  return `<svg class="sokhnaci-svg" viewBox="0 0 112 112" ${decoratif ? 'aria-hidden="true"' : 'role="img" aria-label="Sokhnaci, guide du tableau de bord"'}>
     <ellipse class="baby-shadow" cx="56" cy="108" rx="28" ry="4"/>
     <g class="sok-leg sok-leg-l"><rect class="baby-skin" x="47" y="94" width="6" height="11" rx="2.5"/><ellipse class="sok-shoe" cx="48" cy="106.5" rx="5.5" ry="2.6"/></g>
     <g class="sok-leg sok-leg-r"><rect class="baby-skin" x="59" y="94" width="6" height="11" rx="2.5"/><ellipse class="sok-shoe" cx="64" cy="106.5" rx="5.5" ry="2.6"/></g>
@@ -206,11 +212,56 @@ function jouerBlob(blob) {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     audioCourant = audio;
-    const fin = (ok) => { URL.revokeObjectURL(url); resolve(ok); };
+    let delier = () => {};
+    const fin = (ok) => { delier(); URL.revokeObjectURL(url); resolve(ok); };
+    audio.onplaying = () => { delier = lierBouche(audio); };
     audio.onended = () => fin(true);
     audio.onerror = () => fin(false);
     audio.play().catch(() => fin(false));
   });
+}
+
+function avatars() { return acteur ? [widget, acteur.el] : [widget]; }
+function definirParole(actif, geste = "") {
+  for (const element of avatars()) {
+    element.classList.toggle("speaking", actif);
+    element.dataset.geste = actif ? geste : "";
+  }
+}
+function definirBouche(ouverture) {
+  for (const element of avatars()) {
+    if (ouverture === null) { element.style.removeProperty("--bouche"); delete element.dataset.sync; } else { element.style.setProperty("--bouche", String(ouverture)); element.dataset.sync = "audio"; }
+  }
+}
+
+// Synchronisation labiale en temps réel : l'ouverture de la bouche suit l'énergie réelle du son lu.
+function lierBouche(audio) {
+  try {
+    contexteAudio ||= new (window.AudioContext || window.webkitAudioContext)();
+    contexteAudio.resume?.();
+    const source = contexteAudio.createMediaElementSource(audio);
+    const analyseur = contexteAudio.createAnalyser();
+    analyseur.fftSize = 256;
+    source.connect(analyseur);
+    analyseur.connect(contexteAudio.destination);
+    const donnees = new Uint8Array(analyseur.fftSize);
+    let actif = true;
+    let lisse = 0.3;
+    const boucle = () => {
+      if (!actif) return;
+      analyseur.getByteTimeDomainData(donnees);
+      let somme = 0;
+      for (const valeur of donnees) { const centre = (valeur - 128) / 128; somme += centre * centre; }
+      const energie = Math.sqrt(somme / donnees.length);
+      lisse += (Math.min(1.7, 0.3 + energie * 9) - lisse) * 0.45;
+      definirBouche(lisse);
+      requestAnimationFrame(boucle);
+    };
+    boucle();
+    return () => { actif = false; definirBouche(null); };
+  } catch {
+    return () => {};
+  }
 }
 
 function arreterLecture() {
@@ -219,8 +270,8 @@ function arreterLecture() {
   audioCourant?.pause();
   audioCourant = null;
   if (widget) {
-    widget.classList.remove("speaking");
-    widget.dataset.geste = "";
+    definirParole(false);
+    definirBouche(null);
   }
 }
 
@@ -231,8 +282,10 @@ function essayerAudio(url) {
   return new Promise((resolve) => {
     const audio = new Audio(url);
     audioCourant = audio;
-    audio.onended = () => resolve(true);
-    audio.onerror = () => { audiosAbsents.add(url); resolve(false); };
+    let delier = () => {};
+    audio.onplaying = () => { delier = lierBouche(audio); };
+    audio.onended = () => { delier(); resolve(true); };
+    audio.onerror = () => { delier(); audiosAbsents.add(url); resolve(false); };
     audio.play().catch(() => resolve(false));
   });
 }
@@ -253,7 +306,7 @@ async function jouerVoix(segment) {
       const securite = setTimeout(resolve, Math.max(3500, segment.oral.length * 95));
       const fin = () => { clearTimeout(securite); resolve(); };
       parole.onend = parole.onerror = fin;
-      parole.onstart = () => widget?.classList.add("speaking");
+      parole.onstart = () => { for (const element of avatars()) element.classList.add("speaking"); };
       window.speechSynthesis.speak(parole);
     } catch {
       resolve();
@@ -267,8 +320,7 @@ async function lire(segments) {
   const originale = piper && !piperAbandonne && !voixChoisie ? segments.map((segment) => (segment.audio ? null : synthetiser(segment.oral, id))) : null;
   for (const [index, segment] of segments.entries()) {
     if (id !== lectureId) return;
-    widget.classList.add("speaking");
-    widget.dataset.geste = segment.geste || "";
+    definirParole(true, segment.geste || "");
     let joue = false;
     if (segment.audio) joue = await jouerAudio(segment.audio);
     if (!joue && originale?.[index]) {
@@ -277,10 +329,7 @@ async function lire(segments) {
     }
     if (!joue && id === lectureId) await jouerVoix(segment);
   }
-  if (id === lectureId) {
-    widget.classList.remove("speaking");
-    widget.dataset.geste = "";
-  }
+  if (id === lectureId) definirParole(false);
 }
 
 async function attendrePuisParler() {
@@ -298,6 +347,149 @@ async function attendrePuisParler() {
 function parler() {
   if (!voiceEnabled || !segmentsCourants.length) return;
   lire(segmentsCourants);
+}
+
+function sortirActeur() {
+  if (acteur) return;
+  const zone = widget.querySelector(".sokhnaci-character").getBoundingClientRect();
+  const element = document.createElement("div");
+  element.className = "sokhnaci-acteur";
+  element.setAttribute("aria-hidden", "true");
+  element.innerHTML = `<div class="sokhnaci-acteur-sens">${svgMarkup(true)}</div>`;
+  element.querySelector(".sokhnaci-svg").setAttribute("data-mood", widget.querySelector(".sokhnaci-svg").getAttribute("data-mood") || "attentif");
+  document.body.appendChild(element);
+  const x = Math.max(0, zone.left - 10);
+  acteur = { el: element, x, cible: x, mode: "arret", sens: -1, dernier: performance.now() };
+  widget.classList.add("acteur-dehors");
+  for (const classe of ["speaking"]) if (widget.classList.contains(classe)) element.classList.add(classe);
+  element.dataset.geste = widget.dataset.geste || "";
+  element.style.transform = `translate3d(${x}px, 0, 0)`;
+  element.style.setProperty("--sens", String(acteur.sens));
+  requestAnimationFrame(boucleActeur);
+}
+
+function rentrerActeur() {
+  if (!acteur) return;
+  acteur.el.remove();
+  acteur = null;
+  widget.classList.remove("acteur-dehors");
+}
+
+function boucleActeur(maintenant) {
+  if (!acteur) return;
+  const dt = Math.min(0.1, (maintenant - acteur.dernier) / 1000);
+  acteur.dernier = maintenant;
+  const largeurActeur = 150;
+  if (acteur.mode === "suit") {
+    const distance = 110;
+    acteur.cible = pointeur.x - largeurActeur / 2 + (acteur.x + largeurActeur / 2 > pointeur.x ? distance : -distance);
+  }
+  acteur.cible = Math.max(0, Math.min(window.innerWidth - largeurActeur, acteur.cible));
+  const ecart = acteur.cible - acteur.x;
+  const enMarche = Math.abs(ecart) > 3 && !acteur.el.classList.contains("assise");
+  if (enMarche) {
+    acteur.sens = ecart > 0 ? 1 : -1;
+    acteur.x += Math.sign(ecart) * Math.min(Math.abs(ecart), VITESSE_MARCHE * dt);
+    acteur.el.style.setProperty("--sens", String(acteur.sens));
+  } else if (acteur.mode === "va") {
+    acteur.mode = "arret";
+  }
+  acteur.el.classList.toggle("walking", enMarche);
+  acteur.el.style.transform = `translate3d(${acteur.x}px, 0, 0)`;
+  requestAnimationFrame(boucleActeur);
+}
+
+function arreterMouvement() {
+  if (acteur) { acteur.mode = "arret"; acteur.cible = acteur.x; }
+  for (const element of avatars()) element.classList.remove("walking", "danse", "listening");
+}
+
+function etatTemporaire(classe, duree) {
+  const cibles = avatars();
+  for (const element of cibles) element.classList.add(classe);
+  setTimeout(() => { for (const element of cibles) element.classList.remove(classe); }, duree);
+}
+
+function allerVers(x) {
+  sortirActeur();
+  acteur.mode = "va";
+  acteur.cible = x;
+}
+
+function executerCommande(commande) {
+  const dialogue = phraseAction(commande);
+  if (!dialogue) return false;
+  const maintenant = acteur ? acteur.x : widget.getBoundingClientRect().left;
+  switch (commande.action) {
+    case "stop":
+      arreterLecture();
+      arreterMouvement();
+      break;
+    case "rentre":
+      arreterMouvement();
+      rentrerActeur();
+      break;
+    case "viens":
+      for (const element of avatars()) element.classList.remove("assise");
+      allerVers(pointeur.x - 75);
+      break;
+    case "suis":
+      sortirActeur();
+      for (const element of avatars()) element.classList.remove("assise");
+      acteur.mode = "suit";
+      break;
+    case "avance":
+      allerVers(maintenant + (acteur?.sens ?? -1) * 220);
+      break;
+    case "recule":
+      allerVers(maintenant - (acteur?.sens ?? -1) * 160);
+      break;
+    case "tourne":
+      sortirActeur();
+      acteur.sens = commande.direction ?? acteur.sens;
+      acteur.cible = acteur.x + acteur.sens * 180;
+      acteur.mode = "va";
+      break;
+    case "demitour":
+      sortirActeur();
+      acteur.sens = -acteur.sens;
+      acteur.el.style.setProperty("--sens", String(acteur.sens));
+      break;
+    case "assis":
+      arreterMouvement();
+      for (const element of avatars()) element.classList.add("assise");
+      break;
+    case "debout":
+      for (const element of avatars()) element.classList.remove("assise");
+      break;
+    case "danse":
+      arreterMouvement();
+      for (const element of avatars()) element.classList.remove("assise");
+      etatTemporaire("danse", 7000);
+      break;
+    case "sourire":
+      etatTemporaire("grand-sourire", 4500);
+      break;
+    case "ecoute":
+      arreterMouvement();
+      etatTemporaire("listening", 6000);
+      break;
+    case "montre": {
+      const element = commande.cible ? document.querySelector(commande.cible.selecteur) : null;
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        element.classList.add("sokhnaci-mise-en-evidence");
+        setTimeout(() => element.classList.remove("sokhnaci-mise-en-evidence"), 3000);
+        const zone = element.getBoundingClientRect();
+        if (acteur) allerVers(Math.max(0, zone.left + zone.width / 2 - 75));
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  afficherDialogue(dialogue, null, { speak: voiceEnabled && commande.action !== "stop" });
+  return true;
 }
 
 function marcher(duree = 2600) {
@@ -342,6 +534,8 @@ function render(model, { speak = false } = {}) {
 
 function poserQuestion(texte) {
   if (!modeleCourant) return;
+  const commande = detecterCommande(texte);
+  if (commande && executerCommande(commande)) return;
   marcher(2200);
   afficherDialogue(repondre(texte, modeleCourant), null, { speak: voiceEnabled });
 }
@@ -439,6 +633,17 @@ export function initSokhnaci(model) {
   widget.setAttribute("aria-label", "Sokhnaci, guide vocal du tableau de bord");
   widget.innerHTML = `<div class="sokhnaci-card"><div class="sokhnaci-top"><div><p class="eyebrow">VOTRE GUIDE</p><strong>Sokhnaci</strong><span class="sokhnaci-state"></span></div><button class="sokhnaci-collapse" type="button" aria-label="Réduire Sokhnaci">−</button></div><div class="sokhnaci-content"><div class="sokhnaci-character">${svgMarkup()}</div><p class="sokhnaci-bubble" tabindex="0"></p><div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter le résumé</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button></div><div class="sokhnaci-chips" role="group" aria-label="Questions suggérées"><button type="button" data-question="fais une analyse des résultats">Analyse</button><button type="button" data-question="qui est en difficulté">Priorités</button><button type="button" data-question="les meilleurs districts">Meilleurs</button><button type="button" data-question="comment ça évolue">Évolution</button></div><form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form><p class="sokhnaci-voix-statut" role="status"></p><label class="sokhnaci-voix-choix">Voix française <select aria-label="Choisir la voix française de Sokhnaci"><option value="">Automatique (voix originale)</option></select></label></div></div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir le résumé Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
   document.body.appendChild(widget);
+  document.body.insertAdjacentHTML("beforeend", DEFS_WAX);
+  window.addEventListener("pointermove", (event) => { pointeur = { x: event.clientX, y: event.clientY }; }, { passive: true });
+  // Mouvements naturels permanents : l'avatar change subtilement de posture de temps en temps.
+  const posture = () => {
+    for (const element of avatars()) {
+      element.classList.remove("posture-a", "posture-b");
+      if (Math.random() < 0.7) element.classList.add(Math.random() < 0.5 ? "posture-a" : "posture-b");
+    }
+    setTimeout(posture, 8000 + Math.random() * 7000);
+  };
+  setTimeout(posture, 6000);
   widget.querySelector(".sokhnaci-collapse").addEventListener("click", replierSokhnaci);
   widget.querySelector(".sokhnaci-launcher").addEventListener("click", () => {
     widget.classList.remove("collapsed");

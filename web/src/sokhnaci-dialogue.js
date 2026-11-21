@@ -448,6 +448,9 @@ export function repondre(questionBrute, model) {
     ], "Détail du formulaire le plus en retard ?");
   }
 
+  if (/\b(aide|peux tu|que sais tu|que peux|comment ca marche)\b/.test(question)) {
+    return reponse("souriante", [segment("Demandez-moi la situation d’une région, d’un district ou d’un formulaire, ou bien les meilleurs et les plus en retard. Vous pouvez aussi me donner des ordres : viens ici, suis-moi, assieds-toi, danse.", "geste_ouvert")]);
+  }
   const but = intention(question) || intentionProche(question);
   if (but === "analyse") return interpreter(model);
   if (but === "meilleur") {
@@ -486,9 +489,6 @@ export function repondre(questionBrute, model) {
     ]);
   }
   if (but === "situation") return creerSituation(model);
-  if (/\b(aide|aider|peux tu|que sais tu|que peux|comment ca marche)\b/.test(question)) {
-    return reponse("souriante", [segment("Demandez-moi la situation d’une région, d’un district ou d’un formulaire, ou bien les meilleurs et les plus en retard. Vous pouvez aussi me parler au micro.", "geste_ouvert")]);
-  }
   if (suite) { const reponseSuite = suiteContexte(model, seuils); if (reponseSuite) return reponseSuite; }
 
   // Question trop vague : je donne le point national en une phrase, puis UNE précision.

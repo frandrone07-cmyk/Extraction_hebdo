@@ -324,3 +324,48 @@ test("la voix originale est automatique : aucune case à cocher et la conversati
   await expect(page.locator(".sokhnaci-bubble")).toContainText("les meilleurs districts");
   await expect(page.locator(".sokhnaci-voix-statut")).toBeHidden();
 });
+
+test("Sokhnaci obéit aux ordres : venir, s'arrêter, s'asseoir, danser, suivre et rentrer", async ({ page }) => {
+  const poser = async (question) => {
+    await page.locator(".sokhnaci-ask input").fill(question);
+    await page.locator(".sokhnaci-ask input").press("Enter");
+  };
+  const acteur = page.locator(".sokhnaci-acteur");
+  await expect(acteur).toHaveCount(0);
+
+  await page.mouse.move(300, 400);
+  await poser("viens ici");
+  await expect(acteur).toHaveCount(1);
+  await expect(page.locator(".sokhnaci-widget")).toHaveClass(/acteur-dehors/);
+  await expect(page.locator(".sokhnaci-bubble")).toContainText(/J’arrive|Me voici/);
+  const avant = await acteur.evaluate((element) => element.style.transform);
+  await expect(acteur).toHaveClass(/walking/);
+  await expect.poll(() => acteur.evaluate((element) => element.style.transform)).not.toBe(avant);
+
+  await poser("arrête-toi !");
+  await expect(acteur).not.toHaveClass(/walking/);
+  const figee = await acteur.evaluate((element) => element.style.transform);
+  await page.waitForTimeout(400);
+  expect(await acteur.evaluate((element) => element.style.transform)).toBe(figee);
+
+  await poser("assieds-toi");
+  await expect(acteur).toHaveClass(/assise/);
+  await poser("lève-toi");
+  await expect(acteur).not.toHaveClass(/assise/);
+
+  await poser("danse");
+  await expect(acteur).toHaveClass(/danse/);
+  await poser("arrête-toi");
+  await expect(acteur).not.toHaveClass(/danse/);
+
+  await poser("suis-moi");
+  await page.mouse.move(900, 500);
+  await expect(acteur).toHaveClass(/walking/);
+
+  await poser("rentre");
+  await expect(acteur).toHaveCount(0);
+  await expect(page.locator(".sokhnaci-widget")).not.toHaveClass(/acteur-dehors/);
+
+  await poser("comment ça marche");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Demandez-moi");
+});
