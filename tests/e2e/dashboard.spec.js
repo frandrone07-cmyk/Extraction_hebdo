@@ -435,7 +435,7 @@ test("espace Sokhna Ci AI : l'avatar obéit aux ordres dans sa scène, change de
   await expect(page.locator("#sna-historique .sna-assistante").last()).toContainText("meilleurs");
 });
 
-test("espace Sokhna Ci AI : rapports Word, PDF et Excel, export de la conversation et mémoire locale", async ({ page }) => {
+test("espace Sokhna Ci AI : rapports Word, PDF et Excel, export de la conversation, conversation remise à zéro au rechargement", async ({ page }) => {
   await ouvrirEspace(page);
   const [word] = await Promise.all([page.waitForEvent("download"), page.locator('[data-rapport="word"]').click()]);
   expect(word.suggestedFilename()).toMatch(/^Rapport_completude_.*\.doc$/);
@@ -450,7 +450,13 @@ test("espace Sokhna Ci AI : rapports Word, PDF et Excel, export de la conversati
   await page.reload();
   await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
   await ouvrirEspace(page);
-  await expect(page.locator("#sna-historique")).toContainText("statistiques");
+  // Après un rechargement (F5 / Ctrl+F5), la conversation repart à zéro.
+  await expect(page.locator("#sna-historique .sna-utilisateur")).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("sokhna-ci-ai-historique-v1"))).toBeNull();
+  await poserEspace(page, "statistiques");
+  await page.getByRole("tab", { name: /Vue d’ensemble/ }).click();
+  await ouvrirEspace(page);
+  await expect(page.locator("#sna-historique")).toContainText("statistiques"); // conservée en changeant d'onglet
   await page.locator("#sna-nouvelle").click();
   await expect(page.locator("#sna-historique .sna-utilisateur")).toHaveCount(0);
 });

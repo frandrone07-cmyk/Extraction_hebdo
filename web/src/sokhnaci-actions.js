@@ -8,6 +8,9 @@ export function normaliserTexte(texte) {
 const COMMANDES = [
   { action: "stop", motif: /\b(arrete( toi)?|stop|stoppe|ne bouge plus|immobilise( toi)?|ne bouge pas)\b/ },
   { action: "rentre", motif: /\b(rentre|retourne (dans|a) ta (carte|place)|va te reposer|remonte)\b/ },
+  { action: "applaudis", motif: /\b(applaudis|applaudir|applaudissements?|bravo a tous|tape dans tes mains)\b/ },
+  { action: "incline", motif: /\b(incline toi|incline|reverence|fais une reverence|salue avec respect|courbette)\b/ },
+  { action: "reflechis", motif: /\b(reflechis|reflechir|fais semblant de reflechir|pense un peu)\b/ },
   { action: "danse", motif: /\b(danse|fais (une |un petit )?danse|quelques pas de danse)\b/ },
   { action: "suis", motif: /\b(suis moi|suis nous|accompagne moi)\b/ },
   { action: "viens", motif: /\b(viens( ici| vers moi)?|approche( toi)?|rapproche( toi)?|avance vers moi|reviens( vers moi| ici)?)\b/ },
@@ -54,6 +57,9 @@ export function phraseAction(commande) {
   switch (commande.action) {
     case "stop": return { emotion: "neutre", segments: [s(aleatoire(["D’accord, je m’arrête.", "Je m’immobilise."]), "hochement_tete")] };
     case "rentre": return { emotion: "souriante", segments: [s("Je retourne à ma place. Appelez-moi si besoin !", "salut_main")] };
+    case "applaudis": return { emotion: "felicitations", segments: [s(aleatoire(["Bravo à toutes les équipes !", "Applaudissons les équipes qui transmettent leurs rapports !"]), "pouce_leve")] };
+    case "incline": return { emotion: "souriante", segments: [s("Avec respect, je vous salue.", "mains_jointes")] };
+    case "reflechis": return { emotion: "neutre", segments: [s("Laissez-moi réfléchir un instant…", "inclinaison_ecoute")] };
     case "danse": return { emotion: "felicitations", segments: [s(aleatoire(["Allons-y, un petit pas de danse !", "Avec plaisir, regardez !"]), "geste_ouvert")] };
     case "suis": return { emotion: "souriante", segments: [s("D’accord, je vous suis.", "hochement_tete")] };
     case "viens": return { emotion: "souriante", segments: [s(aleatoire(["J’arrive !", "Me voici, je viens vers vous."]), "salut_main")] };

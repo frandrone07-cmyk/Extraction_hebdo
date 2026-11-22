@@ -52,7 +52,10 @@ let ecouteursInstalles = false;
 
 // ------------------------------------------------------------------ stockage local
 function charger() {
-  try { etat.messages = JSON.parse(localStorage.getItem(CLE_HISTORIQUE) || "[]"); } catch { etat.messages = []; }
+  // La conversation ne vit que le temps de la page : un rechargement (F5, Ctrl+F5) repart d'une conversation neuve.
+  // On efface aussi l'ancien historique qu'enregistraient les versions précédentes.
+  etat.messages = [];
+  try { localStorage.removeItem(CLE_HISTORIQUE); } catch { /* stockage indisponible */ }
   try { Object.assign(etat.preferences, JSON.parse(localStorage.getItem(CLE_PREFERENCES) || "{}")); } catch { /* préférences par défaut */ }
   definirNiveauExplication(etat.preferences.niveau);
   definirVolume(etat.preferences.volume);
@@ -61,7 +64,6 @@ function charger() {
 }
 function sauvegarder() {
   try {
-    localStorage.setItem(CLE_HISTORIQUE, JSON.stringify(etat.messages.slice(-MAX_MESSAGES).map(({ imageUrl, ...reste }) => reste)));
     localStorage.setItem(CLE_PREFERENCES, JSON.stringify(etat.preferences));
   } catch { /* stockage indisponible : la conversation reste en mémoire */ }
 }
@@ -353,6 +355,8 @@ function installerEcouteursGlobaux() {
 // ------------------------------------------------------------------ état et indicateurs
 function definirIndicateur(valeur) {
   etat.indicateur = valeur;
+  // Pendant qu'elle prépare une réponse, Sokhna Ci porte la main au menton.
+  document.getElementById("sna-acteur")?.classList.toggle("reflechit", valeur === "reflechit");
   majIndicateurs();
 }
 const LIBELLES = { attente: "Disponible", ecoute: "Je vous écoute…", reflechit: "Je réfléchis…", parle: "Je parle", chargement: "Chargement…" };
@@ -714,6 +718,9 @@ function executerCommandeScene(commande) {
     case "demitour": scene.sens *= -1; break;
     case "assis": scene.mode = "arret"; scene.cible = scene.x; acteur.classList.add("assise"); break;
     case "debout": retirer("assise"); break;
+    case "applaudis": scene.mode = "arret"; scene.cible = scene.x; retirer("assise"); temporaire("applaudit", 3600); break;
+    case "incline": scene.mode = "arret"; scene.cible = scene.x; retirer("assise"); temporaire("incline", 2600); break;
+    case "reflechis": temporaire("pense", 4500); break;
     case "danse": scene.mode = "arret"; scene.cible = scene.x; retirer("assise"); temporaire("danse", 7000); break;
     case "sourire": temporaire("grand-sourire", 4500); break;
     case "ecoute": scene.mode = "arret"; scene.cible = scene.x; scene.echelleCible = 1.2; temporaire("listening", 6000); break;

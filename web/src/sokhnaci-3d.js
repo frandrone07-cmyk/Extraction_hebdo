@@ -97,6 +97,13 @@ async function creer(tenueInitiale) {
   vrm.scene.traverse((objet) => { objet.frustumCulled = false; });
   vrm.scene.getObjectByName("Hair001")?.traverse((objet) => { objet.visible = false; });
 
+  // Regard : les yeux suivent un point proche de la caméra (l'utilisateur), avec de petits mouvements naturels.
+  const regard = new THREE.Object3D();
+  scene.add(regard);
+  if (vrm.lookAt) { vrm.lookAt.target = regard; vrm.lookAt.autoUpdate = true; }
+  let prochaineSaccade = 0;
+  const saccade = { x: 0, y: 0 };
+
   const boite = new THREE.Box3().setFromObject(vrm.scene);
   const hauteurModele = boite.max.y - boite.min.y;
 
@@ -196,11 +203,12 @@ async function creer(tenueInitiale) {
   let temps = 0;
   let horsEcran = 0;
   let accentRapide = 0;
+  const surcharges = {};
   let accentLent = 0;
 
   function acteurActif() {
     const cl = acteur.classList;
-    return cl.contains("speaking") || cl.contains("walking") || cl.contains("danse") || cl.contains("listening") || cl.contains("assise") || Math.abs(xLisse) > 0.002 || echelleLissee > 1.01;
+    return cl.contains("speaking") || cl.contains("walking") || cl.contains("danse") || cl.contains("listening") || cl.contains("assise") || cl.contains("applaudit") || cl.contains("incline") || cl.contains("reflechit") || cl.contains("pense") || Math.abs(xLisse) > 0.002 || echelleLissee > 1.01;
   }
   function lireEtat() {
     const e = acteur;
@@ -212,6 +220,7 @@ async function creer(tenueInitiale) {
       sourire: cl.contains("grand-sourire"), geste: e.dataset.geste || "", emotion: e.dataset.emotion || "neutre",
       bouche: e.dataset.sync === "audio" ? nombre("--bouche", 0.4) : null, x: buste ? 0 : nombre("--x", 0), echelle: buste ? 1 : nombre("--echelle", 1), sens: buste ? 1 : nombre("--sens", 1),
       posture: cl.contains("posture-a") ? 1 : cl.contains("posture-b") ? -1 : 0,
+      applaudit: cl.contains("applaudit"), incline: cl.contains("incline"), reflechit: cl.contains("reflechit"), pense: cl.contains("pense"),
     };
   }
 
@@ -259,6 +268,25 @@ async function creer(tenueInitiale) {
       }
     }
 
+    // ----- actions : applaudir, saluer en s'inclinant, réfléchir (main au menton) -----
+    if (s.applaudit) {
+      const frappe = Math.sin(t * 15);
+      // Bras ramenés devant la poitrine ; les avant-bras se rapprochent puis s'écartent (réglé à l'image).
+      pose("leftUpperArm", 0, -0.9, 0.45); pose("rightUpperArm", 0, 0.9, -0.45);
+      pose("leftLowerArm", 0, -(1.05 + 0.25 * frappe), 0); pose("rightLowerArm", 0, 1.05 + 0.25 * frappe, 0);
+      ajoute("head", 0.06 * Math.abs(frappe), 0, 0);
+    }
+    if (s.incline) {
+      pose("spine", 0.32, 0, 0); pose("chest", 0.16, 0, 0); pose("neck", 0.12, 0, 0); pose("head", 0.18, 0, 0);
+      pose("leftUpperArm", -0.45, 0, 0.95); pose("rightUpperArm", -0.45, 0, -0.95);
+      pose("leftLowerArm", 0, 1.5, 0); pose("rightLowerArm", 0, -1.5, 0);
+    }
+    if ((s.reflechit && !s.parle) || s.pense) {
+      // Main droite au menton, bras gauche replié devant la taille (réglé à l'image).
+      pose("rightUpperArm", 0, 0.8, -0.65); pose("rightLowerArm", 0, 2.5, 0);
+      pose("leftUpperArm", 0, -0.6, 1.0); pose("leftLowerArm", 0, -1.3, 0);
+      pose("head", 0.08, -0.06, 0.08);
+    }
     // ----- marche -----
     if (s.marche && !s.assise) {
       const pas = Math.sin(t * 7);
@@ -355,6 +383,7 @@ async function creer(tenueInitiale) {
     s.accent = accentRapide;
     s.accentLent = accentLent;
     calculerPose(s, temps);
+    for (const [nom, r] of Object.entries(surcharges)) cible[nom] = r; // réglage des poses (tests uniquement)
     for (const [nom, r] of Object.entries(cible)) {
       const noeud = os(nom);
       if (!noeud) continue;
@@ -372,6 +401,22 @@ async function creer(tenueInitiale) {
     const yaw0 = s.marche && !s.assise ? s.sens * 1.15 : s.danse ? 0.25 * Math.sin(temps * 2.5) : 0;
     yaw.v = lisser(yaw.v, yaw0, dt, 7);
     vrm.scene.rotation.y = orientationBase + yaw.v;
+    const tete = os("head");
+    if (tete) tete.rotation.y += limiter(-yaw.v * 0.45, -0.55, 0.55);
+    // Regard : vers l'utilisateur, en haut à côté quand elle réfléchit, vers l'écran quand elle le montre.
+    if (temps > prochaineSaccade) {
+      saccade.x = (Math.random() - 0.5) * 0.16;
+      saccade.y = (Math.random() - 0.5) * 0.08;
+      prochaineSaccade = temps + 0.8 + Math.random() * 2.4;
+    }
+    const versEcran = s.parle && s.geste === "pointer_ecran";
+    const cibleX = ((s.reflechit && !s.parle) || s.pense ? -0.35 : versEcran ? 0.55 : 0) + saccade.x;
+    const cibleY = ((s.reflechit && !s.parle) || s.pense ? 0.25 : 0) + saccade.y;
+    regard.position.set(
+      lisser(regard.position.x, camera.position.x + cibleX, dt, 10),
+      lisser(regard.position.y, camera.position.y + cibleY, dt, 10),
+      camera.position.z,
+    );
     // Rapprochement doux : une échelle 2D de 1,32 devient environ 1,10 en 3D pour garder la tête dans le cadre.
     const echelle3d = 1 + (echelleLissee - 1) * 0.2;
     vrm.scene.scale.setScalar(echelle3d);
@@ -401,7 +446,8 @@ async function creer(tenueInitiale) {
   };
   if (window.__sokhnaci3d) {
     window.__sna3d = {
-      etat: () => ({ ...debogage, os: Object.fromEntries(["rightUpperArm", "rightLowerArm", "leftUpperLeg", "head"].map((n) => [n, os(n)?.rotation.toArray().slice(0, 3).map((v) => Math.round(v * 100) / 100)])), echelle: vrm.scene.scale.x, x: vrm.scene.position.x, assis: assiseLissee, blink }),
+      etat: () => ({ ...debogage, regard: regard.position.toArray().map((v) => Math.round(v * 100) / 100), os: Object.fromEntries(["rightUpperArm", "rightLowerArm", "leftUpperArm", "leftLowerArm", "spine", "leftUpperLeg", "head"].map((n) => [n, os(n)?.rotation.toArray().slice(0, 3).map((v) => Math.round(v * 100) / 100)])), echelle: vrm.scene.scale.x, x: vrm.scene.position.x, assis: assiseLissee, blink }),
+      surcharger(valeurs) { for (const k of Object.keys(surcharges)) delete surcharges[k]; Object.assign(surcharges, valeurs || {}); },
       lirePixels() {
         rendu.render(scene, camera);
         const gl = rendu.getContext();

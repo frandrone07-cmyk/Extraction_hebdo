@@ -120,93 +120,73 @@ function joursDepuis(iso) {
   return Math.floor((Date.now() - date.getTime()) / 86400000);
 }
 
+// Point de situation : un exposé structuré et professionnel, toujours dans le même ordre (cadre, indicateur
+// principal, répartition, territoires, priorités, formulaire, recommandation). Chaque chiffre vient du modèle.
 export function creerSituation(model) {
   const seuils = model.seuils;
-  const districts = toutesDistricts(model).length ? toutesDistricts(model) : model.districts;
   if (!model.districts?.length) {
-    return { etat: "parle", emotion: "neutre", segments: [segment("Salaamalekum ! Aucun résultat pour ces filtres. Élargissez la sélection, et je referai le point avec vous.", "geste_ouvert")], suivi: null };
+    return { etat: "parle", emotion: "neutre", segments: [segment("Salaamalekum.", "salut_main", "wo", "salaamalekum"), segment("Aucun résultat pour ces filtres. Élargissez la sélection et je referai le point de situation.", "geste_ouvert")], suivi: null };
   }
-  const taux = moyenne(model.districts.map((district) => district.tauxMoyen));
-  const comparable = moyenne(model.districts.map((district) => district.tauxComparable));
-  const precedent = moyenne(model.districts.map((district) => district.tauxPrecedent));
+  const avecTaux = model.districts.filter((d) => d.tauxMoyen !== null && d.tauxMoyen !== undefined);
+  const taux = moyenne(avecTaux.map((d) => d.tauxMoyen));
+  const comparable = moyenne(model.districts.map((d) => d.tauxComparable));
+  const precedent = moyenne(model.districts.map((d) => d.tauxPrecedent));
   const ecart = comparable === null || precedent === null ? null : Math.round((comparable - precedent) * 10) / 10;
-  const comparaison = model.comparaisonCle ? `l’extraction du ${D(model.comparaisonCle)}` : "l’extraction précédente";
   const emotion = emotionPour(taux, seuils);
+  const un = (x) => Math.round(x * 10) / 10;
   const segments = [];
 
-  segments.push(...choisir("salut", [
-    [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum")],
-    [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum"), segment("Comment allez-vous ?", "sourire")],
-    [segment("Salaamalekum !", "salut_main", "wo", "salaamalekum"), segment("Bienvenue !", "sourire")],
-  ]));
-  segments.push(segment(choisir("presentation", [
-    "Je suis Sokhna Ci, votre assistante pour suivre les rapports.",
-    "Moi, c’est Sokhna Ci : je vous guide dans la complétude des rapports.",
-    "Sokhna Ci, à votre service pour faire le point sur la complétude.",
-  ]), "sourire"));
-  if (joursDepuis(model.semaineCle) > 10) segments.push(segment("Attention, les données ne semblent pas à jour.", "geste_rassurant"));
-  segments.push(segment(choisir("cadre", [
-    `Voici le point au ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`,
-    `Les données datent du ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`,
-    `Mise à jour du ${D(model.semaineCle)} : ${periodeTexte(model)}.`,
-  ]), "pointer_ecran"));
+  segments.push(segment("Salaamalekum.", "salut_main", "wo", "salaamalekum"));
+  segments.push(segment("Je suis Sokhna Ci, votre assistante de suivi des rapports.", "main_sur_coeur"));
+  segments.push(segment(`Voici le point de situation de la complétude des rapports DHIS2 au ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`, "pointer_ecran"));
+  if (joursDepuis(model.semaineCle) > 10) segments.push(segment("Attention : ces données datent de plus de dix jours, l’extraction hebdomadaire est à vérifier.", "geste_rassurant"));
 
-  const couleur = niveau(taux, seuils);
-  if (ecart !== null && ecart >= seuils.baisse) {
-    segments.push(segment(choisir("hausse", [
-      `Le taux moyen national est de ${T(taux)}, ${couleur}, avec ${P(ecart)} de mieux que ${comparaison}.`,
-      `Bonne dynamique : ${T(taux)} en moyenne, ${couleur}, soit ${P(ecart)} de plus que ${comparaison}.`,
-    ]), "pointer_ecran"));
-  } else if (ecart !== null && ecart <= -seuils.baisse) {
-    segments.push(segment(choisir("baisse", [
-      `Le taux moyen national recule à ${T(taux)}, ${couleur}, soit ${P(ecart)} de moins que ${comparaison}.`,
-      `Le taux moyen tombe à ${T(taux)}, ${couleur}, avec ${P(ecart)} de perdus depuis ${comparaison}.`,
-    ]), "geste_rassurant"));
-  } else {
-    segments.push(segment(choisir("stable", [
-      `Le taux moyen national est stable, autour de ${T(taux)}, ${couleur}.`,
-      `Côté national, on reste autour de ${T(taux)}, ${couleur}, sans grand mouvement.`,
-    ]), "pointer_ecran"));
+  // 1. Indicateur principal et tendance
+  let tendance = "";
+  if (ecart !== null && model.comparaisonCle) {
+    tendance = Math.abs(ecart) < 0.5
+      ? `, stable par rapport à l’extraction du ${D(model.comparaisonCle)}`
+      : `, ${ecart > 0 ? "en hausse" : "en baisse"} de ${P(ecart)} par rapport à l’extraction du ${D(model.comparaisonCle)}`;
+  }
+  segments.push(segment(`Le taux moyen de complétude des districts est de ${T(un(taux))}${tendance} : il est ${niveau(taux, seuils)}.`, "pointer_ecran"));
+
+  // 2. Répartition des districts selon les seuils
+  const rouges = avecTaux.filter((d) => d.tauxMoyen < seuils.critique).length;
+  const verts = avecTaux.filter((d) => d.tauxMoyen >= seuils.conforme).length;
+  const oranges = avecTaux.length - rouges - verts;
+  segments.push(segment(`Sur ${E(avecTaux.length)} districts analysés, ${E(rouges)} ${rouges > 1 ? "sont" : "est"} sous le seuil critique de ${T(seuils.critique)}, ${E(oranges)} à surveiller et ${E(verts)} ${verts > 1 ? "sont conformes" : "est conforme"}.`, "compter_doigts"));
+
+  // 3. Territoires : écart entre la région la plus en retard et la mieux placée
+  const regions = (model.regions?.length > 1 ? model.regions : []).filter((r) => r.tauxMoyen !== null && r.tauxMoyen !== undefined).sort((a, b) => a.tauxMoyen - b.tauxMoyen);
+  if (regions.length > 1) {
+    const pire = regions[0];
+    const meilleure = regions.at(-1);
+    segments.push(segment(`La région la plus en retard est ${labelRegion(pire.nom)}, à ${T(un(pire.tauxMoyen))} ; la mieux placée est ${labelRegion(meilleure.nom)}, à ${T(un(meilleure.tauxMoyen))}.`, "geste_ouvert"));
   }
 
-  const critiques = [...model.districts].filter((d) => d.statut === "critique").sort((a, b) => (a.tauxMoyen ?? 101) - (b.tauxMoyen ?? 101)).slice(0, 3);
+  // 4. Priorités de relance
+  const critiques = avecTaux.filter((d) => d.statut === "critique").sort((a, b) => a.tauxMoyen - b.tauxMoyen).slice(0, 3);
   if (critiques.length) {
-    const cites = liste(critiques.map((d) => `${d.nom}, à ${T(d.tauxMoyen)}`));
-    const plusieurs = critiques.length > 1;
-    segments.push(segment(choisir("alerte", plusieurs ? [
-      `Les ${critiques.length === 3 ? "trois" : "deux"} districts les plus en retard sont ${cites}.`,
-      `Il faut relancer en priorité : ${cites}.`,
-      `Côté alerte, regardez ${cites}.`,
-    ] : [`Le district le plus en retard est ${cites}.`, `Une relance prioritaire pour ${cites}.`]), "compter_doigts"));
+    segments.push(segment(`Priorités de relance : ${liste(critiques.map((d) => `${d.nom}, à ${T(un(d.tauxMoyen))}`))}.`, "geste_rassurant"));
   }
 
-  const meilleurs = [...model.districts].filter((d) => d.tauxMoyen !== null && d.tauxMoyen !== undefined).sort((a, b) => b.tauxMoyen - a.tauxMoyen).slice(0, 2);
-  if (meilleurs.length && meilleurs[0].tauxMoyen >= seuils.conforme) {
-    const cites = liste(meilleurs.filter((d) => d.tauxMoyen >= seuils.conforme).map((d) => `${d.nom}, ${T(d.tauxMoyen)}`));
-    segments.push(segment(choisir("bravo", [
-      `Bravo aux équipes de ${cites} !`,
-      `Félicitations à ${cites}, un travail sérieux.`,
-      `Belle performance à ${cites}, merci pour l’effort.`,
-    ]), "pouce_leve"));
-  } else if (meilleurs.length && meilleurs[0].tauxMoyen >= seuils.critique) {
-    segments.push(segment(`Meilleur niveau pour l’instant : ${meilleurs[0].nom}, à ${T(meilleurs[0].tauxMoyen)}. À encourager !`, "sourire"));
-  }
+  // 5. Formulaire le plus en retard
+  const formulaires = (model.formulaires?.length ? model.formulaires : model.tousFormulaires || []).filter((f) => f.tauxMoyen !== null && f.tauxMoyen !== undefined);
+  const faible = formulaires.length > 1 ? [...formulaires].sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0] : null;
+  if (faible) segments.push(segment(`Le formulaire le moins renseigné est « ${nomFormulaire(faible.nom)} », à ${T(un(faible.tauxMoyen))}.`, "pointer_ecran"));
 
-  const formulaires = (model.tousFormulaires || model.formulaires || []).filter((f) => f.tauxMoyen !== null && f.tauxMoyen !== undefined);
-  if (formulaires.length > 1) {
-    const faible = [...formulaires].sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0];
-    segments.push(segment(choisir("indicateur", [
-      `L’indicateur le plus en retard est ${nomFormulaire(faible.nom)}, à ${T(faible.tauxMoyen)}.`,
-      `Côté formulaires, c’est « ${nomFormulaire(faible.nom)} » qui traîne, à ${T(faible.tauxMoyen)}.`,
-    ]), "pointer_ecran"));
-  }
+  // 6. Points positifs (sans les inventer : seulement s'ils existent)
+  const meilleurs = [...avecTaux].sort((a, b) => b.tauxMoyen - a.tauxMoyen).filter((d) => d.tauxMoyen >= seuils.conforme).slice(0, 2);
+  if (meilleurs.length) segments.push(segment(`À saluer : ${liste(meilleurs.map((d) => `${d.nom}, à ${T(un(d.tauxMoyen))}`))}.`, "pouce_leve"));
 
-  segments.push(segment(choisir("fin", [
-    "Que voulez-vous savoir ?",
-    "Dites-moi : une région, un district, un formulaire ?",
-    "Que voulez-vous voir en détail ?",
-  ]), "inclinaison_ecoute"));
-  while (segments.length > 8) segments.splice(segments.length - 2, 1);
+  // 7. Recommandation
+  if (critiques.length || faible) {
+    const actions = [];
+    if (critiques.length) actions.push(`relancer d’abord ${critiques.length > 1 ? "les équipes de ces districts" : "l’équipe de ce district"}`);
+    if (faible && faible.tauxMoyen < seuils.critique) actions.push(`vérifier la saisie de « ${nomFormulaire(faible.nom)} »`);
+    if (actions.length) segments.push(segment(`Ma recommandation : ${liste(actions)}.`, "geste_ouvert"));
+  }
+  segments.push(segment("Je reste à votre disposition pour le détail d’une région, d’un district ou d’un formulaire.", "mains_jointes"));
   return { etat: "attente", emotion, segments, suivi: "Que voulez-vous savoir ?" };
 }
 
@@ -451,14 +431,40 @@ export function repondre(questionBrute, model) {
   if (/\b(aide|peux tu|que sais tu|que peux|comment ca marche)\b/.test(question)) {
     return reponse("souriante", [segment("Demandez-moi la situation d’une région, d’un district ou d’un formulaire, ou bien les meilleurs et les plus en retard. Vous pouvez aussi me donner des ordres : viens ici, suis-moi, assieds-toi, danse.", "geste_ouvert")]);
   }
+  // Questions de dénombrement : « combien de districts sont en rouge / à surveiller / conformes ? »
+  if (/\bcombien\b/.test(question) && /\b(district|rouge|critique|orange|surveill|vert|conforme|retard)/.test(question)) {
+    const avecTaux = districts.filter((d) => d.tauxMoyen !== null && d.tauxMoyen !== undefined);
+    const rouges = avecTaux.filter((d) => d.tauxMoyen < seuils.critique).length;
+    const verts = avecTaux.filter((d) => d.tauxMoyen >= seuils.conforme).length;
+    const oranges = avecTaux.length - rouges - verts;
+    const part = (n) => (avecTaux.length ? Math.round((n / avecTaux.length) * 1000) / 10 : 0);
+    return reponse(rouges ? "preoccupee" : "felicitations", [
+      segment(`${cadre}, sur ${E(avecTaux.length)} districts analysés, ${E(rouges)} ${rouges > 1 ? "sont" : "est"} en rouge (sous ${T(seuils.critique)}), soit ${T(part(rouges))} des districts.`, "compter_doigts"),
+      segment(`${E(oranges)} ${oranges > 1 ? "sont" : "est"} à surveiller et ${E(verts)} ${verts > 1 ? "sont conformes" : "est conforme"} (au moins ${T(seuils.conforme)}).`, "pointer_ecran"),
+    ], "Voulez-vous la liste des districts en rouge ?");
+  }
   const but = intention(question) || intentionProche(question);
+  // « Quel formulaire est le plus en retard / le mieux rempli ? » : le classement porte sur les formulaires.
+  if ((but === "pire" || but === "meilleur") && /\bformulaire|\bindicateur|\brapport/.test(question)) {
+    const formulaires = (model.tousFormulaires || model.formulaires || []).filter((f) => f.tauxMoyen !== null && f.tauxMoyen !== undefined)
+      .sort((a, b) => (but === "pire" ? a.tauxMoyen - b.tauxMoyen : b.tauxMoyen - a.tauxMoyen)).slice(0, 3);
+    if (formulaires.length) {
+      retenir("formulaire", formulaires[0].nom);
+      return reponse(but === "pire" ? "preoccupee" : "felicitations", [
+        segment(`${cadre}, les formulaires ${but === "pire" ? "les plus en retard" : "les mieux renseignés"} sont ${liste(formulaires.map((f) => `« ${nomFormulaire(f.nom)} », à ${T(f.tauxMoyen)}`))}.`, "compter_doigts"),
+        segment(but === "pire" ? "Une vérification de la saisie de ces formulaires est recommandée."
+          : formulaires[0].tauxMoyen >= seuils.conforme ? "Ces formulaires peuvent servir d’exemple aux autres."
+            : `Même le mieux renseigné reste sous le seuil de conformité de ${T(seuils.conforme)}.`, but === "pire" ? "geste_rassurant" : "pointer_ecran"),
+      ], "Voulez-vous le détail du premier ?");
+    }
+  }
   if (but === "analyse") return interpreter(model);
   if (but === "meilleur") {
     const parRegion = /\bregion/.test(question);
     const classes = (parRegion ? (model.toutesRegions || []).map((r) => ({ nom: labelRegion(r.nom), taux: r.tauxMoyen })) : districts.map((d) => ({ nom: d.nom, taux: d.tauxMoyen })))
       .filter((x) => x.taux !== null && x.taux !== undefined).sort((a, b) => b.taux - a.taux).slice(0, 3);
     return reponse("felicitations", [
-      segment(`${cadre}, les meilleurs ${parRegion ? "résultats régionaux" : "districts"} sont ${liste(classes.map((x) => `${x.nom}, à ${T(x.taux)}`))}.`, "compter_doigts"),
+      segment(`${cadre}, les ${parRegion ? "régions les mieux placées" : "meilleurs districts"} sont ${liste(classes.map((x) => `${x.nom}, à ${T(x.taux)}`))}.`, "compter_doigts"),
       segment("Bravo à ces équipes !", "pouce_leve"),
     ], "Et les plus en retard ?");
   }
@@ -467,7 +473,7 @@ export function repondre(questionBrute, model) {
     const classes = (parRegion ? (model.toutesRegions || []).map((r) => ({ nom: labelRegion(r.nom), taux: r.tauxMoyen })) : districts.map((d) => ({ nom: d.nom, taux: d.tauxMoyen })))
       .filter((x) => x.taux !== null && x.taux !== undefined).sort((a, b) => a.taux - b.taux).slice(0, 3);
     return reponse("preoccupee", [
-      segment(`${cadre}, les plus en retard sont ${liste(classes.map((x) => `${x.nom}, à ${T(x.taux)}`))}.`, "compter_doigts"),
+      segment(`${cadre}, les ${parRegion ? "régions" : "districts"} les plus en retard sont ${liste(classes.map((x) => `${x.nom}, à ${T(x.taux)}`))}.`, "compter_doigts"),
       segment("Une relance ciblée auprès de ces équipes serait utile.", "geste_rassurant"),
     ], "Voulez-vous le détail d’un district ?");
   }
@@ -478,7 +484,9 @@ export function repondre(questionBrute, model) {
       const gain = Math.round((serie.at(-1) - serie[0]) * 10) / 10;
       return reponse(gain >= 0 ? "encourageante" : "preoccupee", [
         segment(`Sur les ${E(nb)} extractions suivies, le taux des mois comparables est passé de ${T(Math.round(serie[0] * 10) / 10)} à ${T(Math.round(serie.at(-1) * 10) / 10)}.`, "pointer_ecran"),
-        segment("Cette hausse vient surtout des rapports transmis en retard après chaque mois.", "hochement_tete"),
+        segment(gain > 0
+          ? "Une partie de cette hausse vient des rapports saisis après la fin du mois : la complétude d’un même mois progresse d’une extraction à l’autre."
+          : gain < 0 ? "La tendance est à la baisse : c’est un signal à surveiller." : "Le niveau est resté stable sur la période.", "hochement_tete"),
       ], "Voulez-vous l’évolution d’une région ?");
     }
   }

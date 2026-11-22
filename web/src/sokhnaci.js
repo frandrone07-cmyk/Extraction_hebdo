@@ -6,7 +6,6 @@ import { gesteA, planifierGestes } from "./sokhnaci-gestes.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
 const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
-const MODULES_PIPER = ["https://esm.sh/@diffusionstudio/vits-web@1.0.3", "https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3/+esm"];
 const DELAIS_NOUVEL_ESSAI = [8000, 40000, 180000];
 const ECHECS_MAX = 3;
 const VOIX_PIPER = "fr_FR-siwis-medium";
@@ -32,7 +31,6 @@ let statutVoix = null;
 let contexteAudio = null;
 let volume = 1;
 const avatarsExternes = new Set();
-let fileSynthese = Promise.resolve();
 let planGestes = [];
 let gesteActuel = null;
 const syntheses = new Map();
@@ -125,31 +123,47 @@ function annoncerVoix(texte, duree = 0) {
   if (duree) setTimeout(() => { if (statutVoix.textContent === texte) statutVoix.textContent = ""; }, duree);
 }
 
-async function importerMoteur() {
-  let derniere = null;
-  for (const adresse of MODULES_PIPER) {
-    try { return await import(/* @vite-ignore */ adresse); } catch (erreur) { derniere = erreur; }
-  }
-  throw derniere;
-}
+// Moteur dans un Web Worker (sokhnaci-voix-worker.js) : modèle, session ONNX et phonémiseur chargés une seule fois,
+// la page reste fluide pendant la synthèse, et les phrases devenues inutiles sont annulées.
+let travailleur = null;
+let compteurSynthese = 0;
+const attentesSynthese = new Map();
 
 function chargerPiper() {
   if (piperPromesse) return piperPromesse;
-  piperPromesse = (async () => {
-    const moteur = await importerMoteur();
-    try { await navigator.storage?.persist?.(); } catch { /* facultatif */ }
-    let dejaLa = false;
-    try { dejaLa = (await moteur.stored?.())?.includes(VOIX_PIPER) ?? false; } catch { /* facultatif */ }
-    if (!dejaLa) annoncerVoix("Je prépare ma voix originale (téléchargement unique)…");
-    await moteur.predict({ text: "Bonjour.", voiceId: VOIX_PIPER }, (avancement) => {
-      if (!dejaLa && avancement?.total) annoncerVoix(`Je prépare ma voix originale : ${Math.round((100 * avancement.loaded) / avancement.total)} %`);
-    });
-    piper = moteur;
-    piperEnCache = true;
-    echecsSynthese = 0;
-    annoncerVoix("Ma voix originale est prête.", 4000);
-    return moteur;
-  })().catch((erreur) => {
+  piperPromesse = new Promise((resolve, reject) => {
+    try { navigator.storage?.persist?.(); } catch { /* facultatif */ }
+    try {
+      travailleur = new Worker(new URL("./sokhnaci-voix-worker.js", import.meta.url), { type: "module" });
+    } catch (erreur) { reject(erreur); return; }
+    const echec = (raison) => {
+      travailleur?.terminate();
+      travailleur = null;
+      for (const resoudre of attentesSynthese.values()) resoudre(null);
+      attentesSynthese.clear();
+      reject(new Error(raison));
+    };
+    const garde = setTimeout(() => echec("chargement trop long"), 240000);
+    travailleur.onerror = () => { clearTimeout(garde); echec("moteur de voix indisponible"); };
+    travailleur.onmessage = (evenement) => {
+      const m = evenement.data || {};
+      if (m.type === "progression" && m.pourcent >= 0) annoncerVoix(`Je prépare ma voix originale (téléchargement unique) : ${m.pourcent} %`);
+      else if (m.type === "pret") {
+        clearTimeout(garde);
+        piper = travailleur;
+        piperEnCache = true;
+        echecsSynthese = 0;
+        annoncerVoix(m.dejaLa ? "" : "Ma voix originale est prête.", 4000);
+        resolve(travailleur);
+      } else if (m.type === "erreur") { clearTimeout(garde); echec(m.message); }
+      else if (m.type === "audio" || m.type === "echec") {
+        const resoudre = attentesSynthese.get(m.cle);
+        attentesSynthese.delete(m.cle);
+        resoudre?.(m.type === "audio" ? new Blob([m.wav], { type: "audio/wav" }) : (m.annule ? "annule" : null));
+      }
+    };
+    travailleur.postMessage({ type: "init" });
+  }).catch((erreur) => {
     piperPromesse = null;
     piper = null;
     throw erreur;
@@ -157,11 +171,19 @@ function chargerPiper() {
   return piperPromesse;
 }
 
+async function voixDejaTelechargee() {
+  try {
+    const dossier = await (await navigator.storage.getDirectory()).getDirectoryHandle("piper");
+    return (await (await dossier.getFileHandle(`${VOIX_PIPER}.onnx`)).getFile()).size > 1000;
+  } catch { return false; }
+}
+
 // Démarrage automatique, avec nouvelles tentatives espacées et reprise quand la connexion revient.
 function demarrerPiperAutomatique(tentative = 0) {
   if (piperAbandonne || piper) return;
   if (navigator.connection?.saveData) return;
   if (navigator.webdriver && !window.__sokhnaciPiper) return; // tests automatisés : pas de téléchargement
+  if (typeof Worker === "undefined") return;
   chargerPiper().then(() => {
     if (modeleCourant) prechauffer(segmentsCourants);
   }).catch(() => {
@@ -175,41 +197,60 @@ function demarrerPiperAutomatique(tentative = 0) {
 
 const delai = (ms) => new Promise((resolve) => setTimeout(() => resolve(null), ms));
 
-// Les phrases sont fabriquées une à une, dans l'ordre, pendant que la précédente est lue.
-// id = null : préchauffage (jamais périmé).
+// Une phrase longue est découpée aux virgules : le premier morceau, court, part très vite pendant que la suite
+// est fabriquée. Les morceaux restent des groupes de sens (jamais au milieu d'un mot).
+export function decouper(texte, premier = false) {
+  // Au début d'une réponse, les morceaux grandissent progressivement (environ 45, 60, 80, 110 caractères…) :
+  // chaque morceau est fabriqué pendant que le précédent est lu, donc sans blanc entre eux.
+  let max = premier ? 45 : 150;
+  const morceaux = [];
+  let reste = texte;
+  while (reste.length > max) {
+    const zone = reste.slice(0, max);
+    let coupe = Math.max(zone.lastIndexOf(', '), zone.lastIndexOf('; '), zone.lastIndexOf(' : '));
+    if (coupe < 20) coupe = zone.lastIndexOf(' ');
+    if (coupe < 20) break;
+    morceaux.push(reste.slice(0, coupe + 1).trim());
+    reste = reste.slice(coupe + 1).trim();
+    max = Math.min(150, Math.round(max * 1.35));
+  }
+  if (reste) morceaux.push(reste);
+  return morceaux;
+}
+
+// id = null : préchauffage (jamais annulé). Renvoie un Blob WAV, ou null (la voix de l'appareil prend le relais).
 function synthetiser(texte, id) {
   if (syntheses.has(texte)) return syntheses.get(texte);
-  const promesse = fileSynthese
-    .then(async () => {
-      if ((id !== null && id !== lectureId) || !piper || piperAbandonne) return null;
-      return Promise.race([piper.predict({ text: texte, voiceId: VOIX_PIPER }), delai(15000)]);
-    })
-    .catch(() => null)
-    .then((blob) => {
-      if (id !== null && id !== lectureId) { syntheses.delete(texte); return blob; }
-      if (blob) echecsSynthese = 0;
-      else {
-        syntheses.delete(texte);
-        if (piper && ++echecsSynthese >= ECHECS_MAX) {
-          piperAbandonne = true;
-          annoncerVoix("Voix de l’appareil utilisée (la voix originale est trop lente sur cet appareil).", 8000);
-        }
+  const promesse = new Promise((resolve) => {
+    if (!piper || piperAbandonne || !travailleur) { resolve(null); return; }
+    const cle = ++compteurSynthese;
+    attentesSynthese.set(cle, resolve);
+    travailleur.postMessage({ type: "synth", cle, id, texte });
+    setTimeout(() => { if (attentesSynthese.has(cle)) { attentesSynthese.delete(cle); resolve(null); } }, 30000);
+  }).then((resultat) => {
+    if (resultat === "annule") { syntheses.delete(texte); return null; }
+    if (resultat) echecsSynthese = 0;
+    else {
+      syntheses.delete(texte);
+      if (piper && ++echecsSynthese >= ECHECS_MAX) {
+        piperAbandonne = true;
+        annoncerVoix("Voix de l’appareil utilisée (la voix originale ne répond pas sur cet appareil).", 8000);
       }
-      return blob;
-    });
-  fileSynthese = promesse;
+    }
+    return resultat;
+  });
   syntheses.set(texte, promesse);
-  if (syntheses.size > 40) syntheses.delete(syntheses.keys().next().value);
+  if (syntheses.size > 60) syntheses.delete(syntheses.keys().next().value);
   return promesse;
 }
 
-// Prépare à l'avance la phrase affichée pour qu'elle démarre sans attente.
+// Prépare à l'avance les phrases affichées pour qu'elles démarrent sans attente.
 function prechauffer(segments) {
   if (!piper || piperAbandonne) return;
-  for (const segment of segments) if (!segment.audio) synthetiser(segment.oral, null);
+  segments.forEach((segment, i) => { if (!segment.audio) for (const m of decouper(segment.oral, i === 0)) synthetiser(m, null); });
 }
 
-function jouerBlob(blob) {
+function jouerBlob(blob, surProgression = null) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
@@ -217,7 +258,7 @@ function jouerBlob(blob) {
     audioCourant = audio;
     let delier = () => {};
     const fin = (ok) => { delier(); URL.revokeObjectURL(url); resolve(ok); };
-    audio.onplaying = () => { delier = lierBouche(audio); emettre("etat", { etat: "parle" }); };
+    audio.onplaying = () => { delier = lierBouche(audio, surProgression); emettre("etat", { etat: "parle" }); };
     audio.onended = () => fin(true);
     audio.onerror = () => fin(false);
     audio.play().catch(() => fin(false));
@@ -255,7 +296,7 @@ function definirBouche(ouverture) {
 }
 
 // Synchronisation labiale en temps réel : l'ouverture de la bouche suit l'énergie réelle du son lu.
-function lierBouche(audio) {
+function lierBouche(audio, surProgression = null) {
   try {
     contexteAudio ||= new (window.AudioContext || window.webkitAudioContext)();
     contexteAudio.resume?.();
@@ -275,7 +316,7 @@ function lierBouche(audio) {
       const energie = Math.sqrt(somme / donnees.length);
       lisse += (Math.min(1.7, 0.3 + energie * 9) - lisse) * 0.45;
       definirBouche(lisse);
-      if (audio.duration > 0 && Number.isFinite(audio.duration)) suivreGeste(audio.currentTime / audio.duration);
+      if (audio.duration > 0 && Number.isFinite(audio.duration)) (surProgression || suivreGeste)(audio.currentTime / audio.duration);
       requestAnimationFrame(boucle);
     };
     boucle();
@@ -298,6 +339,7 @@ function marquerPhrase(index) {
 
 function arreterLecture() {
   lectureId += 1;
+  travailleur?.postMessage({ type: "annuler", avant: lectureId }); // les phrases d'une lecture interrompue ne sont plus fabriquées
   window.speechSynthesis?.cancel();
   audioCourant?.pause();
   audioCourant = null;
@@ -374,7 +416,10 @@ async function lire(segments) {
     await Promise.race([piperPromesse.catch(() => null), delai(2500)]);
     if (id !== lectureId) return;
   }
-  const originale = piper && !piperAbandonne ? segments.map((segment) => (segment.audio ? null : synthetiser(segment.oral, id))) : null;
+  // Toutes les phrases (découpées en morceaux) sont demandées d'un coup : le moteur les fabrique dans l'ordre
+  // pendant que les précédentes sont lues.
+  const morceaux = segments.map((segment, i) => (segment.audio ? null : decouper(segment.oral, i === 0)));
+  const originale = piper && !piperAbandonne ? morceaux.map((liste) => liste?.map((m) => synthetiser(m, id)) ?? null) : null;
   for (const [index, segment] of segments.entries()) {
     if (id !== lectureId) return;
     planGestes = planifierGestes(segment.affichage || segment.oral, segment.geste);
@@ -386,8 +431,22 @@ async function lire(segments) {
     let joue = false;
     if (segment.audio) joue = await jouerAudio(segment.audio);
     if (!joue && originale?.[index]) {
-      const blob = await Promise.race([originale[index], delai(7000)]);
-      if (blob && id === lectureId) joue = await jouerBlob(blob);
+      const liste = morceaux[index];
+      const total = liste.reduce((n, m) => n + m.length, 0) || 1;
+      let avant = 0;
+      joue = true;
+      for (const [k, promesse] of originale[index].entries()) {
+        const blob = await Promise.race([promesse, delai(9000)]);
+        if (id !== lectureId) return;
+        const decalage = avant;
+        const ok = blob && (await jouerBlob(blob, (f) => suivreGeste((decalage + f * liste[k].length) / total)));
+        if (!ok) {
+          // Morceau manquant : la voix de l'appareil lit la fin de la phrase, sans rien sauter.
+          if (id === lectureId) await jouerVoix({ ...segment, oral: liste.slice(k).join(" ") });
+          break;
+        }
+        avant += liste[k].length;
+      }
     }
     if (!joue && id === lectureId) await jouerVoix(segment);
   }
@@ -395,13 +454,9 @@ async function lire(segments) {
 }
 
 async function attendrePuisParler() {
-  if (!piper && !piperEnCache && !piperAbandonne && !(navigator.webdriver && !window.__sokhnaciPiper)) {
-    let enCache = false;
-    try { enCache = (await (await importerMoteur()).stored?.())?.includes(VOIX_PIPER) ?? false; } catch { /* repli */ }
-    if (enCache) {
-      demarrerPiperAutomatique();
-      await Promise.race([piperPromesse || Promise.resolve(), delai(4000)]).catch(() => {});
-    }
+  if (!piper && !piperAbandonne && !(navigator.webdriver && !window.__sokhnaciPiper) && (await voixDejaTelechargee())) {
+    demarrerPiperAutomatique();
+    await Promise.race([piperPromesse || Promise.resolve(), delai(5000)]).catch(() => {});
   }
   parler();
 }
@@ -428,7 +483,7 @@ function etatTemporaire(classe, duree) {
 }
 
 // Les déplacements (marche, assise, danse...) se font dans l'espace 3D : la carte les lui confie.
-const MOUVEMENTS = new Set(["viens", "suis", "avance", "recule", "tourne", "demitour", "marche", "rentre", "presente", "danse", "assis", "debout"]);
+const MOUVEMENTS = new Set(["applaudis", "incline", "reflechis", "viens", "suis", "avance", "recule", "tourne", "demitour", "marche", "rentre", "presente", "danse", "assis", "debout"]);
 
 function executerCommande(commande) {
   const dialogue = phraseAction(commande);

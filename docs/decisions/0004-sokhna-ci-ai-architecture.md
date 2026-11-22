@@ -70,3 +70,23 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
 - Automatisation de test : l'assistante TV est désactivée sauf si `window.__sokhnaciTV` est défini, pour ne pas changer le rythme des tests du diaporama.
 
 **Navigation** : l'onglet Sokhna Ci AI est désormais le dernier, après Qualité et méthode.
+
+## Voix originale en Web Worker, avatar enrichi, situation professionnelle (22 novembre 2026)
+
+**Voix originale (Piper « siwis »)**
+- Cause de la lenteur et des accrocs : la bibliothèque vits-web rechargeait, à CHAQUE phrase, le modèle de 60 Mo, recréait la session ONNX et réinstanciait le phonémiseur, sur le fil principal.
+- Nouveau moteur `web/src/sokhnaci-voix-worker.js` (Web Worker) : ONNX Runtime Web 1.18 et le phonémiseur Piper sont chargés une seule fois ; le modèle est gardé dans le cache du navigateur (OPFS, même emplacement que vits-web, donc pas de nouveau téléchargement) ; toutes les phrases d'une réponse sont phonémisées en un seul passage ; une question passe toujours avant les phrases préparées à l'avance ; une lecture interrompue annule ses phrases en attente ; petit fondu pour éviter les clics.
+- Les phrases longues sont découpées aux virgules en morceaux de taille croissante (environ 45, 60, 80, 110 caractères…) : chaque morceau est fabriqué pendant que le précédent est lu.
+- Mesure locale : premier son 1,4 s après la question (9,2 s avant), lecture complète 17 s (26,5 s avant), aucune tâche bloquante pendant la synthèse.
+- Repli inchangé : voix de l'appareil si le moteur ne répond pas.
+
+**Avatar 3D**
+- Regard : les yeux suivent l'utilisateur (three-vrm `lookAt`) avec de petites saccades ; vers l'écran quand elle le montre, vers le haut quand elle réfléchit ; la tête se tourne vers l'utilisateur quand elle marche de côté.
+- Nouvelles actions (réglées à l'image) : applaudir, s'incliner, réfléchir (main au menton), automatiquement pendant qu'elle prépare une réponse.
+- Animations VRMA : non retenues, faute de fichiers sous licence clairement libre ; l'animation reste procédurale (three-vrm).
+
+**Réponses**
+- Point de situation structuré : cadre (date, période), indicateur principal et tendance, répartition par seuil, territoires, priorités de relance, formulaire le moins renseigné, points positifs, recommandation.
+- Corrections de précision : « combien de districts sont en rouge » donne le décompte ; « quel formulaire est le plus en retard » classe les formulaires ; les classements précisent s'il s'agit de régions ou de districts ; l'explication de l'évolution dépend du sens réel de la tendance.
+
+**Conversation** : elle n'est plus enregistrée d'une visite à l'autre ; un rechargement (F5, Ctrl+F5) repart d'une conversation neuve. Elle reste conservée quand on change d'onglet.
