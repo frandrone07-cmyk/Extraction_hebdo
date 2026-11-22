@@ -167,7 +167,7 @@ test("mode TV : Sokhna Ci commente la situation, retient la diapositive, répond
   // À la fin du cycle, elle demande s'il y a des éclaircissements ou des questions, puis écoute.
   await page.locator("#tv-dots [data-slide-index]").last().click();
   // Dernière diapositive : bilan global, formulaires sans données et solutions proposées.
-  const bilan = page.locator(".tv-bilan");
+  const bilan = page.locator("#tv-stage .tv-bilan");
   await expect(bilan).toContainText("Situation globale et solutions");
   await expect(bilan.locator(".bilan-anneau-texte strong")).toContainText("%");
   await expect(bilan.locator(".bilan-manquants li").first()).toContainText("attendus");
@@ -233,4 +233,28 @@ test("voix : les phrases longues sont découpées en morceaux de taille croissan
   expect(resultat.premier[0].length).toBeLessThanOrEqual(45);
   expect(resultat.premier.join(" ")).toBe(resultat.texte);
   expect(resultat.court).toEqual(["Bonjour."]);
+});
+
+test("le bilan du mode TV est aussi affiché dans la vue d'ensemble, à l'identique", async ({ page }) => {
+  const bilan = page.locator(".bilan-section .tv-bilan");
+  await expect(bilan).toBeVisible();
+  await expect(bilan.getByRole("heading", { name: "Situation globale et solutions" })).toBeVisible();
+  await expect(bilan.locator(".bilan-anneau-texte strong")).toContainText("%");
+  expect(await bilan.locator(".bilan-manquants li").count()).toBeGreaterThan(0);
+  expect(await bilan.locator(".bilan-solution").count()).toBeGreaterThan(0);
+});
+
+test("pendant que Sokhna Ci parle, la zone qu'elle commente défile et s'illumine (tableau de bord et mode TV)", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.addInitScript(() => { window.__sokhnaciTV = true; });
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await page.evaluate(() => { window.speechSynthesis.speak = (u) => { u.onstart?.(); setTimeout(() => u.onend?.(), 700); }; });
+  await page.locator(".sokhnaci-speak").click();
+  await expect(page.locator("#contenu .sna-focus").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".bilan-manquants.sna-focus, .bilan-solutions.sna-focus")).toHaveCount(1, { timeout: 30_000 });
+  await page.locator(".sokhnaci-stop").click();
+  await page.locator("#btn-tv").click();
+  await expect(page.locator("#tv-stage .sna-focus").first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#tv-stage .tv-kpis article.sna-focus")).toHaveCount(1, { timeout: 15_000 });
 });

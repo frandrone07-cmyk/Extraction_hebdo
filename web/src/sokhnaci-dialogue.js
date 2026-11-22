@@ -138,7 +138,7 @@ export function creerSituation(model) {
 
   segments.push(segment("Salaamalekum.", "salut_main", "wo", "salaamalekum"));
   segments.push(segment("Je suis Sokhna Ci, votre assistante de suivi des rapports.", "main_sur_coeur"));
-  segments.push(segment(`Voici le point de situation de la complétude des rapports DHIS2 au ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`, "pointer_ecran"));
+  segments.push({ ...segment(`Voici le point de situation de la complétude des rapports DHIS2 au ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`, "pointer_ecran"), cible: ".insight-card" });
   if (joursDepuis(model.semaineCle) > 10) segments.push(segment("Attention : ces données datent de plus de dix jours, l’extraction hebdomadaire est à vérifier.", "geste_rassurant"));
 
   // 1. Indicateur principal et tendance
@@ -148,43 +148,43 @@ export function creerSituation(model) {
       ? `, stable par rapport à l’extraction du ${D(model.comparaisonCle)}`
       : `, ${ecart > 0 ? "en hausse" : "en baisse"} de ${P(ecart)} par rapport à l’extraction du ${D(model.comparaisonCle)}`;
   }
-  segments.push(segment(`Le taux moyen de complétude des districts est de ${T(un(taux))}${tendance} : il est ${niveau(taux, seuils)}.`, "pointer_ecran"));
+  segments.push({ ...segment(`Le taux moyen de complétude des districts est de ${T(un(taux))}${tendance} : il est ${niveau(taux, seuils)}.`, "pointer_ecran"), cible: ".grid-kpi > :nth-child(1), .bilan-anneau" });
 
   // 2. Répartition des districts selon les seuils
   const rouges = avecTaux.filter((d) => d.tauxMoyen < seuils.critique).length;
   const verts = avecTaux.filter((d) => d.tauxMoyen >= seuils.conforme).length;
   const oranges = avecTaux.length - rouges - verts;
-  segments.push(segment(`Sur ${E(avecTaux.length)} districts analysés, ${E(rouges)} ${rouges > 1 ? "sont" : "est"} sous le seuil critique de ${T(seuils.critique)}, ${E(oranges)} à surveiller et ${E(verts)} ${verts > 1 ? "sont conformes" : "est conforme"}.`, "compter_doigts"));
+  segments.push({ ...segment(`Sur ${E(avecTaux.length)} districts analysés, ${E(rouges)} ${rouges > 1 ? "sont" : "est"} sous le seuil critique de ${T(seuils.critique)}, ${E(oranges)} à surveiller et ${E(verts)} ${verts > 1 ? "sont conformes" : "est conforme"}.`, "compter_doigts"), cible: "#ch-statuts" });
 
   // 3. Territoires : écart entre la région la plus en retard et la mieux placée
   const regions = (model.regions?.length > 1 ? model.regions : []).filter((r) => r.tauxMoyen !== null && r.tauxMoyen !== undefined).sort((a, b) => a.tauxMoyen - b.tauxMoyen);
   if (regions.length > 1) {
     const pire = regions[0];
     const meilleure = regions.at(-1);
-    segments.push(segment(`La région la plus en retard est ${labelRegion(pire.nom)}, à ${T(un(pire.tauxMoyen))} ; la mieux placée est ${labelRegion(meilleure.nom)}, à ${T(un(meilleure.tauxMoyen))}.`, "geste_ouvert"));
+    segments.push({ ...segment(`La région la plus en retard est ${labelRegion(pire.nom)}, à ${T(un(pire.tauxMoyen))} ; la mieux placée est ${labelRegion(meilleure.nom)}, à ${T(un(meilleure.tauxMoyen))}.`, "geste_ouvert"), cible: "#carte-regions" });
   }
 
   // 4. Priorités de relance
   const critiques = avecTaux.filter((d) => d.statut === "critique").sort((a, b) => a.tauxMoyen - b.tauxMoyen).slice(0, 3);
   if (critiques.length) {
-    segments.push(segment(`Priorités de relance : ${liste(critiques.map((d) => `${d.nom}, à ${T(un(d.tauxMoyen))}`))}.`, "geste_rassurant"));
+    segments.push({ ...segment(`Priorités de relance : ${liste(critiques.map((d) => `${d.nom}, à ${T(un(d.tauxMoyen))}`))}.`, "geste_rassurant"), cible: ".grid3 > .card:nth-child(1)" });
   }
 
   // 5. Formulaire le plus en retard
   const formulaires = (model.formulaires?.length ? model.formulaires : model.tousFormulaires || []).filter((f) => f.tauxMoyen !== null && f.tauxMoyen !== undefined);
   const faible = formulaires.length > 1 ? [...formulaires].sort((a, b) => a.tauxMoyen - b.tauxMoyen)[0] : null;
-  if (faible) segments.push(segment(`Le formulaire le moins renseigné est « ${nomFormulaire(faible.nom)} », à ${T(un(faible.tauxMoyen))}.`, "pointer_ecran"));
+  if (faible) segments.push({ ...segment(`Le formulaire le moins renseigné est « ${nomFormulaire(faible.nom)} », à ${T(un(faible.tauxMoyen))}.`, "pointer_ecran"), cible: ".bilan-manquants" });
 
   // 6. Points positifs (sans les inventer : seulement s'ils existent)
   const meilleurs = [...avecTaux].sort((a, b) => b.tauxMoyen - a.tauxMoyen).filter((d) => d.tauxMoyen >= seuils.conforme).slice(0, 2);
-  if (meilleurs.length) segments.push(segment(`À saluer : ${liste(meilleurs.map((d) => `${d.nom}, à ${T(un(d.tauxMoyen))}`))}.`, "pouce_leve"));
+  if (meilleurs.length) segments.push({ ...segment(`À saluer : ${liste(meilleurs.map((d) => `${d.nom}, à ${T(un(d.tauxMoyen))}`))}.`, "pouce_leve"), cible: ".top-performers" });
 
   // 7. Recommandation
   if (critiques.length || faible) {
     const actions = [];
     if (critiques.length) actions.push(`relancer d’abord ${critiques.length > 1 ? "les équipes de ces districts" : "l’équipe de ce district"}`);
     if (faible && faible.tauxMoyen < seuils.critique) actions.push(`vérifier la saisie de « ${nomFormulaire(faible.nom)} »`);
-    if (actions.length) segments.push(segment(`Ma recommandation : ${liste(actions)}.`, "geste_ouvert"));
+    if (actions.length) segments.push({ ...segment(`Ma recommandation : ${liste(actions)}.`, "geste_ouvert"), cible: ".bilan-solutions" });
   }
   segments.push(segment("Je reste à votre disposition pour le détail d’une région, d’un district ou d’un formulaire.", "mains_jointes"));
   return { etat: "attente", emotion, segments, suivi: "Que voulez-vous savoir ?" };

@@ -100,3 +100,8 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
   - solutions proposées (au plus cinq, avec priorité Immédiat / Cette semaine / Ce mois), déduites de l'analyse : districts en retard global, formulaires sans données, formulaires bas partout, régions entièrement en rouge, district atypique, valeurs à zéro, régions qui stagnent.
 - Design de la diapositive : fond sombre en dégradé, cartes translucides en relief, icônes en volume, apparition échelonnée en perspective. Il a été réalisé directement en CSS : aucun outil Figma n'est connecté à ce projet.
 - Gestes : sans mot déclencheur, le geste « parole » (accompagnement rythmé de la voix) remplace l'absence de geste.
+
+## Suivi visuel de la parole et bilan dans le tableau de bord (22 novembre 2026)
+
+- Chaque phrase de Sokhna Ci peut désigner la zone qu'elle commente (`cible`). Pendant la phrase, l'affichage défile jusqu'à cette zone et l'entoure d'un halo (`web/src/mise-en-avant.js`) : diapositives du mode TV (indicateurs, graphiques, ligne de la carte thermique, cartes du bilan, chaque solution) et vue d'ensemble quand la carte flottante lit le point de situation (synthèse, taux moyen, répartition, carte des régions, priorités, formulaires sans données, solutions).
+- Le bilan « Situation globale et solutions » est affiché à l'identique dans la vue d'ensemble et dans le diaporama : un seul rendu (`bilanHtml` dans `bilan.js`), avec des identifiants propres à chaque emplacement.

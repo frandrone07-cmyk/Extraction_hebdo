@@ -3,6 +3,7 @@ import { phraseAction } from "./sokhnaci-actions.js";
 import { interpreterEntree } from "./sokhnaci-cerveau.js";
 import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
 import { gesteA, planifierGestes } from "./sokhnaci-gestes.js";
+import { effacerMiseEnAvant, mettreEnAvant } from "./mise-en-avant.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
 const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
@@ -32,6 +33,7 @@ let contexteAudio = null;
 let volume = 1;
 const avatarsExternes = new Set();
 let planGestes = [];
+let segmentsLecture = [];
 let gesteActuel = null;
 const syntheses = new Map();
 
@@ -326,8 +328,16 @@ function lierBouche(audio, surProgression = null) {
   }
 }
 
+// Hors mode TV et hors espace Sokhna Ci AI, la page défile jusqu'à la zone commentée (indicateur, carte, bilan…).
+function suivreDansLaPage(index) {
+  const libre = !document.body.classList.contains("tv") && !document.body.classList.contains("sna-actif");
+  const cible = index === null ? null : segmentsLecture[index]?.cible;
+  if (!libre || !cible) { if (libre) effacerMiseEnAvant(); return; }
+  mettreEnAvant(document.getElementById("contenu"), cible);
+}
 function marquerPhrase(index) {
   emettre("phrase", { index });
+  suivreDansLaPage(index);
   const bulle = widget?.querySelector(".sokhnaci-bubble");
   if (!bulle) return;
   bulle.querySelectorAll(".sok-phrase.actif").forEach((element) => element.classList.remove("actif"));
@@ -408,6 +418,7 @@ async function jouerVoix(segment) {
 async function lire(segments) {
   arreterLecture();
   const id = lectureId;
+  segmentsLecture = segments;
   demarrerPiperAutomatique();
   // La réponse ne doit jamais attendre longtemps : si la voix originale n'est pas encore prête (premier
   // téléchargement), cette réponse est lue avec la voix de l'appareil et la suivante utilisera la voix originale.

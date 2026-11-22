@@ -842,7 +842,7 @@ body.tv-avec-sna .tv-slide { min-height: calc(100vh - 68px - 156px - 40px); }
 .bilan-anneau { position: relative; width: min(190px, 100%); aspect-ratio: 1; filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .35)); }
 .bilan-anneau svg { width: 100%; height: 100%; }
 .anneau-fond { fill: none; stroke: rgba(255, 255, 255, .09); stroke-width: 13; }
-.anneau-valeur { fill: none; stroke: url(#bilan-degrade); stroke-width: 13; stroke-linecap: round; filter: drop-shadow(0 0 7px rgba(255, 255, 255, .25)); }
+.anneau-valeur { fill: none; stroke-width: 13; stroke-linecap: round; filter: drop-shadow(0 0 7px rgba(255, 255, 255, .25)); }
 .bilan-anneau.critique .arret-a { stop-color: #ff8a7a; } .bilan-anneau.critique .arret-b { stop-color: #d9433a; }
 .bilan-anneau.surveiller .arret-a { stop-color: #ffd36b; } .bilan-anneau.surveiller .arret-b { stop-color: #d98b00; }
 .bilan-anneau.conforme .arret-a, .bilan-anneau.inconnu .arret-a { stop-color: #8ff0c4; } .bilan-anneau.conforme .arret-b, .bilan-anneau.inconnu .arret-b { stop-color: #1aa36f; }
@@ -893,3 +893,16 @@ body.tv-avec-sna .tv-slide { min-height: calc(100vh - 68px - 156px - 40px); }
 @media (max-width: 1280px) { .bilan-grille { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .bilan-solutions { grid-column: 1 / -1; } .bilan-solutions ol { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); } }
 @media (max-width: 760px) { .bilan-grille { grid-template-columns: minmax(0, 1fr); } .bilan-tete { flex-direction: column; align-items: flex-start; } }
 @media (prefers-reduced-motion: reduce) { .bilan-carte, .bilan-manquants li, .bilan-solution { animation: none; } }
+
+/* Zone commentée par Sokhna Ci : halo pendant la phrase (mode TV et tableau de bord) */
+.sna-focus { position: relative; z-index: 2; outline: 3px solid #2fbf86; outline-offset: 4px; box-shadow: 0 0 0 9px rgba(47, 191, 134, .18), 0 22px 44px rgba(10, 40, 32, .22); transform: translateY(-2px) scale(1.012); transition: transform .35s ease, box-shadow .35s ease, outline-color .35s ease; }
+tr.sna-focus { transform: none; outline-offset: -2px; box-shadow: none; }
+tr.sna-focus th, tr.sna-focus td { box-shadow: inset 0 0 0 999px rgba(47, 191, 134, .12); }
+.tv-bilan .sna-focus { outline-color: #8ff0c4; box-shadow: 0 0 0 9px rgba(143, 240, 196, .16), 0 22px 44px rgba(0, 0, 0, .35); }
+@media (prefers-reduced-motion: reduce) { .sna-focus { transform: none; transition: none; } }
+/* Bilan dans le tableau de bord */
+.bilan-section .tv-bilan { border-radius: 22px; }
+.bilan-section .bilan-tete h2 { margin: 4px 0 0; font-family: Manrope, sans-serif; font-size: clamp(22px, 2.6vw, 32px); letter-spacing: -.045em; line-height: 1.1; background: linear-gradient(90deg, #ffffff, #b9f1d6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.bilan-section .bilan-carte h3 { margin: 0 0 10px; color: #fff; font-family: Manrope, sans-serif; font-size: 16px; }
+@media (max-width: 1280px) { .bilan-section .bilan-grille { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .bilan-section .bilan-solutions { grid-column: 1 / -1; } }
+@media (max-width: 860px) { .bilan-section .bilan-grille { grid-template-columns: minmax(0, 1fr); } }

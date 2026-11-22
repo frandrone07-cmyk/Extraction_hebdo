@@ -6,6 +6,7 @@ import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
 import { D, E, T, emotionPour, labelRegion, liste, niveau, nomFormulaire, periodeTexte, segment, versAffichage } from "./sokhnaci-dialogue.js";
 import { interpreterEntree } from "./sokhnaci-cerveau.js";
 import { construireBilan, texteBilan } from "./bilan.js";
+import { effacerMiseEnAvant, mettreEnAvant } from "./mise-en-avant.js";
 import { interrogerLLM, llmDisponible, segmentsDepuisTexteIA } from "./sokhnaci-llm.js";
 
 const CLE_ATTENTIVE = "sokhna-ci-tv-attentive";
@@ -45,51 +46,51 @@ export function commentaire(id, model, { premiere = false } = {}) {
   }
   let emotion = emotionPour(taux, seuils);
   if (id === "synth") {
-    segments.push(segment(`Voici la situation au ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`, "pointer_ecran"));
-    segments.push(segment(`Le taux moyen national est de ${T(un(taux))}, ${niveau(taux, seuils)}.`));
+    segments.push(vise(segment(`Voici la situation au ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`, "pointer_ecran"), ".tv-slide-head"));
+    segments.push(vise(segment(`Le taux moyen national est de ${T(un(taux))}, ${niveau(taux, seuils)}.`), ".tv-kpis article:nth-child(1)"));
     const comparable = moyenne(districts.map((d) => d.tauxComparable));
     const precedent = moyenne(districts.map((d) => d.tauxPrecedent));
     if (comparable !== null && precedent !== null) {
       const ecart = un(comparable - precedent);
-      segments.push(segment(Math.abs(ecart) < seuils.baisse ? "Par rapport à l’extraction précédente, la situation est stable." : ecart > 0 ? `C’est ${P_(ecart)} de mieux que l’extraction précédente.` : `C’est ${P_(ecart)} de moins que l’extraction précédente.`));
+      segments.push(vise(segment(Math.abs(ecart) < seuils.baisse ? "Par rapport à l’extraction précédente, la situation est stable." : ecart > 0 ? `C’est ${P_(ecart)} de mieux que l’extraction précédente.` : `C’est ${P_(ecart)} de moins que l’extraction précédente.`), "#tv-chart-national"));
     }
-    segments.push(segment(`${E(critiques.length)} ${pluriel(critiques.length, "district est", "districts sont")} sous le seuil critique de ${T(seuils.critique)}, sur ${E(districts.length)} analysés.`));
+    segments.push(vise(segment(`${E(critiques.length)} ${pluriel(critiques.length, "district est", "districts sont")} sous le seuil critique de ${T(seuils.critique)}, sur ${E(districts.length)} analysés.`), ".tv-kpis article:nth-child(4)"));
   } else if (id === "carte") {
     emotion = critiques.length ? "preoccupee" : "felicitations";
-    segments.push(segment(critiques.length
+    segments.push(vise(segment(critiques.length
       ? `Sur la carte, ${E(critiques.length)} ${pluriel(critiques.length, "district est", "districts sont")} en rouge. Les plus en retard : ${citer(critiques.slice(0, 3))}.`
-      : "Sur la carte, aucun district n’est sous le seuil critique. Bravo à toutes les équipes !", critiques.length ? "geste_rassurant" : "pouce_leve"));
-    if (critiques.length) segments.push(segment("Ce sont les équipes à accompagner en premier."));
+      : "Sur la carte, aucun district n’est sous le seuil critique. Bravo à toutes les équipes !", critiques.length ? "geste_rassurant" : "pouce_leve"), "#tv-map"));
+    if (critiques.length) segments.push(vise(segment("Ce sont les équipes à accompagner en premier."), ".tv-map-details .card:nth-child(2)"));
   } else if (id === "reg") {
     const pire = regions[0];
     const meilleure = regions.at(-1);
-    segments.push(segment(`Par région, la mieux placée est ${labelRegion(meilleure.nom)}, à ${T(un(meilleure.tauxMoyen))}.`, "pouce_leve"));
-    segments.push(segment(`La plus en retard est ${labelRegion(pire.nom)}, à ${T(un(pire.tauxMoyen))}.`, "geste_rassurant"));
+    segments.push(vise(segment(`Par région, la mieux placée est ${labelRegion(meilleure.nom)}, à ${T(un(meilleure.tauxMoyen))}.`, "pouce_leve"), "#tv-chart-region"));
+    segments.push(vise(segment(`La plus en retard est ${labelRegion(pire.nom)}, à ${T(un(pire.tauxMoyen))}.`, "geste_rassurant"), "#tv-chart-region"));
     const rouges = regions.filter((r) => r.tauxMoyen < seuils.critique).length;
     segments.push(segment(`${E(rouges)} ${pluriel(rouges, "région est", "régions sont")} sous le seuil critique, sur ${E(regions.length)}.`));
   } else if (id === "form") {
     const formulaires = [...(model.tousFormulaires || [])].filter((f) => f.tauxMoyen !== null && f.tauxMoyen !== undefined).sort((a, b) => a.tauxMoyen - b.tauxMoyen);
     if (formulaires.length) {
-      segments.push(segment(`Côté formulaires, le plus en retard est ${nomFormulaire(formulaires[0].nom)}, à ${T(un(formulaires[0].tauxMoyen))}.`, "geste_rassurant"));
-      segments.push(segment(`Le mieux rempli est ${nomFormulaire(formulaires.at(-1).nom)}, à ${T(un(formulaires.at(-1).tauxMoyen))}.`, "pouce_leve"));
+      segments.push(vise(segment(`Côté formulaires, le plus en retard est ${nomFormulaire(formulaires[0].nom)}, à ${T(un(formulaires[0].tauxMoyen))}.`, "geste_rassurant"), "#tv-chart-form"));
+      segments.push(vise(segment(`Le mieux rempli est ${nomFormulaire(formulaires.at(-1).nom)}, à ${T(un(formulaires.at(-1).tauxMoyen))}.`, "pouce_leve"), "#tv-chart-form"));
     } else segments.push(segment("Aucun formulaire n’a de résultat pour cette sélection.", "geste_ouvert"));
   } else if (id === "heat") {
-    segments.push(segment("La carte thermique croise les régions et les formulaires.", "pointer_ecran"));
-    segments.push(segment("Chaque case rouge est un rapport à relancer en priorité."));
+    segments.push(vise(segment("La carte thermique croise les régions et les formulaires.", "pointer_ecran"), ".heatmap"));
+    segments.push(vise(segment("Chaque case rouge est un rapport à relancer en priorité."), ".heatmap"));
     const plusTouchee = [...(model.toutesRegions || [])].sort((a, b) => b.nbCritique - a.nbCritique)[0];
-    if (plusTouchee?.nbCritique) segments.push(segment(`${labelRegion(plusTouchee.nom)} compte le plus de districts critiques : ${E(plusTouchee.nbCritique)}.`));
+    if (plusTouchee?.nbCritique) segments.push(vise(segment(`${labelRegion(plusTouchee.nom)} compte le plus de districts critiques : ${E(plusTouchee.nbCritique)}.`), `.heatmap tr[data-region="${echapperCss(plusTouchee.nom)}"]`));
   } else if (id === "top") {
     const tries = [...districts].sort((a, b) => b.tauxMoyen - a.tauxMoyen);
-    segments.push(segment(`Les meilleurs résultats : ${citer(tries.slice(0, 3))}.`, "pouce_leve"));
-    segments.push(segment(`Les plus faibles : ${citer(tries.slice(-3).reverse())}.`, "geste_rassurant"));
+    segments.push(vise(segment(`Les meilleurs résultats : ${citer(tries.slice(0, 3))}.`, "pouce_leve"), ".tv-half .card:nth-child(1)"));
+    segments.push(vise(segment(`Les plus faibles : ${citer(tries.slice(-3).reverse())}.`, "geste_rassurant"), ".tv-half .card:nth-child(2)"));
   } else if (id === "tabreg") {
     const rouges = regions.filter((r) => r.tauxMoyen < seuils.critique).length;
-    segments.push(segment(`Cette synthèse détaille chaque région et chaque période DHIS2 de l’extraction du ${D(model.semaineCle)}.`, "pointer_ecran"));
-    segments.push(segment(`${E(rouges)} ${pluriel(rouges, "région est", "régions sont")} en rouge.`));
+    segments.push(vise(segment(`Cette synthèse détaille chaque région et chaque période DHIS2 de l’extraction du ${D(model.semaineCle)}.`, "pointer_ecran"), ".tv-half .card:nth-child(1)"));
+    segments.push(vise(segment(`${E(rouges)} ${pluriel(rouges, "région est", "régions sont")} en rouge.`), ".tv-half .card:nth-child(1)"));
   } else if (id === "bilan") {
     const bilan = construireBilan(model);
     emotion = bilan.taux !== null && bilan.taux < seuils.critique ? "preoccupee" : "encourageante";
-    for (const phrase of texteBilan(bilan)) segments.push(segment(phrase));
+    for (const phrase of texteBilan(bilan)) segments.push(vise(segment(phrase.texte), phrase.cible));
   } else if (id === "evo") {
     const valeurs = model.evolution?.moyenne_generale || [];
     const semaines = model.evolution?.semaines || [];
@@ -97,13 +98,16 @@ export function commentaire(id, model, { premiere = false } = {}) {
       const avant = valeurs.at(-2);
       const apres = valeurs.at(-1);
       emotion = apres > avant ? "souriante" : apres < avant ? "preoccupee" : "neutre";
-      segments.push(segment(`Depuis l’extraction du ${D(semaines.at(-2))}, le taux moyen est passé de ${T(un(avant))} à ${T(un(apres))}.`, "pointer_ecran"));
+      segments.push(vise(segment(`Depuis l’extraction du ${D(semaines.at(-2))}, le taux moyen est passé de ${T(un(avant))} à ${T(un(apres))}.`, "pointer_ecran"), "#tv-chart-evolution"));
       segments.push(segment(apres > avant ? "La tendance est à l’amélioration." : apres < avant ? "Attention, la tendance est à la baisse." : "La situation est stable."));
     } else segments.push(segment("Une seule extraction est disponible pour le moment, je ne peux pas encore parler d’évolution.", "geste_ouvert"));
   }
   return { emotion, segments };
 }
 const P_ = (x) => `«P:${Math.abs(x)}»`;
+// Associe une phrase à la zone de la diapositive qu'elle commente (défilement + halo pendant la phrase).
+const vise = (s, cible) => ({ ...s, cible });
+const echapperCss = (texte) => (window.CSS?.escape ? CSS.escape(texte) : String(texte).replace(/"/g, '\\"'));
 
 const PHRASES_FIN = [
   segment("Voilà pour la situation.", "geste_ouvert"),
@@ -155,6 +159,8 @@ export function creerAssistanteTV() {
     marcherVers(cible, 1000);
   }
 
+  // Fait défiler la diapositive jusqu'à la zone commentée et la met en valeur pendant la phrase.
+  const viser = (s) => { if (s?.cible) mettreEnAvant(document.getElementById("tv-stage"), s.cible); else effacerMiseEnAvant(); };
   const voixPossible = () => etat.voix && navigator.userActivation?.hasBeenActive !== false && !(navigator.webdriver && !window.__sokhnaciPiper);
   const dire = (texte) => { if (sousTitre) sousTitre.textContent = texte; };
   const marquer = (texte) => { if (libelleEtat) libelleEtat.textContent = texte; if (carte) carte.dataset.etat = texte ? "actif" : ""; };
@@ -243,6 +249,7 @@ export function creerAssistanteTV() {
     const detail = evenement.detail || {};
     if (detail.type === "phrase" && detail.index !== null && etat.parle && etat.segments[detail.index]) {
       dire(etat.segments[detail.index].affichage);
+      viser(etat.segments[detail.index]);
       pasPendantExpose(detail.index);
     }
   }
@@ -260,13 +267,14 @@ export function creerAssistanteTV() {
         for (const s of etat.segments) {
           if (jeton !== etat.jeton) break;
           dire(s.affichage);
+          viser(s);
           acteur?.classList.add("speaking");
           await attendre(Math.max(1800, s.affichage.length * 62));
           acteur?.classList.remove("speaking");
         }
       }
     } finally {
-      if (jeton === etat.jeton) { etat.parle = false; etat.silenceJusqua = Date.now() + 1500; acteur?.classList.remove("speaking"); }
+      if (jeton === etat.jeton) { etat.parle = false; etat.silenceJusqua = Date.now() + 1500; acteur?.classList.remove("speaking"); effacerMiseEnAvant(); }
     }
     return jeton === etat.jeton;
   }
@@ -457,6 +465,7 @@ export function creerAssistanteTV() {
       arreterEcouteActive();
       arreterLecture();
       document.removeEventListener("sokhnaci:evenement", surEvenement);
+      effacerMiseEnAvant();
       if (acteur) delierAvatarExterne(acteur);
       carte?.remove();
       document.body.classList.remove(ESPACE_PAGE, PAGE_PRESENTATRICE);
