@@ -144,44 +144,47 @@ test("mode TV : sans autorisation (automatisation) l'assistante est absente et l
   await expect(page.locator(".tv-sna")).toHaveCount(0);
 });
 
-test("mode TV : Sokhna Ci commente la situation, retient la diapositive, répond aux questions et demande s'il y en a", async ({ page }) => {
+test("mode TV : Sokhna Ci n'apparaît que sur la dernière diapositive, fait le point et répond aux questions", async ({ page }) => {
   test.setTimeout(150_000);
   await page.addInitScript(() => { window.__sokhnaciTV = true; });
   await page.reload();
   await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
   await page.locator("#btn-tv").click();
-  const carte = page.locator(".tv-sna");
-  await expect(carte).toBeVisible();
-  await expect(page.locator("body")).toHaveClass(/tv-avec-sna/);
-  await expect(carte.locator(".tv-sna-soustitre")).toContainText("Voici la situation au", { timeout: 15_000 });
-  await expect(carte.locator(".tv-sna-etat")).toHaveText("Je présente…");
-  await expect(page.locator("#tv-progress-fill")).toHaveCSS("width", "0px"); // la diapositive est retenue pendant que Sokhna Ci parle
-  await expect(page.locator("#tv-counter")).toHaveText("1 / 9");
-  // Question au clavier : touche Q, puis réponse issue des données.
-  await page.locator("#tv-stage").click({ position: { x: 10, y: 10 } });
-  await page.keyboard.press("q");
-  await expect(carte.locator("input")).toBeFocused();
-  await carte.locator("input").fill("quelle région est la plus en retard ?");
-  await carte.locator("input").press("Enter");
-  await expect(carte.locator(".tv-sna-soustitre")).toContainText("%", { timeout: 20_000 }); // la réponse chiffrée remplace le commentaire
-  await expect(page.locator("#tv-counter")).toHaveText("1 / 9");
-  // À la fin du cycle, elle demande s'il y a des éclaircissements ou des questions, puis écoute.
-  await page.locator("#tv-dots [data-slide-index]").last().click();
-  // Dernière diapositive : bilan global, formulaires sans données et solutions proposées.
+  await expect(page.locator("#tv-counter")).toHaveText("1 / 10");
+  await page.waitForTimeout(800);
+  await expect(page.locator(".tv-sna")).toHaveCount(0); // pas d'assistante sur les diapositives ordinaires
+  // Avant-dernière diapositive : le bilan, sans assistante.
+  await page.locator('#tv-dots [data-slide-index="8"]').click();
   const bilan = page.locator("#tv-stage .tv-bilan");
   await expect(bilan).toContainText("Situation globale et solutions");
-  await expect(bilan.locator(".bilan-anneau-texte strong")).toContainText("%");
-  await expect(bilan.locator(".bilan-manquants li").first()).toContainText("attendus");
   expect(await bilan.locator(".bilan-solution").count()).toBeGreaterThan(0);
-  await expect(bilan.locator(".bilan-solution .bilan-pill").first()).toHaveText(/Immédiat|Cette semaine|Ce mois/);
-  await expect(carte.locator(".tv-sna-soustitre")).toContainText("Pour conclure", { timeout: 20_000 });
-  await expect(carte.locator(".tv-sna-soustitre")).toContainText("éclaircissements", { timeout: 60_000 });
-  await expect(carte.locator(".tv-sna-etat")).toHaveText("Je vous écoute…", { timeout: 30_000 });
-  await expect(page.locator("#tv-counter")).toHaveText("9 / 9");
+  await expect(page.locator(".tv-sna")).toHaveCount(0);
+  // Dernière diapositive : Sokhna Ci fait le point de situation, puis demande s'il y a des questions.
+  await page.locator("#tv-dots [data-slide-index]").last().click();
+  await expect(page.locator("#tv-counter")).toHaveText("10 / 10");
+  const carte = page.locator("#tv-stage .tv-sna-diapo");
+  await expect(carte).toBeVisible();
+  await expect(carte.locator(".tv-sna-soustitre")).toContainText("point de situation", { timeout: 20_000 });
+  await expect(page.locator("#tv-progress-fill")).toHaveCSS("width", "0px"); // la diapositive est retenue pendant qu'elle parle
+  // Question au clavier : réponse précise, consignée dans l'historique des échanges.
+  await page.keyboard.press("q");
+  await expect(carte.locator("input")).toBeFocused();
+  await carte.locator("input").fill("combien de districts sont en rouge");
+  await carte.locator("input").press("Enter");
+  await expect(carte.locator(".tv-sna-echange.question")).toHaveText("combien de districts sont en rouge");
+  await expect(carte.locator(".tv-sna-echange.reponse").first()).toContainText(/sur \d+ districts analysés, \d+ (sont|est) en rouge/);
+  await expect(carte.locator(".tv-sna-etat")).toHaveText("Je vous écoute…", { timeout: 40_000 });
+  await expect(page.locator("#tv-counter")).toHaveText("10 / 10");
+  // Touche Q depuis une autre diapositive : on rejoint directement Sokhna Ci.
+  await page.locator('#tv-dots [data-slide-index="0"]').click();
+  await expect(page.locator(".tv-sna")).toHaveCount(0);
+  await page.locator("#tv-stage").click({ position: { x: 10, y: 10 } });
+  await page.keyboard.press("q");
+  await expect(page.locator("#tv-counter")).toHaveText("10 / 10");
+  await expect(page.locator("#tv-stage .tv-sna-diapo input")).toBeFocused({ timeout: 15_000 });
   // Quitter le mode TV retire l'assistante.
   await page.locator("#tv-close").click();
   await expect(page.locator(".tv-sna")).toHaveCount(0);
-  await expect(page.locator("body")).not.toHaveClass(/tv-avec-sna/);
 });
 
 test("point de situation professionnel : cadre, indicateur, répartition, priorités et recommandation", async ({ page }) => {
@@ -245,7 +248,7 @@ test("le bilan du mode TV est aussi affiché dans la vue d'ensemble, à l'identi
   expect(await bilan.locator(".bilan-solution").count()).toBeGreaterThan(0);
 });
 
-test("pendant que Sokhna Ci parle, la zone qu'elle commente défile et s'illumine (tableau de bord et mode TV)", async ({ page }) => {
+test("pendant que Sokhna Ci parle, la zone qu'elle commente défile et s'illumine dans le tableau de bord", async ({ page }) => {
   test.setTimeout(120_000);
   await page.addInitScript(() => { window.__sokhnaciTV = true; });
   await page.reload();
@@ -255,9 +258,6 @@ test("pendant que Sokhna Ci parle, la zone qu'elle commente défile et s'illumin
   await expect(page.locator("#contenu .sna-focus").first()).toBeVisible({ timeout: 10_000 });
   await expect(page.locator(".bilan-manquants.sna-focus, .bilan-solutions.sna-focus")).toHaveCount(1, { timeout: 30_000 });
   await page.locator(".sokhnaci-stop").click();
-  await page.locator("#btn-tv").click();
-  await expect(page.locator("#tv-stage .sna-focus").first()).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator("#tv-stage .tv-kpis article.sna-focus")).toHaveCount(1, { timeout: 15_000 });
 });
 
 test("tableau de bord : Sokhna Ci est affichée comme en mode TV (présentatrice en pied sur grand écran, carte compacte sinon)", async ({ page }) => {
@@ -271,10 +271,18 @@ test("tableau de bord : Sokhna Ci est affichée comme en mode TV (présentatrice
   await page.locator(".sokhnaci-speak").click();
   await expect(widget).toHaveClass(/speaking/);
   // Réduite, elle libère la place ; sur un écran plus petit, la carte compacte revient.
+  // Bouton « − » : Sokhna Ci se ferme complètement (aucune pastille), et le reste après un rechargement.
   await page.locator(".sokhnaci-collapse").click();
+  await expect(widget).toBeHidden();
+  await expect(page.locator(".sokhnaci-launcher")).toBeHidden();
   await expect(page.locator("body")).not.toHaveClass(/avec-presentatrice/);
-  await page.locator(".sokhnaci-launcher").click();
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await expect(widget).toBeHidden();
+  // Elle se rouvre avec le bouton « Sokhna Ci » de l'en-tête.
+  await page.locator(".sokhnaci-rouvrir").click();
   await expect(widget).toHaveClass(/presentatrice/);
+  await expect(page.locator(".sokhnaci-rouvrir")).toBeHidden();
   await page.setViewportSize({ width: 1000, height: 800 });
   await expect(widget).not.toHaveClass(/presentatrice/);
   // Même carte que le mode TV : champ « Une question ? (touche Q) », touche Q pour poser une question.

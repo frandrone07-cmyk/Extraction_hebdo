@@ -14,6 +14,7 @@ const DEFINITIONS = [
   { id: "tabreg", title: "Synthèse région et période", description: "Vue consolidée des territoires et périodes DHIS2." },
   { id: "evo", title: "Évolution par date d’extraction", description: "Tendance nationale et régionale entre les extractions." },
   { id: "bilan", title: "Situation globale et solutions", description: "Bilan, formulaires sans données et actions proposées." },
+  { id: "assistante", title: "Sokhna Ci : situation et questions", description: "Sokhna Ci fait le point et répond aux questions." },
 ];
 const REDUIT = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -133,6 +134,7 @@ function slideMarkup(id) {
     heat: `<div class="tv-slide-head"><span class="eyebrow">CROISEMENT TERRITORIAL</span><h1>Régions × formulaires</h1><p>Les écarts de couleur suivent les seuils configurés dans DHIS2.</p></div><article class="card"><div class="table-scroll"><table class="heatmap"><thead><tr><th>Région</th>${data.tousFormulaires.map((form) => `<th title="${escapeHtml(form.nom)}">${escapeHtml(form.nom)}</th>`).join("")}</tr></thead><tbody>${data.toutesRegions.map((region) => `<tr data-region="${escapeHtml(region.nom)}"><th scope="row">${escapeHtml(labelRegion(region.nom))}</th>${data.tousFormulaires.map((form) => { const value = average(region.districts.flatMap((district) => district.formulaires.filter((item) => item.nom === form.nom).map((item) => item.valeur))); const color = value === null ? "inconnu" : value < data.seuils.critique ? "critique" : value < data.seuils.conforme ? "surveiller" : "conforme"; return `<td class="heatmap-cell" style="background:${couleurStatut(color)}">${value ?? "—"}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div></article>`,
     top: `<div class="tv-slide-head"><span class="eyebrow">CLASSEMENTS</span><h1>Résultats marquants</h1><p>Les taux les plus élevés et les districts à accompagner.</p></div><div class="tv-layout tv-half"><article class="card"><div class="card-head"><h2>10 meilleurs résultats</h2><span class="status-chip conforme">Top 10</span></div>${ranking(data, false)}</article><article class="card"><div class="card-head"><h2>10 taux les plus faibles</h2><span class="status-chip critique">À suivre</span></div>${ranking(data, true)}</article></div>`,
     tabreg: `<div class="tv-slide-head"><span class="eyebrow">SYNTHÈSE CROISÉE</span><h1>Région et période</h1><p>Lecture de l’extraction ${escapeHtml(data.semaineCle)} sur ${escapeHtml(data.selection.periode)}.</p></div><div class="tv-layout tv-half"><article class="card"><h2>Synthèse par région</h2><div class="table-scroll"><table><thead><tr><th>Région</th><th>Taux moyen</th><th>Critiques</th></tr></thead><tbody>${data.toutesRegions.map((region) => `<tr><td>${escapeHtml(labelRegion(region.nom))}</td><td>${pct(region.tauxMoyen)}</td><td class="cell-critique">${region.nbCritique}</td></tr>`).join("")}</tbody></table></div></article><article class="card"><h2>Taux moyen par période</h2><div class="chartbox tv-chart"><canvas id="tv-chart-period"></canvas></div></article></div>`,
+    assistante: `<div class="tv-slide-head"><span class="eyebrow">ÉCHANGE AVEC SOKHNA CI</span><h1>Point de situation et questions</h1><p>Posez vos questions à voix haute, au clavier (touche Q) ou avec le micro.</p></div><div class="tv-sna-hote" id="tv-sna-hote"></div>`,
     bilan: bilanHtml(data, { id: "tv", niveau: 1, libelleDate: data.semaineLibelle }),
     evo: `<div class="tv-slide-head"><span class="eyebrow">SUIVI DANS LE TEMPS</span><h1>Évolution par date d’extraction</h1><p>Comparaison des 14 régions au fil des extractions hebdomadaires.</p></div><article class="card tv-chart-card"><div class="chartbox tv-chart-large"><canvas id="tv-chart-evolution"></canvas></div></article>`,
   };
@@ -232,7 +234,7 @@ function relacher(motif, pause = 3500) {
   const restant = dureeDiapositive() - (Date.now() - debutDiapositive);
   schedule(Math.max(pause, restant));
 }
-const controleAssistante = { retenir, relacher };
+const controleAssistante = { retenir, relacher, allerA: (id) => { const i = selectedSlides.findIndex((slide) => slide.id === id); if (i >= 0) show(i); } };
 function show(index, { silencieux = false } = {}) {
   if (!active) return;
   clearTimeout(mapTourTimer);
@@ -371,6 +373,8 @@ export function demarrerDiaporama(currentModel, { initialSlide = 0, refresh, clo
     ? requestedScenes.split(",").map((id) => DEFINITIONS.find((slide) => slide.id === id.trim())).filter(Boolean)
     : DEFINITIONS;
   if (!selectedSlides.length) selectedSlides = DEFINITIONS;
+  // La diapositive « Sokhna Ci » n'existe que si l'assistante est active.
+  if (!assistante) selectedSlides = selectedSlides.filter((slide) => slide.id !== "assistante");
   const requestedId = new URLSearchParams(location.hash.slice(1)).get("tv");
   const requestedIndex = Number.isInteger(Number(requestedId)) ? Number(requestedId) : initialSlide;
   current = Math.max(0, Math.min(selectedSlides.length - 1, requestedIndex));

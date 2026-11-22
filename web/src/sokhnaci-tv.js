@@ -3,7 +3,7 @@
 // Aucun chiffre n'est inventé : tout vient du modèle de données affiché à l'écran.
 import { arreterLecture, delierAvatarExterne, demarrerEcoute, lierAvatarExterne, lireDialogue, messageMicro, preparerVoixOriginale, reconnaissanceDisponible, svgMarkup } from "./sokhnaci.js";
 import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
-import { D, E, T, emotionPour, labelRegion, liste, niveau, nomFormulaire, periodeTexte, segment, versAffichage } from "./sokhnaci-dialogue.js";
+import { D, E, T, creerSituation, emotionPour, labelRegion, liste, niveau, nomFormulaire, periodeTexte, segment, versAffichage } from "./sokhnaci-dialogue.js";
 import { interpreterEntree } from "./sokhnaci-cerveau.js";
 import { construireBilan, texteBilan } from "./bilan.js";
 import { effacerMiseEnAvant, mettreEnAvant } from "./mise-en-avant.js";
@@ -13,11 +13,7 @@ const CLE_ATTENTIVE = "sokhna-ci-tv-attentive";
 const CLE_VOIX = "sokhna-ci-tv-voix";
 const CLE_PREFERENCES = "sokhna-ci-ai-preferences-v1";
 const MOT_REVEIL = /\b(sokhna\s?ci|sokhnaci|sokhna|sokna|socna)\b/i;
-const ESPACE_PAGE = "tv-avec-sna";
-const PAGE_PRESENTATRICE = "tv-presentateur";
 const REDUIT = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-// Sur grand écran, Sokhna Ci est une présentatrice en pied dans une colonne à droite des diapositives.
-const grandEcran = () => window.matchMedia("(min-width: 1100px)").matches;
 
 const moyenne = (valeurs) => { const v = valeurs.filter((x) => x !== null && x !== undefined); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 const un = (x) => Math.round(x * 10) / 10;
@@ -165,16 +161,19 @@ export function creerAssistanteTV() {
   const dire = (texte) => { if (sousTitre) sousTitre.textContent = texte; };
   const marquer = (texte) => { if (libelleEtat) libelleEtat.textContent = texte; if (carte) carte.dataset.etat = texte ? "actif" : ""; };
 
-  function construireCarte() {
-    carte = document.createElement("aside");
-    presentatrice = grandEcran();
-    carte.className = `tv-sna${presentatrice ? " presentateur" : ""}`;
+  // La carte n'existe que sur la diapositive « Sokhna Ci » (la dernière) : les autres diapositives restent nettes.
+  function construireCarte(hote) {
+    detruireCarte();
+    carte = document.createElement("div");
+    presentatrice = true;
+    carte.className = "tv-sna tv-sna-diapo";
     carte.setAttribute("aria-label", "Sokhna Ci, assistante du mode TV");
     const micro = reconnaissanceDisponible();
     carte.innerHTML = `<div class="tv-sna-scene"><div class="sna-acteur tv-sna-acteur" aria-hidden="true">${svgMarkup(true)}</div></div>
       <div class="tv-sna-corps">
         <div class="tv-sna-tete"><strong>Sokhna Ci</strong><span class="tv-sna-etat" role="status"></span></div>
         <p class="tv-sna-soustitre" aria-live="polite"></p>
+        <ol class="tv-sna-echanges" aria-label="Questions posées et réponses"></ol>
         <form class="tv-sna-form" autocomplete="off">
           <input type="text" name="question" maxlength="140" placeholder="Une question ? (touche Q)" aria-label="Poser une question à Sokhna Ci">
           ${micro ? '<button type="button" class="tv-sna-micro" aria-label="Poser la question à voix haute" title="Parler">🎤</button>' : ""}
@@ -183,9 +182,7 @@ export function creerAssistanteTV() {
           ${micro ? '<button type="button" class="tv-sna-attentive" aria-pressed="false" title="Quand c’est activé, Sokhna Ci écoute en continu : dites « Sokhna » puis votre question"></button>' : ""}
         </form>
       </div>`;
-    document.body.appendChild(carte);
-    document.body.classList.add(ESPACE_PAGE);
-    document.body.classList.toggle(PAGE_PRESENTATRICE, presentatrice);
+    hote.appendChild(carte);
     acteur = carte.querySelector(".tv-sna-acteur");
     acteur.classList.toggle("presentatrice", presentatrice);
     acteur.style.setProperty("--x", "0px");
@@ -216,6 +213,23 @@ export function creerAssistanteTV() {
       if (etat.attentive) demarrerEcoutePassive(); else arreterEcoutePassive();
     });
   }
+  function detruireCarte() {
+    cancelAnimationFrame(animationMarche);
+    if (acteur) delierAvatarExterne(acteur);
+    carte?.remove();
+    carte = acteur = sousTitre = libelleEtat = null;
+  }
+  // Historique visible des questions et des réponses de la diapositive.
+  function noterEchange(role, texte) {
+    const liste_ = carte?.querySelector(".tv-sna-echanges");
+    if (!liste_) return;
+    const ligne = document.createElement("li");
+    ligne.className = `tv-sna-echange ${role}`;
+    ligne.textContent = texte;
+    liste_.appendChild(ligne);
+    while (liste_.children.length > 8) liste_.firstElementChild.remove();
+    ligne.scrollIntoView({ block: "nearest" });
+  }
   function majBoutons() {
     const voix = carte?.querySelector(".tv-sna-voix");
     if (voix) { voix.textContent = etat.voix ? "🔊" : "🔇"; voix.setAttribute("aria-pressed", String(etat.voix)); voix.setAttribute("aria-label", etat.voix ? "Voix activée, cliquer pour couper" : "Voix coupée, cliquer pour activer"); }
@@ -239,7 +253,7 @@ export function creerAssistanteTV() {
       if (!etat.actif || !carte) return;
       const zone = carte.querySelector(".tv-sna-scene");
       controleur.habiller(tenue);
-      controleur.relier(zone, acteur, { cadrage: presentatrice ? "pied" : "buste" });
+      controleur.relier(zone, acteur, { cadrage: "pied" });
       zone.classList.add("trois-d");
     } catch { /* l'illustration 2D reste affichée */ }
   }
@@ -307,7 +321,7 @@ export function creerAssistanteTV() {
       const texteIA = await interrogerLLM(question, etat.modele);
       if (texteIA) dialogue = { emotion: "encourageante", segments: segmentsDepuisTexteIA(texteIA) };
     }
-    const segments = dialogue.segments.slice(0, 4);
+    const segments = dialogue.segments.slice(0, 6);
     if (dialogue.visuel || dialogue.action) segments.push(segment("Pour le graphique ou le rapport complet, ouvrez l’espace Sokhna Ci AI.", "geste_ouvert"));
     return { emotion: dialogue.emotion || "neutre", segments };
   }
@@ -320,11 +334,13 @@ export function creerAssistanteTV() {
     arreterEcouteActive();
     marquer("Je réfléchis…");
     dire(`« ${question} »`);
+    noterEchange("question", question);
     let dialogue;
     try { dialogue = await construireReponse(question); } catch { dialogue = { emotion: "neutre", segments: [segment("Je n’ai pas réussi à répondre. Pouvez-vous reformuler ?", "geste_ouvert")] }; }
     if (jeton !== etat.jeton) return;
+    noterEchange("reponse", dialogue.segments.map((s) => versAffichage(s.texte)).join(" "));
     const complet = await narrer(dialogue, jeton);
-    if (complet) await fenetreQuestions(jeton, 12000, "D’autres questions ? Je vous écoute.");
+    if (complet) await fenetreQuestions(jeton, 20000, "D’autres questions ? Je vous écoute.");
   }
 
   // ---------- micro : une question à la fois
@@ -415,47 +431,50 @@ export function creerAssistanteTV() {
       etat.actif = true;
       etat.modele = modele;
       etat.controle = controle;
-      construireCarte();
       document.addEventListener("sokhnaci:evenement", surEvenement);
       preparerVoixOriginale();
-      brancher3D();
-      if (etat.attentive) demarrerEcoutePassive();
-      if (navigator.userActivation?.hasBeenActive === false && etat.voix) {
-        dire("Cliquez n’importe où pour activer ma voix. Je commente en sous-titres en attendant.");
-      }
     },
     mettreAJour(modele) { etat.modele = modele; },
-    async surDiapositive(slide, modele, index, total) {
+    async surDiapositive(slide, modele) {
       if (!etat.actif) return;
       etat.modele = modele;
       const jeton = ++etat.jeton;
       etat.fenetre = false;
       arreterLecture();
       arreterEcouteActive();
-      // À chaque diapositive, la présentatrice entre en marchant depuis le bord, puis prend la parole.
-      if (presentatrice) {
-        positionX = 70;
-        acteur?.style.setProperty("--x", "70px");
-        await marcherVers(0, 1300);
-      } else await attendre(500); // laisse la navigation se stabiliser avant de parler
+      // Diapositives ordinaires : pas d'assistante, le diaporama garde son rythme.
+      if (slide.id !== "assistante") { arreterEcoutePassive(); detruireCarte(); return; }
+      const hote = document.getElementById("tv-sna-hote");
+      if (!hote) return;
+      construireCarte(hote);
+      brancher3D();
+      if (etat.attentive) demarrerEcoutePassive();
+      // Elle entre en marchant, fait le point de situation, puis demande s'il y a des questions.
+      positionX = 90;
+      acteur?.style.setProperty("--x", "90px");
+      await marcherVers(0, 1400);
       if (jeton !== etat.jeton || !etat.actif) return;
-      const dialogue = commentaire(slide.id, modele, { premiere: index === 0 });
-      const derniere = index === total - 1;
-      if (derniere) dialogue.segments.push(...PHRASES_FIN);
+      if (etat.questionDemandee) {
+        etat.questionDemandee = false;
+        carte?.querySelector(".tv-sna-form input")?.focus();
+        await fenetreQuestions(jeton, 45000, "Je vous écoute : tapez votre question ou utilisez le micro 🎤.");
+        return;
+      }
+      if (navigator.userActivation?.hasBeenActive === false && etat.voix) dire("Cliquez n’importe où pour activer ma voix. Je présente en sous-titres en attendant.");
+      const situation = creerSituation(modele);
+      const dialogue = { emotion: situation.emotion, segments: [...situation.segments.filter((x) => !/^Je reste à votre disposition/.test(x.texte)), ...PHRASES_FIN] };
       const complet = await narrer(dialogue, jeton);
       if (!complet) return;
-      marquer(etat.attentive ? "Attentive" : "");
-      attitudeAttentive(etat.attentive);
-      if (derniere) await fenetreQuestions(jeton, 20000);
+      await fenetreQuestions(jeton, 45000);
     },
+    // Touche Q : depuis n'importe quelle diapositive, on rejoint Sokhna Ci pour poser la question.
     ouvrirQuestion() {
       if (!etat.actif) return;
-      carte?.querySelector(".tv-sna-form input")?.focus();
-      etat.controle?.retenir("question");
-      dire("Tapez votre question, ou utilisez le micro.");
+      if (!carte) { etat.questionDemandee = true; etat.controle?.allerA?.("assistante"); return; }
+      carte.querySelector(".tv-sna-form input")?.focus();
       const jeton = ++etat.jeton;
       arreterLecture();
-      fenetreQuestions(jeton, 25000, "Tapez votre question, ou utilisez le micro 🎤.");
+      fenetreQuestions(jeton, 45000, "Tapez votre question, ou utilisez le micro 🎤.");
     },
     arreter() {
       if (!etat.actif) return;
@@ -466,11 +485,7 @@ export function creerAssistanteTV() {
       arreterLecture();
       document.removeEventListener("sokhnaci:evenement", surEvenement);
       effacerMiseEnAvant();
-      if (acteur) delierAvatarExterne(acteur);
-      carte?.remove();
-      document.body.classList.remove(ESPACE_PAGE, PAGE_PRESENTATRICE);
-      cancelAnimationFrame(animationMarche);
-      carte = acteur = sousTitre = libelleEtat = null;
+      detruireCarte();
     },
   };
 }

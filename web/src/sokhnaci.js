@@ -8,6 +8,7 @@ import { effacerMiseEnAvant, mettreEnAvant } from "./mise-en-avant.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
 const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
+const CLE_FERMEE = "completude-sokhnaci-fermee";
 const DELAIS_NOUVEL_ESSAI = [8000, 40000, 180000];
 const ECHECS_MAX = 3;
 const VOIX_PIPER = "fr_FR-siwis-medium";
@@ -718,6 +719,26 @@ export function replierSokhnaci() {
   majPresentatrice();
 }
 
+// Bouton « − » : Sokhna Ci se ferme complètement (aucune pastille ne reste à l'écran) ; le choix est mémorisé.
+// Elle se rouvre avec le bouton « Sokhna Ci » de l'en-tête ou la touche Q.
+function lireFermee() { try { return localStorage.getItem(CLE_FERMEE) === "1"; } catch { return false; } }
+export function fermerSokhnaci() {
+  if (!widget) return;
+  arreterLecture();
+  widget.classList.add("fermee", "collapsed");
+  try { localStorage.setItem(CLE_FERMEE, "1"); } catch { /* stockage facultatif */ }
+  document.querySelector(".sokhnaci-rouvrir")?.removeAttribute("hidden");
+  majPresentatrice();
+}
+export function ouvrirSokhnaci() {
+  if (!widget) return;
+  widget.classList.remove("fermee", "collapsed");
+  widget.querySelector(".sokhnaci-launcher").hidden = true;
+  try { localStorage.removeItem(CLE_FERMEE); } catch { /* stockage facultatif */ }
+  document.querySelector(".sokhnaci-rouvrir")?.setAttribute("hidden", "");
+  majPresentatrice();
+}
+
 // Active ou retire la présentatrice en pied selon la largeur d'écran et l'état de la carte.
 export function majPresentatrice() {
   if (!widget) return;
@@ -761,7 +782,17 @@ export function initSokhnaci(model) {
     setTimeout(posture, 8000 + Math.random() * 7000);
   };
   setTimeout(posture, 6000);
-  widget.querySelector(".sokhnaci-collapse").addEventListener("click", replierSokhnaci);
+  widget.querySelector(".sokhnaci-collapse").addEventListener("click", fermerSokhnaci);
+  widget.querySelector(".sokhnaci-collapse").setAttribute("aria-label", "Fermer Sokhna Ci");
+  widget.querySelector(".sokhnaci-collapse").title = "Fermer (rouvrir avec le bouton Sokhna Ci de l’en-tête ou la touche Q)";
+  const rouvrir = document.createElement("button");
+  rouvrir.type = "button";
+  rouvrir.className = "sokhnaci-rouvrir";
+  rouvrir.hidden = true;
+  rouvrir.innerHTML = '<span aria-hidden="true">✦</span> Sokhna Ci';
+  rouvrir.setAttribute("aria-label", "Rouvrir Sokhna Ci, l’assistante virtuelle");
+  rouvrir.addEventListener("click", ouvrirSokhnaci);
+  (document.querySelector(".masthead-actions") || document.body).prepend(rouvrir);
   widget.querySelector(".sokhnaci-launcher").addEventListener("click", () => {
     widget.classList.remove("collapsed");
     widget.querySelector(".sokhnaci-launcher").hidden = true;
@@ -806,6 +837,7 @@ export function initSokhnaci(model) {
   // Les navigateurs interdisent la parole avant le premier geste de l'utilisateur : on attend ce geste.
   // Sur petit écran, l'assistante démarre réduite pour ne pas masquer le tableau de bord.
   if (window.matchMedia("(max-width: 700px)").matches) replierSokhnaci();
+  if (lireFermee()) { widget.classList.add("fermee", "collapsed"); rouvrir.hidden = false; }
   majPresentatrice();
   // Comme en mode TV : la touche Q ouvre la question (hors saisie en cours).
   document.addEventListener("keydown", (evenement) => {
@@ -813,10 +845,11 @@ export function initSokhnaci(model) {
     if (document.body.classList.contains("tv") || document.body.classList.contains("sna-actif")) return;
     if (evenement.target instanceof HTMLElement && evenement.target.closest("input, textarea, select, [contenteditable]")) return;
     evenement.preventDefault();
-    if (widget.classList.contains("collapsed")) widget.querySelector(".sokhnaci-launcher").click();
+    if (widget.classList.contains("fermee")) ouvrirSokhnaci();
+    else if (widget.classList.contains("collapsed")) widget.querySelector(".sokhnaci-launcher").click();
     widget.querySelector(".sokhnaci-ask input").focus();
   });
-  const parlerOuverture = () => { if (voiceEnabled && !widget.classList.contains("collapsed")) attendrePuisParler(); };
+  const parlerOuverture = () => { if (voiceEnabled && !widget.classList.contains("collapsed") && !widget.classList.contains("fermee")) attendrePuisParler(); };
   if (navigator.userActivation?.hasBeenActive === false) {
     const premierGeste = () => {
       for (const nom of ["pointerdown", "keydown", "touchstart"]) window.removeEventListener(nom, premierGeste, true);

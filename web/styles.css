@@ -967,3 +967,32 @@ tr.sna-focus th, tr.sna-focus td { box-shadow: inset 0 0 0 999px rgba(47, 191, 1
 .sokhnaci-widget.style-tv.presentatrice .sokhnaci-identite { padding-right: 0; }
 .sokhnaci-widget.style-tv.presentatrice .sokhnaci-collapse { top: 20px; right: 20px; z-index: 3; }
 .sokhnaci-widget.style-tv.presentatrice .sokhnaci-bubble { max-height: 5.2em; min-height: 5.2em; font-size: 15px; }
+
+/* Mode TV : diapositive « Sokhna Ci » (la seule où elle apparaît) */
+.tv-sna-hote { min-height: 0; }
+.tv-sna.tv-sna-diapo { position: static; display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.4fr); gap: 22px; width: auto; height: min(68vh, 720px); padding: 18px; border-radius: 26px;
+  background: radial-gradient(70% 90% at 0% 0%, #1f5a52 0%, transparent 60%), linear-gradient(135deg, #0c2430, #123c3f); box-shadow: 0 30px 60px rgba(9, 28, 33, .35); }
+.tv-sna.tv-sna-diapo .tv-sna-scene { width: 100%; height: 100%; border-radius: 20px; background: radial-gradient(90% 55% at 50% 30%, #3d7d6c 0%, #1d4a47 55%, #10302f 100%); }
+.tv-sna.tv-sna-diapo .tv-sna-scene::after { position: absolute; right: 26%; bottom: 10%; left: 26%; height: 20px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .45), transparent); content: ""; }
+.tv-sna.tv-sna-diapo .tv-sna-acteur .sokhnaci-svg { width: 260px; height: 260px; }
+.tv-sna.tv-sna-diapo .tv-sna-corps { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 14px; min-height: 0; }
+.tv-sna.tv-sna-diapo .tv-sna-tete strong { font-size: 20px; }
+.tv-sna.tv-sna-diapo .tv-sna-etat { font-size: 14px; }
+.tv-sna.tv-sna-diapo .tv-sna-soustitre { min-height: 3.9em; font-size: clamp(18px, 1.6vw, 26px); line-height: 1.35; -webkit-line-clamp: 4; line-clamp: 4; }
+.tv-sna-echanges { display: grid; align-content: start; gap: 8px; min-height: 0; margin: 0; padding: 0 4px 0 0; overflow-y: auto; list-style: none; }
+.tv-sna-echange { max-width: 92%; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.4; }
+.tv-sna-echange.question { justify-self: end; background: rgba(127, 179, 255, .2); color: #dbe8ff; }
+.tv-sna-echange.question::before { content: "Question · "; font-weight: 700; }
+.tv-sna-echange.reponse { justify-self: start; background: rgba(143, 240, 196, .14); color: #e6f7ee; }
+.tv-sna-echange.reponse::before { content: "Sokhna Ci · "; font-weight: 700; color: #8ff0c4; }
+.tv-sna.tv-sna-diapo .tv-sna-form input { height: 40px; font-size: 15px; }
+.tv-sna.tv-sna-diapo .tv-sna-form button { height: 40px; min-width: 46px; font-size: 15px; }
+@media (max-width: 900px) { .tv-sna.tv-sna-diapo { grid-template-columns: 1fr; height: auto; } .tv-sna.tv-sna-diapo .tv-sna-scene { height: 300px; } }
+
+/* Sokhna Ci fermée : rien ne reste à l'écran, sauf le bouton de l'en-tête pour la rouvrir */
+.sokhnaci-widget.fermee { display: none; }
+.sokhnaci-rouvrir { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border: 1px solid #1d4a47; border-radius: 999px; background: linear-gradient(180deg, #1d4a47, #12323a); color: #e6f7ee; font-size: 12px; font-weight: 700; cursor: pointer; }
+.sokhnaci-rouvrir[hidden] { display: none; }
+.sokhnaci-rouvrir span { color: #8ff0c4; }
+.sokhnaci-rouvrir:hover { background: #1d4a47; }
+body.tv .sokhnaci-rouvrir { display: none; }
