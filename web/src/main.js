@@ -32,6 +32,8 @@ const SELECTORS = {
 };
 const REINITIALISER_APRES_RECHARGEMENT = performance.getEntriesByType("navigation")[0]?.type === "reload";
 
+// F5 réinitialise la vue : le navigateur ne doit pas restaurer l'ancienne position de défilement après coup.
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 if (REINITIALISER_APRES_RECHARGEMENT) {
   history.replaceState(null, "", `${location.pathname}${location.search}`);
 }
