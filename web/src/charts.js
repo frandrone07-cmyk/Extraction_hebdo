@@ -19,7 +19,13 @@ function detruire(id) {
 export function detruireGraphiques(filtre = () => true) {
   for (const id of [...INSTANCES.keys()]) if (filtre(id)) { try { detruire(id); } catch { INSTANCES.delete(id); } }
 }
-function disponible() { return typeof Chart !== "undefined"; }
+// Le module d'étiquettes est enregistré AVANT le premier graphique (désactivé par défaut) : enregistré plus tard,
+// il ne serait pas initialisé sur les graphiques déjà créés et planterait en les redessinant (« _labels »).
+function disponible() {
+  if (typeof Chart === "undefined") return false;
+  enregistrerDatalabels();
+  return true;
+}
 let datalabelsEnregistre = false;
 function enregistrerDatalabels() {
   if (datalabelsEnregistre || typeof ChartDataLabels === "undefined") return;
