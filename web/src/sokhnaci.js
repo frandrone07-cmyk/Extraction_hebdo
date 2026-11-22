@@ -34,6 +34,9 @@ let volume = 1;
 const avatarsExternes = new Set();
 let planGestes = [];
 let segmentsLecture = [];
+// Le suivi visuel dans la page ne s'active que pour une lecture demandée (bouton Écouter, question), jamais pour
+// l'accueil automatique ; il s'arrête dès que l'utilisateur fait défiler la page lui-même.
+let suiviPage = false;
 let gesteActuel = null;
 const syntheses = new Map();
 
@@ -330,7 +333,7 @@ function lierBouche(audio, surProgression = null) {
 
 // Hors mode TV et hors espace Sokhna Ci AI, la page défile jusqu'à la zone commentée (indicateur, carte, bilan…).
 function suivreDansLaPage(index) {
-  const libre = !document.body.classList.contains("tv") && !document.body.classList.contains("sna-actif");
+  const libre = suiviPage && !document.body.classList.contains("tv") && !document.body.classList.contains("sna-actif");
   const cible = index === null ? null : segmentsLecture[index]?.cible;
   if (!libre || !cible) { if (libre) effacerMiseEnAvant(); return; }
   mettreEnAvant(document.getElementById("contenu"), cible);
@@ -469,7 +472,7 @@ async function attendrePuisParler() {
     demarrerPiperAutomatique();
     await Promise.race([piperPromesse || Promise.resolve(), delai(5000)]).catch(() => {});
   }
-  parler();
+  parler({ suivi: false });
 }
 
 export function lireDialogue(dialogue) {
@@ -478,7 +481,8 @@ export function lireDialogue(dialogue) {
 }
 export { arreterLecture };
 
-function parler() {
+function parler({ suivi = true } = {}) {
+  suiviPage = suivi;
   if (!voiceEnabled || !segmentsCourants.length) return;
   lire(segmentsCourants);
 }
@@ -717,7 +721,10 @@ export function initSokhnaci(model) {
     widget.classList.remove("collapsed");
     widget.querySelector(".sokhnaci-launcher").hidden = true;
   });
-  widget.querySelector(".sokhnaci-speak").addEventListener("click", parler);
+  widget.querySelector(".sokhnaci-speak").addEventListener("click", () => parler());
+  const reprendreLaMain = () => { if (suiviPage) { suiviPage = false; effacerMiseEnAvant(); } };
+  for (const nom of ["wheel", "touchmove"]) window.addEventListener(nom, reprendreLaMain, { passive: true });
+  window.addEventListener("keydown", (evenement) => { if (["PageDown", "PageUp", "ArrowDown", "ArrowUp", "Home", "End", " "].includes(evenement.key) && evenement.target === document.body) reprendreLaMain(); });
   widget.querySelector(".sokhnaci-stop").addEventListener("click", arreterLecture);
   try { localStorage.removeItem(CLE_VOIX_CHOISIE); } catch { /* stockage facultatif */ }
   widget.querySelector(".sokhnaci-espace").addEventListener("click", () => document.dispatchEvent(new CustomEvent("sokhnaci:ouvrir-espace", { detail: { question: "" } })));
