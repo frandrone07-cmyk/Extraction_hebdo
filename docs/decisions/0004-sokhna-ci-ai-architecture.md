@@ -131,3 +131,9 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
 - Fermée, Sokhna Ci laisse une petite icône ronde en bas à droite pour la rouvrir d'un clic (en plus du bouton de l'en-tête et de la touche Q).
 - Avatar 3D : attitudes au repos (mains croisées devant, regard autour, changement d'appui), buste qui se penche légèrement sur les mots appuyés, doigt pointé et ouverture des bras amplifiés par l'énergie de la voix.
 - Correctif : des expressions régulières écrites par un script contenaient des caractères de contrôle à la place de `\b` ; le fichier concerné a été nettoyé et vérifié.
+
+## Mise à jour du lundi et ouverture de Sokhna Ci (23 novembre 2026)
+
+- Extraction : l'exécution planifiée de lundi 00:00 du 16 novembre n'avait jamais démarré (GitHub retarde ou abandonne les tâches planifiées à minuit, heure de pointe) ; seul le rattrapage du mardi avait tourné. Le workflow ajoute des relances le lundi à 00:20, 02:00 et 05:00, puis le rattrapage du mardi ; toute exécution planifiée vérifie d'abord que la semaine manque (`check-week`), donc jamais de double extraction. Le déclenchement manuel s'exécute toujours.
+- Tableau de bord : la page ouverte vérifie toutes les 5 minutes, et à chaque retour sur l'onglet, si une nouvelle extraction est publiée ; elle se met alors à jour seule (en suivant la nouvelle semaine si l'utilisateur regardait la plus récente), affiche un message, et Sokhna Ci s'ouvre pour présenter la nouvelle situation (« L'extraction de ce lundi … vient d'être publiée »).
+- Sokhna Ci : la fermeture ne vaut que pour la visite en cours ; à chaque nouvelle visite, et à chaque nouvelle semaine de données, elle est ouverte avec le point de situation. Celui-ci annonce la prochaine mise à jour (« lundi …, à minuit ») ou signale clairement que l'extraction attendue n'est pas encore publiée.

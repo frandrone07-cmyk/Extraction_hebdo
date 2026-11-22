@@ -1,4 +1,4 @@
-import { creerSituation, versAffichage, versOral } from "./sokhnaci-dialogue.js";
+import { D, creerSituation, segment, versAffichage, versOral } from "./sokhnaci-dialogue.js";
 import { phraseAction } from "./sokhnaci-actions.js";
 import { interpreterEntree } from "./sokhnaci-cerveau.js";
 import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
@@ -9,6 +9,7 @@ import { effacerMiseEnAvant, mettreEnAvant } from "./mise-en-avant.js";
 const CLE_VOIX = "completude-sokhnaci-voice";
 const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
 const CLE_FERMEE = "completude-sokhnaci-fermee";
+const CLE_SEMAINE_VUE = "completude-sokhnaci-semaine-vue";
 const DELAIS_NOUVEL_ESSAI = [8000, 40000, 180000];
 const ECHECS_MAX = 3;
 const VOIX_PIPER = "fr_FR-siwis-medium";
@@ -721,13 +722,14 @@ export function replierSokhnaci() {
 
 // Bouton « − » : Sokhna Ci se ferme complètement (aucune pastille ne reste à l'écran) ; le choix est mémorisé.
 // Elle se rouvre avec le bouton « Sokhna Ci » de l'en-tête ou la touche Q.
-function lireFermee() { try { return localStorage.getItem(CLE_FERMEE) === "1"; } catch { return false; } }
+// La fermeture ne vaut que pour la visite en cours : à la visite suivante, Sokhna Ci présente d'emblée la situation.
+function lireFermee() { try { localStorage.removeItem(CLE_FERMEE); return sessionStorage.getItem(CLE_FERMEE) === "1"; } catch { return false; } }
 export function fermerSokhnaci() {
   if (!widget) return;
   arreterLecture();
   widget.classList.add("fermee", "collapsed");
   widget.querySelector(".sokhnaci-launcher").hidden = false; // petite icône ronde pour la rouvrir rapidement
-  try { localStorage.setItem(CLE_FERMEE, "1"); } catch { /* stockage facultatif */ }
+  try { sessionStorage.setItem(CLE_FERMEE, "1"); } catch { /* stockage facultatif */ }
   document.querySelector(".sokhnaci-rouvrir")?.removeAttribute("hidden");
   majPresentatrice();
 }
@@ -735,9 +737,24 @@ export function ouvrirSokhnaci() {
   if (!widget) return;
   widget.classList.remove("fermee", "collapsed");
   widget.querySelector(".sokhnaci-launcher").hidden = true;
-  try { localStorage.removeItem(CLE_FERMEE); } catch { /* stockage facultatif */ }
+  try { sessionStorage.removeItem(CLE_FERMEE); } catch { /* stockage facultatif */ }
   document.querySelector(".sokhnaci-rouvrir")?.setAttribute("hidden", "");
   majPresentatrice();
+}
+
+// Nouvelle extraction (lundi minuit) publiée : Sokhna Ci s'ouvre et présente la nouvelle situation.
+function situationNouvelleExtraction(model) {
+  const situation = creerSituation(model);
+  const [salut, ...suite] = situation.segments;
+  return { ...situation, segments: [salut, segment(`L’extraction de ce lundi ${D(model.semaineCle)} vient d’être publiée.`, "pointer_ecran"), ...suite] };
+}
+export function annoncerNouvelleExtraction(model) {
+  if (!widget || !model) return;
+  modeleCourant = model;
+  try { localStorage.setItem(CLE_SEMAINE_VUE, model.semaineCle); } catch { /* stockage facultatif */ }
+  if (widget.classList.contains("fermee") || widget.classList.contains("collapsed")) ouvrirSokhnaci();
+  const parler_ = voiceEnabled && navigator.userActivation?.hasBeenActive !== false;
+  afficherDialogue(situationNouvelleExtraction(model), humeur(model), { speak: parler_ });
 }
 
 // Active ou retire la présentatrice en pied selon la largeur d'écran et l'état de la carte.
@@ -839,7 +856,12 @@ export function initSokhnaci(model) {
   // Les navigateurs interdisent la parole avant le premier geste de l'utilisateur : on attend ce geste.
   // Sur petit écran, l'assistante démarre réduite pour ne pas masquer le tableau de bord.
   if (window.matchMedia("(max-width: 700px)").matches) replierSokhnaci();
-  if (lireFermee()) { widget.classList.add("fermee", "collapsed"); rouvrir.hidden = false; widget.querySelector(".sokhnaci-launcher").hidden = false; }
+  // Nouvelle semaine depuis la dernière visite : Sokhna Ci s'ouvre et l'annonce, même si elle avait été fermée.
+  let semaineVue = null;
+  try { semaineVue = localStorage.getItem(CLE_SEMAINE_VUE); localStorage.setItem(CLE_SEMAINE_VUE, model.semaineCle); } catch { /* stockage facultatif */ }
+  const nouvelleSemaine = Boolean(semaineVue && semaineVue !== model.semaineCle);
+  if (nouvelleSemaine) { try { sessionStorage.removeItem(CLE_FERMEE); } catch { /* facultatif */ } afficherDialogue(situationNouvelleExtraction(model), humeur(model)); }
+  else if (lireFermee()) { widget.classList.add("fermee", "collapsed"); rouvrir.hidden = false; widget.querySelector(".sokhnaci-launcher").hidden = false; }
   majPresentatrice();
   // Comme en mode TV : la touche Q ouvre la question (hors saisie en cours).
   document.addEventListener("keydown", (evenement) => {

@@ -122,6 +122,14 @@ function joursDepuis(iso) {
 
 // Point de situation : un exposé structuré et professionnel, toujours dans le même ordre (cadre, indicateur
 // principal, répartition, territoires, priorités, formulaire, recommandation). Chaque chiffre vient du modèle.
+// Lundi de l'extraction suivante (les données sont extraites chaque lundi à minuit, heure de Dakar = UTC).
+export function lundiSuivant(iso) {
+  if (!iso) return null;
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 7);
+  return date.toISOString().slice(0, 10);
+}
+
 export function creerSituation(model) {
   const seuils = model.seuils;
   if (!model.districts?.length) {
@@ -139,7 +147,11 @@ export function creerSituation(model) {
   segments.push(segment("Salaamalekum.", "salut_main", "wo", "salaamalekum"));
   segments.push(segment("Je suis Sokhna Ci, votre assistante de suivi des rapports.", "main_sur_coeur"));
   segments.push({ ...segment(`Voici le point de situation de la complétude des rapports DHIS2 au ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`, "pointer_ecran"), cible: ".insight-card" });
-  if (joursDepuis(model.semaineCle) > 10) segments.push(segment("Attention : ces données datent de plus de dix jours, l’extraction hebdomadaire est à vérifier.", "geste_rassurant"));
+  // Les données changent chaque lundi à minuit : si l'extraction attendue tarde, on le dit clairement.
+  const attendue = lundiSuivant(model.semaineCle);
+  if (attendue && Date.now() > new Date(`${attendue}T06:00:00Z`).getTime()) {
+    segments.push(segment(`Attention : l’extraction du lundi ${D(attendue)} n’est pas encore publiée ; ces chiffres datent du ${D(model.semaineCle)}.`, "geste_rassurant"));
+  }
 
   // 1. Indicateur principal et tendance
   let tendance = "";
@@ -186,6 +198,7 @@ export function creerSituation(model) {
     if (faible && faible.tauxMoyen < seuils.critique) actions.push(`vérifier la saisie de « ${nomFormulaire(faible.nom)} »`);
     if (actions.length) segments.push({ ...segment(`Ma recommandation : ${liste(actions)}.`, "geste_ouvert"), cible: ".bilan-solutions" });
   }
+  if (attendue && Date.now() <= new Date(`${attendue}T06:00:00Z`).getTime()) segments.push(segment(`Prochaine mise à jour : lundi ${D(attendue)}, à minuit.`, "pointer_ecran"));
   segments.push(segment("Je reste à votre disposition pour le détail d’une région, d’un district ou d’un formulaire.", "mains_jointes"));
   return { etat: "attente", emotion, segments, suivi: "Que voulez-vous savoir ?" };
 }
@@ -493,7 +506,9 @@ export function repondre(questionBrute, model) {
   if (but === "periode") {
     return reponse("neutre", [
       segment(`Les données datent de l’extraction du ${D(model.semaineCle)}, pour ${periodeTexte(model)}.`, "pointer_ecran"),
-      segment("Une nouvelle extraction est faite chaque lundi à minuit.", "hochement_tete"),
+      segment(Date.now() > new Date(`${lundiSuivant(model.semaineCle)}T06:00:00Z`).getTime()
+        ? `L’extraction du lundi ${D(lundiSuivant(model.semaineCle))} est attendue mais pas encore publiée : elle sera reprise automatiquement dans la journée.`
+        : `La prochaine extraction aura lieu le lundi ${D(lundiSuivant(model.semaineCle))} à minuit ; le tableau de bord se mettra à jour tout seul.`, "hochement_tete"),
     ]);
   }
   if (but === "situation") return creerSituation(model);

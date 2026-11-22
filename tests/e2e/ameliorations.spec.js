@@ -82,7 +82,8 @@ test("les gestes suivent le contenu de la phrase et se placent au bon moment", a
 
 test("avatar 3D : la main et la tête marquent les mots appuyés et la boucle résiste aux images en retard", async ({ page }) => {
   test.setTimeout(180_000);
-  await page.addInitScript(() => { window.__sokhnaci3d = true; });
+  // La lecture d'accueil ne doit pas animer l'avatar pendant qu'on teste un geste précis.
+  await page.addInitScript(() => { window.__sokhnaci3d = true; window.speechSynthesis.speak = (u) => setTimeout(() => u.onend?.(), 0); });
   await page.reload();
   await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
   await ouvrirEspace(page);
@@ -388,4 +389,33 @@ test("réponses précises : diagnostic d'un district, évolution, listes, homony
   expect(reponses.vides).toMatch(/sont vides ou à zéro/);
   expect((reponses.cinq.match(/, à \d/g) || []).length).toBe(5);
   expect(reponses.rien).toBeNull(); // les autres compétences prennent le relais
+});
+
+test("nouvelle extraction du lundi : la page ouverte se met à jour seule et Sokhna Ci présente la nouvelle situation", async ({ page }) => {
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Prochaine mise à jour : lundi");
+  // Sokhna Ci fermée pendant la visite…
+  await page.locator(".sokhnaci-collapse").click();
+  await expect(page.locator(".sokhnaci-card")).toBeHidden();
+  // …puis une nouvelle extraction est publiée (simulée en changeant la semaine annoncée par latest.json).
+  const autre = await page.evaluate(async () => (await (await fetch("data/snapshots.json")).json()).semaines.at(-2));
+  await page.route("**/data/latest.json", async (route) => {
+    const reponse = await route.fetch();
+    const corps = await reponse.json();
+    await route.fulfill({ response: reponse, json: { ...corps, semaine_cle: autre } });
+  });
+  await page.evaluate(() => window.__verifierNouvelleExtraction());
+  await expect(page.locator("#toast")).toContainText("Nouvelle extraction du");
+  await expect(page.locator(".sokhnaci-card")).toBeVisible(); // elle se rouvre d'elle-même
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("vient d’être publiée");
+  await expect(page.locator("#sel-extraction")).toHaveValue(autre);
+});
+
+test("à chaque nouvelle visite, Sokhna Ci est ouverte et présente la situation, même fermée la fois précédente", async ({ page, context }) => {
+  await page.locator(".sokhnaci-collapse").click();
+  await expect(page.locator(".sokhnaci-card")).toBeHidden();
+  const nouvelleVisite = await context.newPage();
+  await nouvelleVisite.goto("/");
+  await expect(nouvelleVisite.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await expect(nouvelleVisite.locator(".sokhnaci-card")).toBeVisible();
+  await expect(nouvelleVisite.locator(".sokhnaci-bubble")).toContainText("point de situation");
 });

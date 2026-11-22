@@ -540,7 +540,8 @@ test("espace Sokhna Ci AI : cartes de compétences et ouverture depuis la carte 
 
 test("avatar 3D libre (CC0) : chargement, ordres, gestes, bouche synchronisée, tenues et repli en 2D", async ({ page }) => {
   test.setTimeout(180_000);
-  await page.addInitScript(() => { window.__sokhnaci3d = true; });
+  // La lecture d'accueil ne doit pas animer l'avatar pendant qu'on teste un geste précis.
+  await page.addInitScript(() => { window.__sokhnaci3d = true; window.speechSynthesis.speak = (u) => setTimeout(() => u.onend?.(), 0); });
   await page.reload();
   await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
   await ouvrirEspace(page);

@@ -4,7 +4,7 @@ import { basculerThemeCarte } from "./map.js";
 import { initDrawer } from "./drawer.js";
 import { demarrerDiaporama } from "./slideshow.js";
 import { assistanteTVAutorisee, creerAssistanteTV } from "./sokhnaci-tv.js";
-import { initSokhnaci, majPresentatrice, mettreAJourSokhnaci, replierSokhnaci, rattacherAvatarWidget } from "./sokhnaci.js";
+import { annoncerNouvelleExtraction, initSokhnaci, majPresentatrice, mettreAJourSokhnaci, replierSokhnaci, rattacherAvatarWidget } from "./sokhnaci.js";
 import { initTrigger } from "./trigger.js";
 import {
   renderVue, apresRenduVue,
@@ -276,6 +276,26 @@ async function actualiserPendantDiaporama() {
   return modeleCourant;
 }
 
+// Mise à jour automatique : l'extraction a lieu chaque lundi à minuit. La page ouverte vérifie régulièrement
+// (et à chaque retour sur l'onglet) si une nouvelle extraction est publiée, se met à jour et Sokhna Ci l'annonce.
+let verificationEnCours = false;
+async function verifierNouvelleExtraction() {
+  if (!donnees || verificationEnCours || document.hidden || document.body.classList.contains("tv")) return;
+  verificationEnCours = true;
+  try {
+    const reponse = await fetch("data/latest.json", { cache: "no-cache" });
+    if (!reponse.ok) return;
+    const { semaine_cle: semaine } = await reponse.json();
+    if (!semaine || semaine === donnees.latest.semaine_cle) return;
+    await actualiserPendantDiaporama();
+    afficherOnglet(ongletCourant);
+    afficherToast(`Nouvelle extraction du ${formaterDate(semaine)} : le tableau de bord est à jour.`);
+    annoncerNouvelleExtraction(modeleCourant);
+  } catch { /* réseau indisponible : nouvel essai au prochain passage */ } finally {
+    verificationEnCours = false;
+  }
+}
+
 async function init() {
   themeCourant = appliquerTheme(lireTheme());
   const themeLabel = themeCourant === "dark" ? "Activer le thème clair" : "Activer le thème sombre";
@@ -310,6 +330,10 @@ async function init() {
     });
   }
   window.addEventListener("hashchange", synchroniserHash);
+  setInterval(verifierNouvelleExtraction, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") verifierNouvelleExtraction(); });
+  window.addEventListener("online", verifierNouvelleExtraction);
+  window.__verifierNouvelleExtraction = verifierNouvelleExtraction; // utilisé par les tests automatisés
 }
 
 init();
