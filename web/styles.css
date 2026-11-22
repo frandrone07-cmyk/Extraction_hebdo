@@ -906,3 +906,39 @@ tr.sna-focus th, tr.sna-focus td { box-shadow: inset 0 0 0 999px rgba(47, 191, 1
 .bilan-section .bilan-carte h3 { margin: 0 0 10px; color: #fff; font-family: Manrope, sans-serif; font-size: 16px; }
 @media (max-width: 1280px) { .bilan-section .bilan-grille { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .bilan-section .bilan-solutions { grid-column: 1 / -1; } }
 @media (max-width: 860px) { .bilan-section .bilan-grille { grid-template-columns: minmax(0, 1fr); } }
+
+/* Carte flottante en présentatrice (grand écran, hors mode TV) : même présentation que le mode TV */
+@media (min-width: 1360px) {
+  body.avec-presentatrice:not(.tv):not(.sna-actif) { padding-right: 368px; }
+  body.avec-presentatrice:not(.tv):not(.sna-actif) :is(main, .tabs, .filter-panel, .banniere, .site-footer) { margin-inline: max(24px, calc((100% - 1404px) / 2)); }
+  body.avec-presentatrice:not(.tv):not(.sna-actif) :is(.masthead, .intro) { padding-inline: 28px; }
+}
+.sokhnaci-widget.presentatrice { top: 14px; right: 14px; bottom: 14px; width: 340px; }
+.sokhnaci-widget.presentatrice .sokhnaci-card { --pres-texte: #eef6f2; --pres-doux: #b7cfc5; --pres-verre: rgba(255, 255, 255, .08); --pres-bord: rgba(255, 255, 255, .16);
+  height: 100%; max-height: none; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(220px, 1fr) auto auto auto auto auto;
+  grid-template-areas: "ident fermer" "scene scene" "bulle bulle" "actions actions" "chips chips" "question question" "statut statut";
+  gap: 10px; padding: 14px; overflow: hidden; border: 1px solid rgba(255, 255, 255, .12); border-radius: 24px;
+  background: radial-gradient(80% 50% at 50% 0%, rgba(79, 224, 173, .14), transparent 70%), linear-gradient(180deg, #13323a, #0b2027); color: var(--pres-texte); box-shadow: 0 24px 60px rgba(6, 22, 27, .45); }
+.sokhnaci-widget.presentatrice .sokhnaci-top { display: contents; }
+.sokhnaci-widget.presentatrice .sokhnaci-identite { grid-area: ident; }
+.sokhnaci-widget.presentatrice .sokhnaci-identite .eyebrow { color: #8ff0c4; }
+.sokhnaci-widget.presentatrice .sokhnaci-top strong { color: #fff; font-size: 19px; }
+.sokhnaci-widget.presentatrice .sokhnaci-state { background: rgba(143, 240, 196, .16); color: #b9f5d8; }
+.sokhnaci-widget.presentatrice .sokhnaci-collapse { grid-area: fermer; border-color: var(--pres-bord); background: var(--pres-verre); color: var(--pres-texte); }
+.sokhnaci-widget.presentatrice .sokhnaci-character { grid-area: scene; width: 100%; height: 100%; min-height: 220px; border-radius: 18px; background: radial-gradient(90% 55% at 50% 30%, #3d7d6c 0%, #1d4a47 55%, #10302f 100%); }
+.sokhnaci-widget.presentatrice .sokhnaci-character::after { position: absolute; right: 24%; bottom: 9%; left: 24%; height: 16px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .45), transparent); content: ""; }
+.sokhnaci-widget.presentatrice .sokhnaci-svg { width: 190px; height: 190px; transform: translateX(var(--x, 0px)); }
+.sokhnaci-widget.presentatrice.walking:not(.entering) .sokhnaci-character { animation: none; }
+.sokhnaci-widget.presentatrice .sokhnaci-bubble { grid-area: bulle; max-height: 9.6em; padding: 12px 14px; border: 1px solid var(--pres-bord); background: var(--pres-verre); color: var(--pres-texte); font-size: 15px; line-height: 1.5; }
+.sokhnaci-widget.presentatrice.speaking .sokhnaci-bubble .sok-phrase:not(.actif) { opacity: .5; }
+.sokhnaci-widget.presentatrice .sokhnaci-bubble .sok-phrase.actif { background: rgba(143, 240, 196, .2); color: #fff; }
+.sokhnaci-widget.presentatrice .sokhnaci-actions { grid-area: actions; }
+.sokhnaci-widget.presentatrice .sokhnaci-chips { grid-area: chips; }
+.sokhnaci-widget.presentatrice .sokhnaci-ask { grid-area: question; }
+.sokhnaci-widget.presentatrice .sokhnaci-voix-statut { grid-area: statut; color: var(--pres-doux); }
+.sokhnaci-widget.presentatrice :is(.sokhnaci-actions, .sokhnaci-chips, .sokhnaci-ask) button { border-color: var(--pres-bord); background: var(--pres-verre); color: var(--pres-texte); }
+.sokhnaci-widget.presentatrice :is(.sokhnaci-actions, .sokhnaci-chips, .sokhnaci-ask) button:hover { border-color: #8ff0c4; color: #fff; }
+.sokhnaci-widget.presentatrice .sokhnaci-actions .sokhnaci-speak { border-color: #1aa36f; background: linear-gradient(180deg, #24b87f, #138a5d); color: #fff; }
+.sokhnaci-widget.presentatrice .sokhnaci-ask input { border-color: var(--pres-bord); background: rgba(0, 0, 0, .22); color: #fff; }
+.sokhnaci-widget.presentatrice .sokhnaci-ask input::placeholder { color: var(--pres-doux); }
+.sokhnaci-widget.presentatrice :focus-visible { outline: 2px solid #8ff0c4; outline-offset: 2px; }

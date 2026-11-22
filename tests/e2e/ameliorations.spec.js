@@ -75,8 +75,9 @@ test("les gestes suivent le contenu de la phrase et se placent au bon moment", a
   expect(resultat.ordre).toBe(true);
   expect(resultat.chevauche).toBe(false);
   expect(resultat.question).toContain("inclinaison_ecoute");
-  expect(resultat.neutre).toEqual([]); // un geste de script trop générique n'est pas imposé sans raison
-  expect(resultat.script).toEqual(["salut_main"]);
+  // Un geste de script trop générique n'est pas imposé sans raison : seule la fin de phrase est ponctuée.
+  expect(resultat.neutre.map((e) => e.geste)).toEqual(["hochement_tete"]);
+  expect(resultat.script).toEqual(["salut_main", "hochement_tete"]);
 });
 
 test("avatar 3D : la main et la tête marquent les mots appuyés et la boucle résiste aux images en retard", async ({ page }) => {
@@ -257,4 +258,82 @@ test("pendant que Sokhna Ci parle, la zone qu'elle commente défile et s'illumin
   await page.locator("#btn-tv").click();
   await expect(page.locator("#tv-stage .sna-focus").first()).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#tv-stage .tv-kpis article.sna-focus")).toHaveCount(1, { timeout: 15_000 });
+});
+
+test("grand écran : la carte de Sokhna Ci devient une présentatrice en pied, comme en mode TV", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  const widget = page.locator(".sokhnaci-widget");
+  await expect(widget).toHaveClass(/presentatrice/);
+  await expect(page.locator("body")).toHaveClass(/avec-presentatrice/);
+  expect(await page.evaluate(() => parseFloat(getComputedStyle(document.body).paddingRight))).toBeGreaterThan(300);
+  // Elle fait quelques pas : la variable --x change pendant la marche, puis revient près du centre.
+  await page.evaluate(() => { window.speechSynthesis.speak = (u) => { u.onstart?.(); setTimeout(() => u.onend?.(), 400); }; });
+  await page.locator(".sokhnaci-speak").click();
+  await expect(widget).toHaveClass(/speaking/);
+  // Réduite, elle libère la place ; sur un écran plus petit, la carte compacte revient.
+  await page.locator(".sokhnaci-collapse").click();
+  await expect(page.locator("body")).not.toHaveClass(/avec-presentatrice/);
+  await page.locator(".sokhnaci-launcher").click();
+  await expect(widget).toHaveClass(/presentatrice/);
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await expect(widget).not.toHaveClass(/presentatrice/);
+});
+
+test("les solutions proposées changent avec la situation (baisse, bonne situation)", async ({ page }) => {
+  const resultat = await page.evaluate(async () => {
+    const { chargerDonnees, construireModele } = await import("/src/data.js");
+    const { construireBilan } = await import("/src/bilan.js");
+    const d = await chargerDonnees();
+    const fabriquer = () => construireModele(d.snapshot, d.latest.semaine_cle, d.snapshot.semaines.at(-2), { region: "", periode: "*", formulaire: "" }, d.evolution, d.geo, d.geoRegions);
+    const titres = (m) => construireBilan(m).solutions.map((s) => s.titre);
+    const bon = fabriquer();
+    for (const r of bon.toutesRegions) { r.tauxMoyen = 95; for (const di of r.districts) { di.tauxMoyen = 95; for (const f of di.formulaires) f.valeur = 95; } }
+    bon.districts = bon.toutesRegions.flatMap((r) => r.districts);
+    const baisse = fabriquer();
+    baisse.evolution = { ...baisse.evolution, par_region: baisse.evolution.par_region.map((s, i) => (i ? s : { ...s, valeurs: [...s.valeurs.slice(0, -1), s.valeurs.at(-1) - 9] })) };
+    return { reel: titres(fabriquer()), bon: titres(bon), baisse: titres(baisse) };
+  });
+  expect(resultat.reel.length).toBeGreaterThan(0);
+  expect(resultat.reel.length).toBeLessThanOrEqual(5);
+  expect(resultat.bon).toContain("Consolider un niveau conforme");
+  expect(resultat.bon.some((t) => /Relancer les districts en retard/.test(t))).toBe(false);
+  expect(resultat.baisse[0]).toBe("Comprendre la baisse de la dernière extraction");
+  expect(resultat.baisse).not.toEqual(resultat.reel);
+});
+
+test("le visage suit l'humeur de chaque phrase et une affirmation se termine par un hochement de tête", async ({ page }) => {
+  const r = await page.evaluate(async () => {
+    const { humeurPhrase, planifierGestes } = await import("/src/sokhnaci-gestes.js");
+    return {
+      bonne: humeurPhrase("Bravo, la région progresse nettement."),
+      mauvaise: humeurPhrase("Attention, 72 districts sont en retard."),
+      neutre: humeurPhrase("Voici le tableau de la semaine."),
+      fin: planifierGestes("Le taux moyen national est stable depuis la semaine dernière.").at(-1)?.geste,
+    };
+  });
+  expect(r.bonne).toBe("felicitations");
+  expect(r.mauvaise).toBe("preoccupee");
+  expect(r.neutre).toBeNull();
+  expect(r.fin).toBe("hochement_tete");
+});
+
+test("avatar 3D : une perte du contexte graphique ne provoque aucune erreur et l'avatar repart", async ({ page }) => {
+  test.setTimeout(180_000);
+  const erreurs = [];
+  page.on("pageerror", (e) => erreurs.push(String(e)));
+  await page.addInitScript(() => { window.__sokhnaci3d = true; });
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await ouvrirEspace(page);
+  await expect(page.locator(".sna-scene.trois-d")).toBeVisible({ timeout: 120_000 });
+  await page.evaluate(async () => {
+    const canvas = document.querySelector("canvas.sna-canvas-3d");
+    const extension = (canvas.getContext("webgl2") || canvas.getContext("webgl")).getExtension("WEBGL_lose_context");
+    extension.loseContext();
+    await new Promise((r) => setTimeout(r, 500));
+    extension.restoreContext();
+    await new Promise((r) => setTimeout(r, 1500));
+  });
+  await expect(page.locator(".sna-scene.trois-d")).toBeVisible();
+  expect(erreurs).toEqual([]);
 });

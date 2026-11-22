@@ -38,45 +38,7 @@ export function construireBilan(model) {
   const totalCellules = [...parFormulaire.values()].reduce((n, l) => n + l.attendus, 0);
 
   const a = analyser(model);
-  const solutions = [];
-  const ajouter = (solution) => { if (solutions.length < 5) solutions.push(solution); };
-  if (a.globaux.length) {
-    const cites = [...a.globaux].sort((x, y) => x.tauxMoyen - y.tauxMoyen).slice(0, 3).map((d) => d.nom);
-    ajouter({ priorite: "Immédiat", icone: "☎", titre: "Relancer les districts en retard sur presque tous les formulaires",
-      detail: `${E(a.globaux.length)} ${a.globaux.length > 1 ? "districts" : "district"}, dont ${liste(cites)} : appel au point focal DHIS2 et saisie de rattrapage sous 48 heures.` });
-  }
-  const vide = sansDonnees.find((l) => l.vides > 0);
-  if (vide) {
-    ajouter({ priorite: "Cette semaine", icone: "⚙", titre: "Clarifier les formulaires sans données",
-      detail: `« ${nomFormulaire(vide.nom)} » : ${E(vide.vides)} ${vide.vides > 1 ? "districts sans donnée" : "district sans donnée"}. Vérifier s’il s’applique à ces structures et son affectation dans DHIS2.` });
-  }
-  if (a.systemiques.length) {
-    const f = a.systemiques[0];
-    ajouter({ priorite: "Ce mois", icone: "🎓", titre: `Plan national pour « ${nomFormulaire(f.nom)} »`,
-      detail: `Bas dans toutes les régions, autour de ${T(un(f.moyenne))} : rappel de la procédure et courte formation des agents de saisie.` });
-  }
-  if (a.regionsToutesRouges.length) {
-    const noms = a.regionsToutesRouges.slice(0, 3).map((r) => labelRegion(r.nom));
-    ajouter({ priorite: "Cette semaine", icone: "🤝", titre: `Appui renforcé à ${liste(noms)}`,
-      detail: `Tous leurs districts sont en rouge : réunion de coordination avec ${a.regionsToutesRouges.length > 1 ? "ces régions médicales" : "la région médicale"} et suivi chaque semaine.` });
-  }
-  const atypique = a.atypiques.find((x) => x.ecart < 0);
-  if (atypique) {
-    ajouter({ priorite: "Cette semaine", icone: "🔎", titre: `Vérifier la situation du district de ${atypique.district.nom}`,
-      detail: `Ce district est ${P(atypique.ecart)} sous la médiane des districts de la région ${labelRegion(atypique.region.nom)} : contrôler la saisie, la connexion ou l’absence de personnel.` });
-  }
-  if (a.zeros > 0) {
-    ajouter({ priorite: "Ce mois", icone: "✓", titre: "Contrôler les valeurs à zéro",
-      detail: `${E(a.zeros)} ${a.zeros > 1 ? "valeurs sont" : "valeur est"} à zéro : distinguer « rapport non envoyé » et « formulaire non applicable » pour fiabiliser le taux.` });
-  }
-  if (a.stagnantes.length) {
-    ajouter({ priorite: "Ce mois", icone: "📈", titre: "Relancer la dynamique des régions qui stagnent",
-      detail: `${liste(a.stagnantes.slice(0, 3).map((r) => labelRegion(r.nom)))} : objectif de progression fixé avec chaque équipe régionale.` });
-  }
-  if (!solutions.length) {
-    ajouter({ priorite: "Ce mois", icone: "★", titre: "Maintenir la dynamique",
-      detail: "Aucun point bloquant majeur : partager les bonnes pratiques des districts conformes." });
-  }
+  const solutions = choisirSolutions(model, { a, taux, ecart, rouges, oranges, verts, avecTaux, sansDonnees, seuils });
 
   return {
     semaineCle: model.semaineCle, comparaisonCle: model.comparaisonCle, periode: model.selection?.periode,
@@ -86,6 +48,109 @@ export function construireBilan(model) {
     sansDonnees: sansDonnees.slice(0, 6), totalManquants, totalCellules, nbFormulaires: parFormulaire.size,
     solutions,
   };
+}
+
+// ---------------------------------------------------------------- solutions adaptées à la situation
+// Chaque règle examine un aspect de la situation de la semaine et, si elle s'applique, propose une action avec un
+// score de gravité. Les cinq actions les plus importantes sont retenues : quand la situation change (baisse,
+// progression, données anciennes, presque tout conforme…), les solutions changent avec elle.
+const ORDRE = { "Immédiat": 0, "Cette semaine": 1, "Ce mois": 2 };
+function joursDepuis(iso) { return iso ? Math.floor((Date.now() - new Date(`${iso}T12:00:00`).getTime()) / 86400000) : 0; }
+
+function choisirSolutions(model, c) {
+  const { a, taux, ecart, rouges, oranges, verts, avecTaux, sansDonnees, seuils } = c;
+  const total = avecTaux.length || 1;
+  const candidats = [];
+  const proposer = (score, solution) => candidats.push({ ...solution, score });
+
+  // Données anciennes : avant toute action, vérifier l'extraction elle-même.
+  const age = joursDepuis(model.semaineCle);
+  if (age > 10) proposer(100, { priorite: "Immédiat", icone: "⏱", titre: "Vérifier l’extraction hebdomadaire",
+    detail: `Les données datent de ${E(age)} jours : contrôler l’exécution automatique du lundi avant de décider des relances.` });
+
+  // Baisse récente : comprendre avant que la situation ne s'installe.
+  const declins = (model.evolution?.par_region || [])
+    .map((serie) => { const v = serie.valeurs.filter((x) => x !== null && x !== undefined); return v.length >= 2 ? { nom: serie.region, perte: un(v.at(-1) - v.at(-2)) } : null; })
+    .filter((r) => r && r.perte <= -2).sort((x, y) => x.perte - y.perte);
+  if ((a.dernierPas !== null && a.dernierPas <= -1) || declins.length) {
+    const cites = declins.slice(0, 3).map((r) => `${labelRegion(r.nom)} (${P(r.perte)} de moins)`);
+    proposer(92, { priorite: "Immédiat", icone: "📉", titre: "Comprendre la baisse de la dernière extraction",
+      detail: cites.length ? `Recul marqué pour ${liste(cites)} : vérifier les ruptures de connexion, les absences ou les changements de formulaires.` : `Le taux national perd ${P(a.dernierPas)} : identifier les districts qui ont cessé de transmettre.` });
+  }
+
+  // Retard généralisé sur presque tous les formulaires.
+  if (a.globaux.length) {
+    const cites = [...a.globaux].sort((x, y) => x.tauxMoyen - y.tauxMoyen).slice(0, 3).map((d) => d.nom);
+    proposer(85 + Math.min(10, a.globaux.length / 6), { priorite: "Immédiat", icone: "☎", titre: "Relancer les districts en retard sur presque tous les formulaires",
+      detail: `${E(a.globaux.length)} ${a.globaux.length > 1 ? "districts" : "district"}, dont ${liste(cites)} : appel au point focal DHIS2 et saisie de rattrapage sous 48 heures.` });
+  } else if (rouges) {
+    const cites = avecTaux.filter((d) => d.tauxMoyen < seuils.critique).sort((x, y) => x.tauxMoyen - y.tauxMoyen).slice(0, 3).map((d) => d.nom);
+    proposer(70, { priorite: "Cette semaine", icone: "☎", titre: "Relance ciblée des districts en rouge",
+      detail: `${liste(cites)} : relancer seulement les formulaires manquants, le reste est transmis.` });
+  }
+
+  // Régions dont tous les districts sont en rouge.
+  if (a.regionsToutesRouges.length) {
+    const noms = a.regionsToutesRouges.slice(0, 3).map((r) => labelRegion(r.nom));
+    proposer(75, { priorite: "Cette semaine", icone: "🤝", titre: `Appui renforcé à ${liste(noms)}`,
+      detail: `Tous leurs districts sont en rouge : réunion de coordination avec ${a.regionsToutesRouges.length > 1 ? "ces régions médicales" : "la région médicale"} et suivi chaque semaine.` });
+  }
+
+  // Formulaires sans données (rapport absent) : question de paramétrage ou d'applicabilité.
+  const vide = sansDonnees.find((l) => l.vides > 0);
+  if (vide) proposer(60 + Math.min(20, vide.part / 5), { priorite: "Cette semaine", icone: "⚙", titre: "Clarifier les formulaires sans données",
+    detail: `« ${nomFormulaire(vide.nom)} » : ${E(vide.vides)} ${vide.vides > 1 ? "districts sans donnée" : "district sans donnée"}. Vérifier s’il s’applique à ces structures et son affectation dans DHIS2.` });
+
+  // Formulaire bas partout : problème national d'organisation.
+  if (a.systemiques.length) {
+    const f = a.systemiques[0];
+    proposer(55, { priorite: "Ce mois", icone: "🎓", titre: `Plan national pour « ${nomFormulaire(f.nom)} »`,
+      detail: `Bas dans toutes les régions, autour de ${T(un(f.moyenne))} : rappel de la procédure et courte formation des agents de saisie.` });
+  }
+
+  // District très en dessous des autres districts de sa région.
+  const atypique = a.atypiques.find((x) => x.ecart < 0);
+  if (atypique) proposer(50, { priorite: "Cette semaine", icone: "🔎", titre: `Vérifier la situation du district de ${atypique.district.nom}`,
+    detail: `Ce district est ${P(atypique.ecart)} sous la médiane des districts de la région ${labelRegion(atypique.region.nom)} : contrôler la saisie, la connexion ou l’absence de personnel.` });
+
+  // Districts à surveiller tout proches de la conformité : un petit effort suffit.
+  const prochesConformite = avecTaux.filter((d) => d.tauxMoyen >= seuils.conforme - 5 && d.tauxMoyen < seuils.conforme).sort((x, y) => y.tauxMoyen - x.tauxMoyen);
+  if (prochesConformite.length) proposer(45, { priorite: "Cette semaine", icone: "🎯", titre: "Faire passer au vert les districts tout proches du seuil",
+    detail: `${liste(prochesConformite.slice(0, 3).map((d) => `${d.nom}, à ${T(un(d.tauxMoyen))}`))} : il leur manque moins de 5 points pour être conformes.` });
+
+  // Districts juste au-dessus du seuil critique : prévenir une rechute.
+  const fragiles = avecTaux.filter((d) => d.tauxMoyen >= seuils.critique && d.tauxMoyen < seuils.critique + 5);
+  if (fragiles.length) proposer(40, { priorite: "Ce mois", icone: "🛡", titre: "Prévenir les rechutes sous le seuil critique",
+    detail: `${liste(fragiles.slice(0, 3).map((d) => d.nom))} ${fragiles.length > 1 ? "sont" : "est"} juste au-dessus de ${T(seuils.critique)} : un suivi rapproché évitera une rechute.` });
+
+  // Valeurs à zéro : fiabilité du taux.
+  if (a.zeros > 0) proposer(35 + Math.min(10, a.zeros / 40), { priorite: "Ce mois", icone: "✓", titre: "Contrôler les valeurs à zéro",
+    detail: `${E(a.zeros)} ${a.zeros > 1 ? "valeurs sont" : "valeur est"} à zéro : distinguer « rapport non envoyé » et « formulaire non applicable » pour fiabiliser le taux.` });
+
+  // Régions qui stagnent.
+  if (a.stagnantes.length) proposer(30, { priorite: "Ce mois", icone: "📈", titre: "Relancer la dynamique des régions qui stagnent",
+    detail: `${liste(a.stagnantes.slice(0, 3).map((r) => labelRegion(r.nom)))} : objectif de progression fixé avec chaque équipe régionale.` });
+
+  // Progression : capitaliser sur ce qui marche.
+  if (a.meilleureProgression && a.meilleureProgression.gain >= 3) proposer(28, { priorite: "Ce mois", icone: "🚀", titre: `S’inspirer de la progression de ${labelRegion(a.meilleureProgression.nom)}`,
+    detail: `${P(a.meilleureProgression.gain)} gagnés sur les dernières extractions : partager sa méthode avec les autres régions.` });
+
+  // Bonne situation : consolider et valoriser.
+  if (taux !== null && taux >= seuils.conforme) proposer(26, { priorite: "Ce mois", icone: "🏆", titre: "Consolider un niveau conforme",
+    detail: `Taux moyen de ${T(un(taux))} : maintenir le rythme de saisie et féliciter les équipes${verts ? `, dont ${E(verts)} ${verts > 1 ? "districts conformes" : "district conforme"}` : ""}.` });
+  else if (verts && verts / total >= 0.05) proposer(20, { priorite: "Ce mois", icone: "★", titre: "Valoriser les districts conformes",
+    detail: `${E(verts)} ${verts > 1 ? "districts sont conformes" : "district est conforme"} : partager leurs pratiques lors de la prochaine réunion de coordination.` });
+  if (ecart !== null && ecart >= seuils.baisse) proposer(24, { priorite: "Ce mois", icone: "👏", titre: "Saluer la nette amélioration",
+    detail: `${P(ecart)} gagnés par rapport à l’extraction de comparaison : un message de félicitations encouragera la régularité.` });
+
+  if (!candidats.length) proposer(1, { priorite: "Ce mois", icone: "★", titre: "Maintenir la dynamique",
+    detail: "Aucun point bloquant majeur : partager les bonnes pratiques des districts conformes." });
+  if (oranges && !candidats.some((x) => x.icone === "🎯") && candidats.length < 5) proposer(10, { priorite: "Ce mois", icone: "🎯", titre: "Accompagner les districts à surveiller",
+    detail: `${E(oranges)} ${oranges > 1 ? "districts sont" : "district est"} entre ${T(seuils.critique)} et ${T(seuils.conforme)} : fixer avec eux un objectif de conformité.` });
+
+  return candidats.sort((x, y) => y.score - x.score).slice(0, 5)
+    .sort((x, y) => ORDRE[x.priorite] - ORDRE[y.priorite] || y.score - x.score)
+    .map(({ score, ...solution }) => solution);
 }
 
 // Commentaire oral de Sokhna Ci pour le bilan : chaque phrase indique la zone de l'écran qu'elle commente

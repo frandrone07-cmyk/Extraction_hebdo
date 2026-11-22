@@ -4,7 +4,7 @@ import { basculerThemeCarte } from "./map.js";
 import { initDrawer } from "./drawer.js";
 import { demarrerDiaporama } from "./slideshow.js";
 import { assistanteTVAutorisee, creerAssistanteTV } from "./sokhnaci-tv.js";
-import { initSokhnaci, mettreAJourSokhnaci, replierSokhnaci, rattacherAvatarWidget } from "./sokhnaci.js";
+import { initSokhnaci, majPresentatrice, mettreAJourSokhnaci, replierSokhnaci, rattacherAvatarWidget } from "./sokhnaci.js";
 import { initTrigger } from "./trigger.js";
 import {
   renderVue, apresRenduVue,
@@ -94,6 +94,7 @@ function afficherOnglet(name) {
   if (ongletCourant !== "vue") replierSokhnaci();
   document.body.classList.toggle("sna-actif", ongletCourant === "assistante");
   if (ongletCourant !== "assistante") rattacherAvatarWidget();
+  majPresentatrice();
   content.setAttribute("aria-busy", "false");
   document.querySelectorAll('[role="tab"][data-tab]').forEach((button) => {
     const active = button.dataset.tab === ongletCourant;

@@ -217,7 +217,7 @@ async function creer(tenueInitiale) {
     const nombre = (nom, defaut) => { const v = parseFloat(e.style.getPropertyValue(nom)); return Number.isFinite(v) ? v : defaut; };
     return {
       parle: cl.contains("speaking"), ecoute: cl.contains("listening"), marche: !buste && cl.contains("walking"), assise: !buste && cl.contains("assise"), danse: !buste && cl.contains("danse"),
-      sourire: cl.contains("grand-sourire"), geste: e.dataset.geste || "", emotion: e.dataset.emotion || "neutre",
+      sourire: cl.contains("grand-sourire"), geste: e.dataset.geste || "", emotion: e.dataset.emotion || "neutre", mainGauche: e.dataset.main === "gauche",
       bouche: e.dataset.sync === "audio" ? nombre("--bouche", 0.4) : null, x: buste ? 0 : nombre("--x", 0), echelle: buste ? 1 : nombre("--echelle", 1), sens: buste ? 1 : nombre("--sens", 1),
       posture: cl.contains("posture-a") ? 1 : cl.contains("posture-b") ? -1 : 0,
       applaudit: cl.contains("applaudit"), incline: cl.contains("incline"), reflechit: cl.contains("reflechit"), pense: cl.contains("pense"),
@@ -258,7 +258,12 @@ async function creer(tenueInitiale) {
       // Chaque mot appuyé fait un petit signe de tête ; avec un geste, la main accentue en même temps que la voix.
       ajoute("head", 0.08 * accent, 0.05 * Math.sin(t * 0.8), 0);
       ajoute("neck", 0.03 * accent, 0, 0);
-      if (!G) {
+      if (!G && s.mainGauche) {
+        // Phrase impaire : c'est la main gauche qui rythme la parole.
+        pose("leftUpperArm", -0.12 - 0.32 * accent, 0, 1.1 + 0.18 * accent);
+        pose("leftLowerArm", 0, 0.12 + 0.75 * accent, 0);
+        pose("rightLowerArm", 0, -0.12 - 0.3 * s.accentLent, 0);
+      } else if (!G) {
         pose("rightUpperArm", -0.12 - 0.32 * accent, 0, -1.1 - 0.18 * accent);
         pose("rightLowerArm", 0, -0.12 - 0.75 * accent, 0);
         pose("leftLowerArm", 0, 0.12 + 0.3 * s.accentLent, 0);
@@ -366,10 +371,28 @@ async function creer(tenueInitiale) {
   }
 
   const debogage = { aa: 0, ih: 0, ou: 0, happy: 0, os: {} };
+  // Robustesse : perte du contexte graphique (pilote, veille) et erreurs répétées → retour à l'illustration 2D.
+  let contextePerdu = false;
+  let erreursSuccessives = 0;
+  rendu.domElement.addEventListener("webglcontextlost", (evenement) => { evenement.preventDefault(); contextePerdu = true; });
+  rendu.domElement.addEventListener("webglcontextrestored", () => { contextePerdu = false; cadrer(); });
+  function abandonner() {
+    boucle = false;
+    zone?.classList.remove("trois-d");
+    rendu.domElement.remove();
+    singleton = null;
+    chargement = null;
+    document.dispatchEvent(new CustomEvent("sokhnaci:3d-indisponible"));
+  }
   function image(maintenant) {
     if (!boucle) return;
     requestAnimationFrame(image);
-    if (document.hidden) return;
+    if (document.hidden || contextePerdu) return;
+    try { dessiner(maintenant); erreursSuccessives = 0; } catch (erreur) {
+      if (++erreursSuccessives > 20) { console.warn("Avatar 3D arrêté, retour à l'illustration 2D", erreur); abandonner(); }
+    }
+  }
+  function dessiner(maintenant) {
     if (!acteur?.isConnected || !rendu.domElement.isConnected || !zone?.clientWidth) { horsEcran += 1; if (horsEcran > 90) boucle = false; return; }
     horsEcran = 0;
     // Au repos (ni parole, ni mouvement) on dessine environ 24 images par seconde : l'animation reste fluide

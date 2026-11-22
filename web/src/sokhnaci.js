@@ -2,7 +2,8 @@ import { creerSituation, versAffichage, versOral } from "./sokhnaci-dialogue.js"
 import { phraseAction } from "./sokhnaci-actions.js";
 import { interpreterEntree } from "./sokhnaci-cerveau.js";
 import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
-import { gesteA, planifierGestes } from "./sokhnaci-gestes.js";
+import { gesteA, humeurPhrase, planifierGestes } from "./sokhnaci-gestes.js";
+import { creerMarcheur } from "./marche.js";
 import { effacerMiseEnAvant, mettreEnAvant } from "./mise-en-avant.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
@@ -37,6 +38,10 @@ let segmentsLecture = [];
 // Le suivi visuel dans la page ne s'active que pour une lecture demandée (bouton Écouter, question), jamais pour
 // l'accueil automatique ; il s'arrête dès que l'utilisateur fait défiler la page lui-même.
 let suiviPage = false;
+// Grand écran : la carte flottante devient une présentatrice en pied dans une colonne à droite (comme en mode TV).
+const ECRAN_PRESENTATRICE = window.matchMedia("(min-width: 1360px)");
+let marcheur = null;
+let emotionDialogue = "neutre";
 let gesteActuel = null;
 const syntheses = new Map();
 
@@ -149,7 +154,11 @@ function chargerPiper() {
       reject(new Error(raison));
     };
     const garde = setTimeout(() => echec("chargement trop long"), 240000);
-    travailleur.onerror = () => { clearTimeout(garde); echec("moteur de voix indisponible"); };
+    travailleur.onerror = () => {
+      clearTimeout(garde);
+      if (piper) { reinitialiserVoix(); return; } // panne après démarrage : on relance le moteur proprement
+      echec("moteur de voix indisponible");
+    };
     travailleur.onmessage = (evenement) => {
       const m = evenement.data || {};
       if (m.type === "progression" && m.pourcent >= 0) annoncerVoix(`Je prépare ma voix originale (téléchargement unique) : ${m.pourcent} %`);
@@ -174,6 +183,19 @@ function chargerPiper() {
     throw erreur;
   });
   return piperPromesse;
+}
+
+// Le moteur de voix s'est arrêté en cours de route : les phrases en attente passent à la voix de l'appareil
+// et un nouveau moteur est démarré quelques secondes plus tard (le modèle est déjà en cache).
+function reinitialiserVoix() {
+  try { travailleur?.terminate(); } catch { /* déjà arrêté */ }
+  travailleur = null;
+  piper = null;
+  piperPromesse = null;
+  for (const resoudre of attentesSynthese.values()) resoudre(null);
+  attentesSynthese.clear();
+  syntheses.clear();
+  setTimeout(() => demarrerPiperAutomatique(), 4000);
 }
 
 async function voixDejaTelechargee() {
@@ -231,7 +253,7 @@ function synthetiser(texte, id) {
     const cle = ++compteurSynthese;
     attentesSynthese.set(cle, resolve);
     travailleur.postMessage({ type: "synth", cle, id, texte });
-    setTimeout(() => { if (attentesSynthese.has(cle)) { attentesSynthese.delete(cle); resolve(null); } }, 30000);
+    setTimeout(() => { if (attentesSynthese.has(cle)) { attentesSynthese.delete(cle); resolve(null); } }, 15000);
   }).then((resultat) => {
     if (resultat === "annule") { syntheses.delete(texte); return null; }
     if (resultat) echecsSynthese = 0;
@@ -340,6 +362,7 @@ function suivreDansLaPage(index) {
 }
 function marquerPhrase(index) {
   emettre("phrase", { index });
+  if (index !== null && index >= 2 && index % 2 === 0 && widget?.classList.contains("presentatrice")) marcheur?.flaner(30, 1000);
   suivreDansLaPage(index);
   const bulle = widget?.querySelector(".sokhnaci-bubble");
   if (!bulle) return;
@@ -438,6 +461,11 @@ async function lire(segments) {
     if (id !== lectureId) return;
     planGestes = planifierGestes(segment.affichage || segment.oral, segment.geste);
     gesteActuel = null;
+    const humeur = humeurPhrase(segment.affichage || segment.oral);
+    for (const element of avatars()) {
+      element.dataset.emotion = humeur || element.dataset.emotionGenerale || element.dataset.emotion || "neutre";
+      element.dataset.main = index % 2 ? "gauche" : "droite"; // la main qui rythme la parole alterne d'une phrase à l'autre
+    }
     definirParole(true, gesteA(planGestes, 0));
     gesteActuel = gesteA(planGestes, 0);
     emettre("etat", { etat: "prepare" });
@@ -533,6 +561,7 @@ function executerCommande(commande) {
 
 function marcher(duree = 2600) {
   if (!widget || widget.classList.contains("collapsed") || widget.classList.contains("listening")) return;
+  if (widget.classList.contains("presentatrice")) { marcheur?.flaner(30, 1100); return; }
   widget.classList.add("walking");
   clearTimeout(marcheTimer);
   marcheTimer = setTimeout(() => widget.classList.remove("walking"), duree);
@@ -566,6 +595,7 @@ function afficherDialogue(dialogue, humeurForcee = null, { speak = false } = {})
   }));
   bubble.scrollTop = 0;
   widget.dataset.emotion = dialogue.emotion || "neutre";
+  widget.dataset.emotionGenerale = dialogue.emotion || "neutre";
   widget.querySelector(".sokhnaci-svg").setAttribute("data-mood", mood);
   widget.querySelector(".sokhnaci-state").textContent = LIBELLE_HUMEUR[mood];
   if (speak) parler();
@@ -685,6 +715,21 @@ export function replierSokhnaci() {
   arreterLecture();
   widget.classList.add("collapsed");
   widget.querySelector(".sokhnaci-launcher").hidden = false;
+  majPresentatrice();
+}
+
+// Active ou retire la présentatrice en pied selon la largeur d'écran et l'état de la carte.
+export function majPresentatrice() {
+  if (!widget) return;
+  const actif = ECRAN_PRESENTATRICE.matches && !widget.classList.contains("collapsed");
+  const avant = widget.classList.contains("presentatrice");
+  widget.classList.toggle("presentatrice", actif);
+  document.body.classList.toggle("avec-presentatrice", actif);
+  if (avant === actif) return;
+  marcheur?.placer(0);
+  if (actif) { marcheur?.placer(70); marcheur?.marcherVers(0, 1300); }
+  rattacherAvatarWidget();
+  requestAnimationFrame(() => window.dispatchEvent(new Event("resize"))); // cartes et graphiques reprennent la largeur
 }
 
 export function initSokhnaci(model) {
@@ -720,7 +765,10 @@ export function initSokhnaci(model) {
   widget.querySelector(".sokhnaci-launcher").addEventListener("click", () => {
     widget.classList.remove("collapsed");
     widget.querySelector(".sokhnaci-launcher").hidden = true;
+    majPresentatrice();
   });
+  marcheur = creerMarcheur(widget);
+  ECRAN_PRESENTATRICE.addEventListener?.("change", majPresentatrice);
   widget.querySelector(".sokhnaci-speak").addEventListener("click", () => parler());
   const reprendreLaMain = () => { if (suiviPage) { suiviPage = false; effacerMiseEnAvant(); } };
   for (const nom of ["wheel", "touchmove"]) window.addEventListener(nom, reprendreLaMain, { passive: true });
@@ -758,6 +806,7 @@ export function initSokhnaci(model) {
   // Les navigateurs interdisent la parole avant le premier geste de l'utilisateur : on attend ce geste.
   // Sur petit écran, l'assistante démarre réduite pour ne pas masquer le tableau de bord.
   if (window.matchMedia("(max-width: 700px)").matches) replierSokhnaci();
+  majPresentatrice();
   const parlerOuverture = () => { if (voiceEnabled && !widget.classList.contains("collapsed")) attendrePuisParler(); };
   if (navigator.userActivation?.hasBeenActive === false) {
     const premierGeste = () => {
@@ -791,7 +840,7 @@ export async function rattacherAvatarWidget() {
     const controleur = await obtenir3D(preferences.tenue || "wax");
     if (!widget.isConnected || document.body.classList.contains("sna-actif")) return;
     controleur.habiller(preferences.tenue || "wax");
-    controleur.relier(zone, widget, { cadrage: "buste" });
+    controleur.relier(zone, widget, { cadrage: widget.classList.contains("presentatrice") ? "pied" : "buste" });
     zone.classList.add("trois-d");
   } catch {
     zone.classList.remove("trois-d");

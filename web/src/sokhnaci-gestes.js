@@ -28,7 +28,10 @@ export function planifierGestes(texte, gesteScript = null) {
   REGLES.forEach((regle, priorite) => {
     for (const m of t.matchAll(new RegExp(regle.motif.source, "g"))) candidats.push({ position: m.index / longueur, geste: regle.geste, priorite });
   });
-  if (/\?\s*$/.test(String(texte ?? "").trim())) candidats.push({ position: 0.62, geste: "inclinaison_ecoute", priorite: -1 });
+  const question = /\?\s*$/.test(String(texte ?? "").trim());
+  if (question) candidats.push({ position: 0.62, geste: "inclinaison_ecoute", priorite: -1 });
+  // Une affirmation se termine par un léger hochement de tête, comme on ponctue une phrase.
+  else if (longueur > 25) candidats.push({ position: 0.93, geste: "hochement_tete", priorite: 99 });
   candidats.sort((a, b) => a.position - b.position || a.priorite - b.priorite);
   const retenus = [];
   for (const c of candidats) {
@@ -37,7 +40,8 @@ export function planifierGestes(texte, gesteScript = null) {
     retenus.push(c);
     if (retenus.length >= MAX_PAR_PHRASE) break;
   }
-  if (!retenus.length && gesteScript && GESTES_SCRIPT_UTILES.has(gesteScript)) retenus.push({ position: 0.08, geste: gesteScript });
+  // Sans geste lié au contenu (le hochement final ne compte pas), on garde le geste prévu par le script s'il est utile.
+  if (!retenus.some((r) => r.priorite !== 99) && gesteScript && GESTES_SCRIPT_UTILES.has(gesteScript)) retenus.unshift({ position: 0.08, geste: gesteScript });
   return retenus.map((c, i) => {
     const debut = Math.max(0, c.position - ANTICIPATION);
     const suivant = retenus[i + 1] ? retenus[i + 1].position - ANTICIPATION : 1;
@@ -51,4 +55,17 @@ export const GESTE_NEUTRE = "parole";
 export function gesteA(plan, fraction) {
   for (const etape of plan) if (fraction >= etape.debut && fraction < etape.fin) return etape.geste;
   return GESTE_NEUTRE;
+}
+
+// Humeur d'une phrase d'après son contenu : le visage suit chaque phrase (bonne nouvelle, alerte), pas seulement
+// l'ensemble de la réponse. null = garder l'humeur générale.
+const POSITIF = /\b(bravo|felicitation\w*|excellent\w*|conforme\w*|progress\w*|amelior\w*|hausse|a saluer|reussi\w*|mieux)\b/;
+const NEGATIF = /\b(critique\w*|retard\w*|alerte\w*|baisse|recule\w*|attention|probleme\w*|inquiet\w*|sans donnee\w*|a zero|rouge)\b/;
+export function humeurPhrase(texte) {
+  const t = sansAccent(texte);
+  const positif = POSITIF.test(t);
+  const negatif = NEGATIF.test(t);
+  if (positif && !negatif) return "felicitations";
+  if (negatif && !positif) return "preoccupee";
+  return null;
 }
