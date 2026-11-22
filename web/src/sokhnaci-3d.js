@@ -292,6 +292,25 @@ async function creer(tenueInitiale) {
       pose("leftUpperArm", 0, -0.6, 1.0); pose("leftLowerArm", 0, -1.3, 0);
       pose("head", 0.08, -0.06, 0.08);
     }
+    // ----- mains : doigts détendus au repos, forme de main propre à chaque geste (réglé à l'image) -----
+    const doigts = (cote, c) => {
+      const sens = cote === "left" ? -1 : 1; // flexion vers la paume
+      for (const [doigt, k] of [["Index", c[0]], ["Middle", c[1]], ["Ring", c[2]], ["Little", c[3]]]) {
+        pose(`${cote}${doigt}Proximal`, 0, 0, sens * k * 0.9);
+        pose(`${cote}${doigt}Intermediate`, 0, 0, sens * k);
+        pose(`${cote}${doigt}Distal`, 0, 0, sens * k * 0.7);
+      }
+    };
+    const DETENDU = [0.22, 0.3, 0.36, 0.42];
+    const OUVERT = [0.05, 0.08, 0.1, 0.12];
+    doigts("left", DETENDU);
+    doigts("right", DETENDU);
+    if (G === "pointer_ecran") doigts("right", [0, 1.2, 1.25, 1.3]); // index tendu vers l'écran
+    else if (G === "pouce_leve") doigts("right", [1.3, 1.35, 1.35, 1.35]); // poing fermé, pouce levé
+    else if (G === "compter_doigts") doigts("right", [0, 0.05, 1.2, 1.3]); // deux doigts pour énumérer
+    else if (["geste_ouvert", "salut_main", "geste_rassurant"].includes(G)) { doigts("left", OUVERT); doigts("right", OUVERT); }
+    else if (G === "mains_jointes" || s.applaudit || s.incline) { doigts("left", [0.1, 0.1, 0.12, 0.14]); doigts("right", [0.1, 0.1, 0.12, 0.14]); }
+    else if (s.parle && !G) { const ouverture = 0.25 * accent; doigts(s.mainGauche ? "left" : "right", DETENDU.map((k) => Math.max(0, k - ouverture))); }
     // ----- marche -----
     if (s.marche && !s.assise) {
       const pas = Math.sin(t * 7);

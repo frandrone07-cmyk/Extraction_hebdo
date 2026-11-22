@@ -312,7 +312,7 @@ test("Sokhnaci interprète les résultats : analyse territoriale, structure du r
     await poser(question);
     await expect(bulle).toContainText("Voulez-vous que je détaille un de ces points ?");
   }
-  await page.locator('.sokhnaci-chips button[data-question="qui est en difficulté"]').click();
+  await poser("qui est en difficulté");
   await expect(bulle).toContainText("les plus en retard");
 });
 

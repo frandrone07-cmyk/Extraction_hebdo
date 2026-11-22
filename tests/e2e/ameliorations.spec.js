@@ -260,7 +260,7 @@ test("pendant que Sokhna Ci parle, la zone qu'elle commente défile et s'illumin
   await expect(page.locator("#tv-stage .tv-kpis article.sna-focus")).toHaveCount(1, { timeout: 15_000 });
 });
 
-test("grand écran : la carte de Sokhna Ci devient une présentatrice en pied, comme en mode TV", async ({ page }) => {
+test("tableau de bord : Sokhna Ci est affichée comme en mode TV (présentatrice en pied sur grand écran, carte compacte sinon)", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 });
   const widget = page.locator(".sokhnaci-widget");
   await expect(widget).toHaveClass(/presentatrice/);
@@ -275,8 +275,13 @@ test("grand écran : la carte de Sokhna Ci devient une présentatrice en pied, c
   await expect(page.locator("body")).not.toHaveClass(/avec-presentatrice/);
   await page.locator(".sokhnaci-launcher").click();
   await expect(widget).toHaveClass(/presentatrice/);
-  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await expect(widget).not.toHaveClass(/presentatrice/);
+  // Même carte que le mode TV : champ « Une question ? (touche Q) », touche Q pour poser une question.
+  await expect(page.locator(".sokhnaci-ask input")).toHaveAttribute("placeholder", "Une question ? (touche Q)");
+  await page.locator("body").click({ position: { x: 5, y: 300 } });
+  await page.keyboard.press("q");
+  await expect(page.locator(".sokhnaci-ask input")).toBeFocused();
 });
 
 test("les solutions proposées changent avec la situation (baisse, bonne situation)", async ({ page }) => {

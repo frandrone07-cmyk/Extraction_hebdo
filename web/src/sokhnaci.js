@@ -39,7 +39,7 @@ let segmentsLecture = [];
 // l'accueil automatique ; il s'arrête dès que l'utilisateur fait défiler la page lui-même.
 let suiviPage = false;
 // Grand écran : la carte flottante devient une présentatrice en pied dans une colonne à droite (comme en mode TV).
-const ECRAN_PRESENTATRICE = window.matchMedia("(min-width: 1360px)");
+const ECRAN_PRESENTATRICE = window.matchMedia("(min-width: 1100px)"); // même seuil que le mode TV
 let marcheur = null;
 let emotionDialogue = "neutre";
 let gesteActuel = null;
@@ -736,7 +736,7 @@ export function initSokhnaci(model) {
   if (widget) { render(model); return; }
   try { voiceEnabled = localStorage.getItem(CLE_VOIX) !== "false"; } catch { voiceEnabled = true; }
   widget = document.createElement("section");
-  widget.className = "sokhnaci-widget";
+  widget.className = "sokhnaci-widget style-tv"; // même carte que l’assistante du mode TV
   widget.setAttribute("aria-label", "Sokhnaci, guide vocal du tableau de bord");
   widget.innerHTML = `<div class="sokhnaci-card">
     <div class="sokhnaci-top">
@@ -747,7 +747,7 @@ export function initSokhnaci(model) {
     <div class="sokhnaci-bubble" tabindex="0" role="region" aria-label="Propos de Sokhnaci" aria-live="polite"></div>
     <div class="sokhnaci-actions"><button class="sokhnaci-speak" type="button">▶ Écouter</button><button class="sokhnaci-stop" type="button">■ Arrêter</button><button class="sokhnaci-voice" type="button" aria-pressed="true"></button><button class="sokhnaci-espace" type="button" title="Ouvrir l’espace Sokhna Ci AI : avatar 3D, graphiques, rapports">✦ Espace complet</button></div>
     <div class="sokhnaci-chips" role="group" aria-label="Questions suggérées"><button type="button" data-question="fais une analyse des résultats">Analyse</button><button type="button" data-question="qui est en difficulté">Priorités</button><button type="button" data-question="les meilleurs districts">Meilleurs</button><button type="button" data-question="comment ça évolue">Évolution</button></div>
-    <form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Posez votre question…" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form>
+    <form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Une question ? (touche Q)" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form>
     <p class="sokhnaci-voix-statut" role="status"></p>
   </div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
   document.body.appendChild(widget);
@@ -807,6 +807,15 @@ export function initSokhnaci(model) {
   // Sur petit écran, l'assistante démarre réduite pour ne pas masquer le tableau de bord.
   if (window.matchMedia("(max-width: 700px)").matches) replierSokhnaci();
   majPresentatrice();
+  // Comme en mode TV : la touche Q ouvre la question (hors saisie en cours).
+  document.addEventListener("keydown", (evenement) => {
+    if (evenement.key.toLowerCase() !== "q" || evenement.ctrlKey || evenement.metaKey || evenement.altKey) return;
+    if (document.body.classList.contains("tv") || document.body.classList.contains("sna-actif")) return;
+    if (evenement.target instanceof HTMLElement && evenement.target.closest("input, textarea, select, [contenteditable]")) return;
+    evenement.preventDefault();
+    if (widget.classList.contains("collapsed")) widget.querySelector(".sokhnaci-launcher").click();
+    widget.querySelector(".sokhnaci-ask input").focus();
+  });
   const parlerOuverture = () => { if (voiceEnabled && !widget.classList.contains("collapsed")) attendrePuisParler(); };
   if (navigator.userActivation?.hasBeenActive === false) {
     const premierGeste = () => {
