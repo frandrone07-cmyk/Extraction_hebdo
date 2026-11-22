@@ -225,6 +225,8 @@ async function creer(tenueInitiale) {
   }
 
   const pose = (nom, x = 0, y = 0, z = 0) => { cible[nom] = [x, y, z]; };
+  // Attitudes au repos : de temps en temps, elle croise les mains devant elle, regarde autour d'elle ou change d'appui.
+  const repos = { action: null, fin: 0, prochain: 4, cote: 1 };
 
   function calculerPose(s, t) {
     for (const k of Object.keys(cible)) delete cible[k];
@@ -238,6 +240,26 @@ async function creer(tenueInitiale) {
     pose("rightUpperArm", 0, 0, -1.22);
     pose("leftLowerArm", 0, 0.12, 0);
     pose("rightLowerArm", 0, -0.12, 0);
+
+    // ----- attitudes au repos (ni parole, ni écoute, ni déplacement) -----
+    const auRepos = !s.parle && !s.ecoute && !s.marche && !s.assise && !s.danse && !s.applaudit && !s.incline && !s.reflechit && !s.pense;
+    if (auRepos && t > repos.prochain) {
+      repos.action = ["mains_devant", "regard", "appui", "mains_devant", "regard"][Math.floor(Math.random() * 5)];
+      repos.cote = Math.random() < 0.5 ? -1 : 1;
+      repos.fin = t + 2.6 + Math.random() * 1.6;
+      repos.prochain = t + 8 + Math.random() * 7;
+    }
+    if (!auRepos) { repos.action = null; repos.prochain = Math.max(repos.prochain, t + 5); }
+    if (auRepos && repos.action && t < repos.fin) {
+      if (repos.action === "mains_devant") {
+        pose("leftUpperArm", 0, -0.9, 0.7); pose("rightUpperArm", 0, 0.9, -0.7);
+        pose("leftLowerArm", 0, -1.2, 0); pose("rightLowerArm", 0, 1.2, 0);
+      } else if (repos.action === "regard") {
+        pose("head", 0.02, 0.32 * repos.cote, 0.04 * repos.cote); pose("neck", 0, 0.1 * repos.cote, 0);
+      } else if (repos.action === "appui") {
+        pose("hips", 0, 0.04 * repos.cote, 0.07 * repos.cote); pose("spine", 0.02, -0.02 * repos.cote, -0.05 * repos.cote);
+      }
+    }
 
     // ----- gestes liés aux paroles -----
     const G = s.parle && s.geste !== "parole" ? s.geste : "";
@@ -255,9 +277,13 @@ async function creer(tenueInitiale) {
     if (G === "hochement_tete") pose("head", 0.16 * Math.sin(t * 6), 0.05 * Math.sin(t * 0.8), 0);
     if (s.ecoute || G === "inclinaison_ecoute") { pose("head", 0.04, 0, 0.17); pose("neck", 0.05, 0, 0.04); }
     if (s.parle) {
-      // Chaque mot appuyé fait un petit signe de tête ; avec un geste, la main accentue en même temps que la voix.
+      // Chaque mot appuyé fait un petit signe de tête et un léger mouvement du buste vers l'auditeur ;
+      // avec un geste, la main accentue en même temps que la voix.
       ajoute("head", 0.08 * accent, 0.05 * Math.sin(t * 0.8), 0);
       ajoute("neck", 0.03 * accent, 0, 0);
+      ajoute("spine", 0.05 * accent, 0, 0);
+      if (G === "pointer_ecran") ajoute("rightUpperArm", -0.14 * accent, 0, 0); // le doigt « pique » vers l'écran sur les mots clés
+      if (G === "geste_ouvert") { ajoute("leftUpperArm", 0, 0, -0.18 * accent); ajoute("rightUpperArm", 0, 0, 0.18 * accent); } // les bras s'ouvrent davantage
       if (!G && s.mainGauche) {
         // Phrase impaire : c'est la main gauche qui rythme la parole.
         pose("leftUpperArm", -0.12 - 0.32 * accent, 0, 1.1 + 0.18 * accent);

@@ -273,12 +273,16 @@ test("tableau de bord : Sokhna Ci est affichée comme en mode TV (présentatrice
   // Réduite, elle libère la place ; sur un écran plus petit, la carte compacte revient.
   // Bouton « − » : Sokhna Ci se ferme complètement (aucune pastille), et le reste après un rechargement.
   await page.locator(".sokhnaci-collapse").click();
-  await expect(widget).toBeHidden();
-  await expect(page.locator(".sokhnaci-launcher")).toBeHidden();
+  await expect(page.locator(".sokhnaci-card")).toBeHidden();
+  await expect(page.locator(".sokhnaci-launcher")).toBeVisible(); // petite icône ronde pour la rouvrir
   await expect(page.locator("body")).not.toHaveClass(/avec-presentatrice/);
+  await page.locator(".sokhnaci-launcher").click();
+  await expect(widget).toHaveClass(/presentatrice/);
+  await page.locator(".sokhnaci-collapse").click();
   await page.reload();
   await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
-  await expect(widget).toBeHidden();
+  await expect(page.locator(".sokhnaci-card")).toBeHidden();
+  await expect(page.locator(".sokhnaci-launcher")).toBeVisible();
   // Elle se rouvre avec le bouton « Sokhna Ci » de l'en-tête.
   await page.locator(".sokhnaci-rouvrir").click();
   await expect(widget).toHaveClass(/presentatrice/);
@@ -349,4 +353,39 @@ test("avatar 3D : une perte du contexte graphique ne provoque aucune erreur et l
   });
   await expect(page.locator(".sna-scene.trois-d")).toBeVisible();
   expect(erreurs).toEqual([]);
+});
+
+test("réponses précises : diagnostic d'un district, évolution, listes, homonymes, « X ou Y », recommandations", async ({ page }) => {
+  const reponses = await page.evaluate(async () => {
+    const { chargerDonnees, construireModele } = await import("/src/data.js");
+    const { repondrePrecis } = await import("/src/sokhnaci-precision.js");
+    const { versAffichage } = await import("/src/sokhnaci-dialogue.js");
+    const d = await chargerDonnees();
+    const m = construireModele(d.snapshot, d.latest.semaine_cle, d.snapshot.semaines.at(-2), { region: "", periode: "latest", formulaire: "" }, d.evolution, d.geo, d.geoRegions);
+    const r = (q) => { const x = repondrePrecis(q, m); return x ? x.segments.map((s) => versAffichage(s.texte)).join(" ") : null; };
+    return {
+      pourquoi: r("pourquoi Kanel est en retard"),
+      evolution: r("comment évolue Dakar"),
+      dansRegion: r("quel district de Thiès est le plus en retard"),
+      liste: r("liste des districts en rouge à Matam"),
+      homonyme: r("le district de Kolda"),
+      regions: r("combien de régions sont en rouge"),
+      ou: r("Dakar ou Thiès, qui fait mieux ?"),
+      faire: r("que faut-il faire cette semaine"),
+      vides: r("quels formulaires n'ont pas de données"),
+      cinq: r("donne moi les 5 districts les plus faibles"),
+      rien: r("bonjour"),
+    };
+  });
+  expect(reponses.pourquoi).toMatch(/formulaires sur \d+ sont sous/);
+  expect(reponses.evolution).toMatch(/région de Dakar, le taux des mois comparables est passé de/);
+  expect(reponses.dansRegion).toMatch(/dans la région de Thies, les districts les plus en retard sont/);
+  expect(reponses.liste).toMatch(/en rouge dans la région de Matam/);
+  expect(reponses.homonyme).toMatch(/le district de Kolda est à/);
+  expect(reponses.regions).toMatch(/régions? (sont|est) en rouge sur \d+/);
+  expect(reponses.ou).toMatch(/fait mieux : .* contre .* d’écart/);
+  expect(reponses.faire).toMatch(/recommandations prioritaires/);
+  expect(reponses.vides).toMatch(/sont vides ou à zéro/);
+  expect((reponses.cinq.match(/, à \d/g) || []).length).toBe(5);
+  expect(reponses.rien).toBeNull(); // les autres compétences prennent le relais
 });

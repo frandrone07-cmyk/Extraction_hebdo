@@ -3,6 +3,7 @@
 import { ASSISTANT_API_URL } from "./assistant-config.js";
 import { toutesDistricts, labelRegion, nomFormulaire } from "./sokhnaci-dialogue.js";
 import { analyser } from "./sokhnaci-analyse.js";
+import { construireBilan } from "./bilan.js";
 
 const arrondi = (x) => (x === null || x === undefined ? null : Math.round(x * 10) / 10);
 
@@ -46,6 +47,8 @@ export function construireFaits(model) {
     districts_les_meilleurs: triees.slice(-5).reverse().map(ligne),
     formulaires: (model.tousFormulaires || []).map((f) => ({ nom: nomFormulaire(f.nom), taux: arrondi(f.tauxMoyen), ecart: arrondi(f.variation) })),
     evolution: (model.evolution?.semaines || []).map((semaine, i) => ({ extraction: semaine, taux: arrondi(model.evolution.moyenne_generale[i]) })),
+    solutions_proposees: construireBilan(model).solutions.map((x) => ({ priorite: x.priorite, action: x.titre })),
+    formulaires_sans_donnees: construireBilan(model).sansDonnees.slice(0, 4).map((l) => ({ nom: nomFormulaire(l.nom), districts_sans_donnee: l.vides, districts_a_zero: l.zeros, attendus: l.attendus })),
     analyse: { regions_entierement_en_rouge: a.regionsToutesRouges.map((r) => labelRegion(r.nom)), districts_en_retard_global: a.globaux.length, valeurs_a_zero: a.zeros },
   };
 }

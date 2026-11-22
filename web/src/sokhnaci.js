@@ -726,6 +726,7 @@ export function fermerSokhnaci() {
   if (!widget) return;
   arreterLecture();
   widget.classList.add("fermee", "collapsed");
+  widget.querySelector(".sokhnaci-launcher").hidden = false; // petite icône ronde pour la rouvrir rapidement
   try { localStorage.setItem(CLE_FERMEE, "1"); } catch { /* stockage facultatif */ }
   document.querySelector(".sokhnaci-rouvrir")?.removeAttribute("hidden");
   majPresentatrice();
@@ -770,7 +771,7 @@ export function initSokhnaci(model) {
     <div class="sokhnaci-chips" role="group" aria-label="Questions suggérées"><button type="button" data-question="fais une analyse des résultats">Analyse</button><button type="button" data-question="qui est en difficulté">Priorités</button><button type="button" data-question="les meilleurs districts">Meilleurs</button><button type="button" data-question="comment ça évolue">Évolution</button></div>
     <form class="sokhnaci-ask" autocomplete="off"><input type="text" name="question" maxlength="120" placeholder="Une question ? (touche Q)" aria-label="Poser une question à Sokhnaci"><button class="sokhnaci-mic" type="button" aria-pressed="false" aria-label="Poser la question à voix haute" title="Parlez en français : le navigateur ne reconnaît pas encore le wolof">🎤</button><button type="submit">Demander</button></form>
     <p class="sokhnaci-voix-statut" role="status"></p>
-  </div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir Sokhnaci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhnaci</span></button>`;
+  </div><button class="sokhnaci-launcher" type="button" aria-label="Ouvrir Sokhna Ci" title="Ouvrir Sokhna Ci" hidden><span class="sokhnaci-mini" aria-hidden="true"></span><span>Sokhna Ci</span></button>`;
   document.body.appendChild(widget);
   document.body.insertAdjacentHTML("beforeend", DEFS_WAX);
   // Mouvements naturels permanents : l'avatar change subtilement de posture de temps en temps.
@@ -794,6 +795,7 @@ export function initSokhnaci(model) {
   rouvrir.addEventListener("click", ouvrirSokhnaci);
   (document.querySelector(".masthead-actions") || document.body).prepend(rouvrir);
   widget.querySelector(".sokhnaci-launcher").addEventListener("click", () => {
+    if (widget.classList.contains("fermee")) { ouvrirSokhnaci(); return; }
     widget.classList.remove("collapsed");
     widget.querySelector(".sokhnaci-launcher").hidden = true;
     majPresentatrice();
@@ -837,7 +839,7 @@ export function initSokhnaci(model) {
   // Les navigateurs interdisent la parole avant le premier geste de l'utilisateur : on attend ce geste.
   // Sur petit écran, l'assistante démarre réduite pour ne pas masquer le tableau de bord.
   if (window.matchMedia("(max-width: 700px)").matches) replierSokhnaci();
-  if (lireFermee()) { widget.classList.add("fermee", "collapsed"); rouvrir.hidden = false; }
+  if (lireFermee()) { widget.classList.add("fermee", "collapsed"); rouvrir.hidden = false; widget.querySelector(".sokhnaci-launcher").hidden = false; }
   majPresentatrice();
   // Comme en mode TV : la touche Q ouvre la question (hors saisie en cours).
   document.addEventListener("keydown", (evenement) => {

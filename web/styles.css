@@ -990,7 +990,16 @@ tr.sna-focus th, tr.sna-focus td { box-shadow: inset 0 0 0 999px rgba(47, 191, 1
 @media (max-width: 900px) { .tv-sna.tv-sna-diapo { grid-template-columns: 1fr; height: auto; } .tv-sna.tv-sna-diapo .tv-sna-scene { height: 300px; } }
 
 /* Sokhna Ci fermée : rien ne reste à l'écran, sauf le bouton de l'en-tête pour la rouvrir */
-.sokhnaci-widget.fermee { display: none; }
+.sokhnaci-widget.fermee { width: auto; }
+.sokhnaci-widget.fermee .sokhnaci-card { display: none; }
+/* Fermée : seule une petite icône ronde reste en bas à droite ; un clic la rouvre. */
+.sokhnaci-widget.fermee .sokhnaci-launcher { position: relative; display: grid; width: 58px; height: 58px; margin: 0; padding: 0; place-items: center; border: 2px solid #8ff0c4; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #2f6b5d, #12323a 70%); box-shadow: 0 10px 26px rgba(8, 24, 28, .4); }
+.sokhnaci-widget.fermee .sokhnaci-launcher > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sokhnaci-widget.fermee .sokhnaci-mini { width: 40px; height: 40px; background: none; }
+.sokhnaci-widget.fermee .sokhnaci-mini::before { font-size: 30px; }
+.sokhnaci-widget.fermee .sokhnaci-launcher::after { position: absolute; top: 3px; right: 3px; width: 11px; height: 11px; border: 2px solid #12323a; border-radius: 50%; background: #3fd39a; content: ""; }
+.sokhnaci-widget.fermee .sokhnaci-launcher:hover { transform: translateY(-2px); }
+@media (prefers-reduced-motion: no-preference) { .sokhnaci-widget.fermee .sokhnaci-launcher { transition: transform .2s ease; } }
 .sokhnaci-rouvrir { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border: 1px solid #1d4a47; border-radius: 999px; background: linear-gradient(180deg, #1d4a47, #12323a); color: #e6f7ee; font-size: 12px; font-weight: 700; cursor: pointer; }
 .sokhnaci-rouvrir[hidden] { display: none; }
 .sokhnaci-rouvrir span { color: #8ff0c4; }
