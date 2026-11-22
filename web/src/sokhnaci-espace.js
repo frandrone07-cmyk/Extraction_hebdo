@@ -7,7 +7,7 @@ import { interpreterEntree } from "./sokhnaci-cerveau.js";
 import { definirNiveauExplication, lireNiveauExplication, pointsAttention, sourcesPour } from "./sokhnaci-competences.js";
 import { chargerBibliothequeTableur, imprimerPdf, telechargerConversation, telechargerExcel, telechargerWord } from "./sokhnaci-rapport.js";
 import { grapheBarres, grapheDoughnut, grapheLigne } from "./charts.js";
-import { interrogerLLM, llmDisponible } from "./sokhnaci-llm.js";
+import { interrogerLLM, llmDisponible, segmentsDepuisTexteIA } from "./sokhnaci-llm.js";
 import { avatar3dAutorise, lire3D, obtenir3D } from "./sokhnaci-3d.js";
 
 const CLE_HISTORIQUE = "sokhna-ci-ai-historique-v1";
@@ -162,6 +162,12 @@ export function apresRenduEspace(modele, theme) {
   acteur.dataset.sens = "1";
 
   appliquerPreferences(racine);
+  // À la première visite de l'espace, Sokhna Ci entre en marchant depuis le côté jusqu'au centre de la scène.
+  if (!etat.entreeFaite) {
+    etat.entreeFaite = true;
+    const largeurScene = racine.querySelector(".sna-scene")?.clientWidth || 0;
+    if (largeurScene > 300) { scene.x = -(largeurScene / 2 - 130); scene.cible = 0; scene.mode = "va"; }
+  }
   activer3D(racine);
   racine.querySelector("#sna-points").innerHTML = pointsAttention(modele).map((p, i) => `<article class="sna-point sna-${p.gravite}"><h4>${echapper(versAffichage(p.titre))}</h4><p>${echapper(versAffichage(p.detail))}</p><button type="button" data-q="${echapper(p.question)}">Détailler</button></article>`).join("") || '<p class="sna-vide">Rien d’anormal à signaler pour cette sélection.</p>';
   racine.querySelector("#sna-competences").innerHTML = COMPETENCES.map((c) => `<button type="button" class="sna-competence" data-q="${echapper(c.q)}"><strong>${c.titre}</strong><span>${c.texte}</span></button>`).join("");
@@ -395,10 +401,9 @@ async function envoyer(question) {
   if (dialogue.incomprise && llmDisponible()) {
     const texteIA = await interrogerLLM(question, etat.model);
     if (texteIA) {
-      const gestes = ["pointer_ecran", "hochement_tete", "geste_ouvert", "compter_doigts"];
       dialogue = {
         emotion: "encourageante",
-        segments: texteIA.split(/(?<=[.!?])\s+/).slice(0, 5).map((texte, i) => ({ langue: "fr", texte, geste: gestes[i % gestes.length], audio: null })),
+        segments: segmentsDepuisTexteIA(texteIA),
         sources: sourcesPour(etat.model, ["Reformulé par un modèle de langage, limité aux faits du tableau de bord", "Tous les chiffres ont été vérifiés automatiquement"]),
         suggestions: ["fais une analyse des résultats", "fais un graphique des régions"],
       };

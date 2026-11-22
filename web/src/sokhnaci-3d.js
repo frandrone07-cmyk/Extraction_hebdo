@@ -75,7 +75,7 @@ async function creer(tenueInitiale) {
   const { VRMLoaderPlugin, VRMUtils } = await import("@pixiv/three-vrm");
 
   const rendu = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
-  rendu.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  rendu.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
   rendu.outputColorSpace = THREE.SRGBColorSpace;
   rendu.domElement.className = "sna-canvas-3d";
   rendu.domElement.setAttribute("aria-hidden", "true");
@@ -195,7 +195,13 @@ async function creer(tenueInitiale) {
   let dernier = 0;
   let temps = 0;
   let horsEcran = 0;
+  let accentRapide = 0;
+  let accentLent = 0;
 
+  function acteurActif() {
+    const cl = acteur.classList;
+    return cl.contains("speaking") || cl.contains("walking") || cl.contains("danse") || cl.contains("listening") || cl.contains("assise") || Math.abs(xLisse) > 0.002 || echelleLissee > 1.01;
+  }
   function lireEtat() {
     const e = acteur;
     const cl = e.classList;
@@ -227,6 +233,8 @@ async function creer(tenueInitiale) {
     // ----- gestes liés aux paroles -----
     const G = s.parle ? s.geste : "";
     const ondule = Math.sin(t * 9);
+    const accent = s.parle ? s.accent : 0; // pic d'énergie de la voix : la main et la tête marquent les mots appuyés
+    const ajoute = (nom, x = 0, y = 0, z = 0) => { const c = cible[nom]; if (c) { c[0] += x; c[1] += y; c[2] += z; } };
     if (G === "salut_main") { pose("rightUpperArm", 0, 0, 0.75); pose("rightLowerArm", 0, -1.05 + ondule * 0.4, 0); pose("head", 0, 0, -0.1); }
     else if (G === "pointer_ecran") { pose("rightUpperArm", -0.95, 0, -0.55); pose("rightLowerArm", 0, -0.25, 0); pose("head", 0, -0.15, 0); }
     else if (G === "compter_doigts") { pose("rightUpperArm", 0, 0, 0.45); pose("rightLowerArm", 0, -1.25 + Math.sin(t * 5) * 0.12, 0); }
@@ -235,9 +243,21 @@ async function creer(tenueInitiale) {
     else if (G === "geste_ouvert") { pose("leftUpperArm", -0.25, 0, 0.55 + Math.sin(t * 3) * 0.06); pose("rightUpperArm", -0.25, 0, -0.55 - Math.sin(t * 3) * 0.06); pose("leftLowerArm", 0, 0.55, 0); pose("rightLowerArm", 0, -0.55, 0); }
     else if (G === "geste_rassurant") { pose("leftUpperArm", -0.35, 0, 0.95); pose("rightUpperArm", -0.35, 0, -0.95); pose("leftLowerArm", 0, 1.0 + Math.sin(t * 3) * 0.12, 0); pose("rightLowerArm", 0, -1.0 - Math.sin(t * 3) * 0.12, 0); }
     else if (G === "mains_jointes") { pose("leftUpperArm", -0.45, 0, 0.95); pose("rightUpperArm", -0.45, 0, -0.95); pose("leftLowerArm", 0, 1.5, 0); pose("rightLowerArm", 0, -1.5, 0); }
-    if (G === "hochement_tete" || (s.parle && !G)) pose("head", 0.16 * Math.sin(t * 6) * (G ? 1 : 0.4), 0.05 * Math.sin(t * 0.8), 0);
+    if (G === "hochement_tete") pose("head", 0.16 * Math.sin(t * 6), 0.05 * Math.sin(t * 0.8), 0);
     if (s.ecoute || G === "inclinaison_ecoute") { pose("head", 0.04, 0, 0.17); pose("neck", 0.05, 0, 0.04); }
-    if (s.parle && !G) pose("rightUpperArm", -0.12, 0, -1.1 - Math.sin(t * 2.2) * 0.07);
+    if (s.parle) {
+      // Chaque mot appuyé fait un petit signe de tête ; avec un geste, la main accentue en même temps que la voix.
+      ajoute("head", 0.08 * accent, 0.05 * Math.sin(t * 0.8), 0);
+      ajoute("neck", 0.03 * accent, 0, 0);
+      if (!G) {
+        pose("rightUpperArm", -0.12 - 0.32 * accent, 0, -1.1 - 0.18 * accent);
+        pose("rightLowerArm", 0, -0.12 - 0.75 * accent, 0);
+        pose("leftLowerArm", 0, 0.12 + 0.3 * s.accentLent, 0);
+      } else {
+        ajoute("rightLowerArm", 0, -0.22 * accent, 0);
+        ajoute("leftLowerArm", 0, 0.18 * accent, 0);
+      }
+    }
 
     // ----- marche -----
     if (s.marche && !s.assise) {
@@ -321,16 +341,28 @@ async function creer(tenueInitiale) {
     if (document.hidden) return;
     if (!acteur?.isConnected || !rendu.domElement.isConnected || !zone?.clientWidth) { horsEcran += 1; if (horsEcran > 90) boucle = false; return; }
     horsEcran = 0;
-    const dt = Math.min(0.05, (maintenant - dernier) / 1000 || 0.016);
+    // Au repos (ni parole, ni mouvement) on dessine environ 24 images par seconde : l'animation reste fluide
+    // mais la plateforme reste légère.
+    const ecoule = (maintenant - dernier) / 1000;
+    if (!acteurActif() && ecoule < 0.04) return;
+    const dt = limiter(ecoule || 0.016, 0.001, 0.05); // jamais négatif : sinon le lissage diverge
     dernier = maintenant;
     temps += dt;
     const s = lireEtat();
+    const brut = s.parle ? (s.bouche !== null ? limiter((s.bouche - 0.4) / 0.8, 0, 1) : 0.5 + 0.5 * Math.sin(temps * 7)) : 0;
+    accentRapide = lisser(accentRapide, brut, dt, 16);
+    accentLent = lisser(accentLent, brut, dt, 4);
+    s.accent = accentRapide;
+    s.accentLent = accentLent;
     calculerPose(s, temps);
     for (const [nom, r] of Object.entries(cible)) {
       const noeud = os(nom);
       if (!noeud) continue;
       const c = (courant[nom] ||= [0, 0, 0]);
-      for (let i = 0; i < 3; i += 1) c[i] = lisser(c[i], r[i], dt, 11);
+      for (let i = 0; i < 3; i += 1) {
+        c[i] = lisser(c[i], r[i], dt, 11);
+        if (!Number.isFinite(c[i])) c[i] = r[i];
+      }
       noeud.rotation.set(c[0], c[1], c[2]);
     }
     const unitesParPixel = (2 * distance * Math.tan((camera.fov * Math.PI) / 360)) / hauteur;

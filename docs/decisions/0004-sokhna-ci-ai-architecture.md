@@ -44,3 +44,29 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
 - Le client rejette de toute façon toute réponse contenant un nombre absent des faits.
 - Offre gratuite : environ 10 000 neurones par jour ; au-delà, le site retombe sur les réponses scriptées.
 - Déploiement : `wrangler deploy` depuis un dossier dont le nom est un sous-domaine workers.dev valide (le dossier `assistant-worker/` ne peut pas servir de sous-domaine).
+
+
+## Performance, gestes et mode TV (22 novembre 2026)
+
+**Rapidité**
+- Cause principale de la lenteur : `moyennePour` (data.js) reparcourait toutes les lignes de la semaine pour chaque district, formulaire et période, soit environ 3 s de calcul bloquant au chargement et à chaque changement de filtre. Un index par district (`parDistrict`) ramène ce calcul à moins de 50 ms. Un test de non-régression (< 600 ms) protège ce point.
+- Le modèle 3D passe de 17,5 Mo à 5,8 Mo : `scripts/optimiser_avatar.py` réduit les textures (la peau et la robe sont recolorées par le code). L'original reste dans l'historique git.
+- Les modules sont préchargés (`modulepreload`) et les données revalidées (`no-cache`, réponse 304) au lieu d'être retéléchargées.
+- La voix originale (gros téléchargement) ne démarre qu'après le chargement de la page et un court moment de calme. Une réponse n'attend plus la voix originale plus de 2,5 s : sinon elle est lue avec la voix de l'appareil et la suivante utilise la voix originale.
+- Au repos, l'avatar 3D est dessiné à environ 24 images par seconde (pleine cadence quand il parle ou bouge).
+
+**Avatar 3D**
+- Défaut corrigé : la boucle d'animation pouvait calculer un pas de temps négatif quand une image arrivait en retard, ce qui faisait diverger les rotations (valeurs de l'ordre de 1e39) et figeait ou déformait l'avatar. Le pas de temps est désormais borné et toute valeur non finie est réinitialisée.
+- Les gestes suivent le contenu de chaque phrase (`sokhnaci-gestes.js`) et se placent au moment où les mots sont prononcés : la progression est lue sur l'audio réel (ou sur les événements de la voix de l'appareil). La main et la tête marquent les mots appuyés d'après l'énergie de la voix.
+- À la première visite de l'espace, Sokhna Ci entre en marchant.
+
+**Robustesse de l'IA**
+- Client : une seule nouvelle tentative, cache des réponses, coupe-circuit de 3 minutes après deux échecs, délai total de 9 s ; en cas de panne l'assistante répond par ses réponses intégrées.
+- Worker : modèle de secours (`MODELE_SECOURS`, Granite 4.0 micro) essayé si le modèle principal échoue, et lecture des deux formats de réponse de Workers AI.
+
+**Mode TV**
+- Sokhna Ci (avatar 3D en buste) commente la situation de chaque diapositive à partir des données affichées, retient la diapositive pendant qu'elle parle, puis demande à la fin du cycle s'il y a des éclaircissements ou des questions.
+- Questions : touche Q, champ de saisie, micro, ou écoute continue facultative (bouton « Attentive », mot « Sokhna » puis la question ; le micro n'est activé que sur demande et ignore sa propre voix). Les réponses utilisent les mêmes compétences que l'espace Sokhna Ci AI, avec le modèle de langage en repli.
+- Automatisation de test : l'assistante TV est désactivée sauf si `window.__sokhnaciTV` est défini, pour ne pas changer le rythme des tests du diaporama.
+
+**Navigation** : l'onglet Sokhna Ci AI est désormais le dernier, après Qualité et méthode.

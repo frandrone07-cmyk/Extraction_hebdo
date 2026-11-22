@@ -31,6 +31,9 @@ let pointerStart = null;
 let active = false;
 let mapTourTimer = null;
 let mapTourIndex = 0;
+let assistante = null;
+let debutDiapositive = 0;
+const retenues = new Set(); // motifs qui retiennent la diapositive (Sokhna Ci parle ou répond à une question)
 const MAP_OVERVIEW_DURATION = 3200;
 const DISTRICT_DWELL = 1800;
 
@@ -196,30 +199,44 @@ function drawSlide(id) {
   }));
 }
 
-function updateProgress() {
+function updateProgress(slideDuration = dureeDiapositive()) {
   const fill = document.getElementById("tv-progress-fill");
   if (!fill) return;
-  const slideDuration = dureeDiapositive();
+  const arret = paused || retenues.size > 0;
   fill.style.transition = "none";
   fill.style.width = "0%";
   requestAnimationFrame(() => {
-    fill.style.transition = paused || REDUIT ? "none" : `width ${slideDuration}ms linear`;
-    fill.style.width = paused ? "0%" : "100%";
+    fill.style.transition = arret || REDUIT ? "none" : `width ${slideDuration}ms linear`;
+    fill.style.width = arret ? "0%" : "100%";
   });
 }
-function schedule() {
+function schedule(duree = dureeDiapositive()) {
   clearTimeout(timer);
   clearInterval(progressTimer);
-  updateProgress();
-  if (paused) return;
-  timer = setTimeout(() => show(current + 1), dureeDiapositive());
+  updateProgress(duree);
+  if (paused || retenues.size) return;
+  timer = setTimeout(() => show(current + 1), duree);
 }
-function show(index) {
+// Tant que Sokhna Ci parle ou répond, la diapositive reste affichée ; ensuite elle attend encore un court instant.
+function retenir(motif) {
+  if (!active) return;
+  retenues.add(motif);
+  clearTimeout(timer);
+  updateProgress();
+}
+function relacher(motif, pause = 3500) {
+  if (!active || !retenues.delete(motif) || retenues.size || paused) return;
+  const restant = dureeDiapositive() - (Date.now() - debutDiapositive);
+  schedule(Math.max(pause, restant));
+}
+const controleAssistante = { retenir, relacher };
+function show(index, { silencieux = false } = {}) {
   if (!active) return;
   clearTimeout(mapTourTimer);
   clearInterval(mapTourTimer);
   mapTourTimer = null;
   current = (index + selectedSlides.length) % selectedSlides.length;
+  const indexAffiche = current;
   const stage = document.getElementById("tv-stage");
   const slide = selectedSlides[current];
   stage.innerHTML = slideMarkup(slide.id);
@@ -234,6 +251,14 @@ function show(index) {
   params.set("tv", String(current));
   history.replaceState(null, "", `#${params.toString()}`);
   drawSlide(slide.id);
+  retenues.clear();
+  debutDiapositive = Date.now();
+  if (assistante && !silencieux) {
+    retenir("narration");
+    Promise.resolve(assistante.surDiapositive(slide, model, current, selectedSlides.length))
+      .catch(() => {})
+      .finally(() => { if (current === indexAffiche) relacher("narration", 3500); });
+  }
   schedule();
 }
 function setPaused(value) {
@@ -268,6 +293,9 @@ function close() {
   mapTourTimer = null;
   clearInterval(refreshTimer);
   clearInterval(clockTimer);
+  retenues.clear();
+  assistante?.arreter();
+  assistante = null;
   document.removeEventListener("keydown", onKeydown);
   document.removeEventListener("visibilitychange", onVisibilityChange);
   window.removeEventListener("online", onOnlineChange);
@@ -291,6 +319,7 @@ function onKeydown(event) {
   else if (event.key === "ArrowLeft") { event.preventDefault(); show(current - 1); }
   else if (event.key === " " || event.code === "Space") { event.preventDefault(); setPaused(!paused); }
   else if (event.key.toLowerCase() === "f") { event.preventDefault(); toggleFullscreen(); }
+  else if (event.key.toLowerCase() === "q" && assistante) { event.preventDefault(); assistante.ouvrirQuestion(); }
 }
 function onVisibilityChange() { if (document.visibilityState === "visible") requestWakeLock(); }
 function onOnlineChange() {
@@ -301,7 +330,7 @@ async function refreshData() {
   if (!onRefresh || !active) return;
   try {
     const updated = await onRefresh();
-    if (updated) { model = updated; show(current); }
+    if (updated) { model = updated; assistante?.mettreAJour(model); show(current, { silencieux: true }); }
     onOnlineChange();
   } catch { onOnlineChange(); }
 }
@@ -326,11 +355,12 @@ function bindControls() {
   });
 }
 
-export function demarrerDiaporama(currentModel, { initialSlide = 0, refresh, close: onExit } = {}) {
+export function demarrerDiaporama(currentModel, { initialSlide = 0, refresh, close: onExit, assistante: assistanteTV = null } = {}) {
   if (active || !currentModel) return;
   model = currentModel;
   onClose = onExit;
   onRefresh = refresh;
+  assistante = assistanteTV;
   const requestedScenes = new URLSearchParams(location.search).get("scenes");
   selectedSlides = requestedScenes
     ? requestedScenes.split(",").map((id) => DEFINITIONS.find((slide) => slide.id === id.trim())).filter(Boolean)
@@ -355,5 +385,6 @@ export function demarrerDiaporama(currentModel, { initialSlide = 0, refresh, clo
   refreshTimer = setInterval(refreshData, 10 * 60 * 1000);
   majHorloge();
   clockTimer = setInterval(majHorloge, 15 * 1000);
+  assistante?.demarrer(model, controleAssistante);
   show(current);
 }

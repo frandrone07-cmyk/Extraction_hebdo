@@ -3,7 +3,7 @@
 // afin de calculer correctement le taux de remplissage.
 
 async function fetchJson(url) {
-  const response = await fetch(url, { cache: "no-store" });
+  const response = await fetch(url, { cache: "no-cache" }) /* revalide (304) au lieu de retélécharger */;
   if (!response.ok) throw new Error(`${url} → HTTP ${response.status}`);
   return response.json();
 }
@@ -29,14 +29,20 @@ function libelleSemaine(value) {
 
 function indexer(snapshots) {
   const valeursParSemaine = snapshots.semaines.map(() => []);
+  // Index par district : évite de reparcourir toutes les lignes de la semaine pour chaque district.
+  const parDistrict = snapshots.semaines.map(() => new Map());
   for (const [semaine, district, formulaire, periode, valeur] of snapshots.lignes) {
-    valeursParSemaine[semaine].push({ district, formulaire, periode, valeur });
+    const ligne = { district, formulaire, periode, valeur };
+    valeursParSemaine[semaine].push(ligne);
+    const groupe = parDistrict[semaine].get(district);
+    if (groupe) groupe.push(ligne); else parDistrict[semaine].set(district, [ligne]);
   }
-  return { ...snapshots, valeursParSemaine };
+  return { ...snapshots, valeursParSemaine, parDistrict };
 }
 
 function moyennePour(snapshot, semaineIndex, districtIndex, formulaireIndex, periodeIndex, selections) {
-  const valeurs = snapshot.valeursParSemaine[semaineIndex].filter((ligne) => {
+  const source = districtIndex !== null ? (snapshot.parDistrict[semaineIndex].get(districtIndex) || []) : snapshot.valeursParSemaine[semaineIndex];
+  const valeurs = source.filter((ligne) => {
     if (districtIndex !== null && ligne.district !== districtIndex) return false;
     if (selections.regionIndex !== null && snapshot.districts[ligne.district][0] !== selections.regionIndex) return false;
     if (selections.formulaireIndex !== null && ligne.formulaire !== selections.formulaireIndex) return false;
@@ -127,18 +133,19 @@ export function construireModele(snapshot, semaineCle, comparaisonCle, filters, 
     feature.properties.region,
     feature,
   ]));
-  const weekRows = semaineIndex < 0 ? [] : snapshot.valeursParSemaine[semaineIndex];
-  const districtIds = [...new Set(weekRows.map((row) => row.district))];
+  const parDistrictSemaine = semaineIndex < 0 ? new Map() : snapshot.parDistrict[semaineIndex];
+  const districtIds = [...parDistrictSemaine.keys()];
   const tousDistricts = [];
 
   for (const districtId of districtIds) {
     const [districtRegionIndex, districtName, uid] = snapshot.districts[districtId];
-    const formIds = [...new Set(weekRows.filter((row) => row.district === districtId).map((row) => row.formulaire))];
+    const lignesDistrict = parDistrictSemaine.get(districtId) || [];
+    const formIds = [...new Set(lignesDistrict.map((row) => row.formulaire))];
     const formulaires = formIds
       .filter((id) => selections.formulaireIndex === null || id === selections.formulaireIndex)
       .map((id) => {
-        const periodIds = [...new Set(weekRows
-          .filter((row) => row.district === districtId && row.formulaire === id)
+        const periodIds = [...new Set(lignesDistrict
+          .filter((row) => row.formulaire === id)
           .map((row) => row.periode))].sort((a, b) => snapshot.periodes[a][0].localeCompare(snapshot.periodes[b][0]));
         const historySelections = { ...selections, regionIndex: null, periodeIndex: null };
         const historiquePeriodes = periodIds.map((idPeriode) => {
@@ -316,18 +323,10 @@ export async function chargerDonnees() {
     fetchJson("data/evolution.json"),
     fetchJson("data/snapshots.json"),
   ]);
-  let geo = null;
-  let geoRegions = null;
-  try {
-    geo = await fetchJson("data/geo/districts.geojson");
-  } catch {
-    geo = null;
-  }
-  try {
-    geoRegions = await fetchJson("data/geo/regions.geojson");
-  } catch (error) {
-    console.warn("Contours régionaux non disponibles", error);
-  }
+  const [geo, geoRegions] = await Promise.all([
+    fetchJson("data/geo/districts.geojson").catch(() => null),
+    fetchJson("data/geo/regions.geojson").catch((error) => { console.warn("Contours régionaux non disponibles", error); return null; }),
+  ]);
   const indexed = indexer({ ...snapshots, seuils: latest.seuils });
   return { latest, evolution, snapshot: indexed, geo, geoRegions };
 }

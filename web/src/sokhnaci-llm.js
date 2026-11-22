@@ -11,7 +11,17 @@ export function urlAssistante() {
   if (navigator.webdriver && window.__SOKHNACI_ASSISTANT_URL__) return window.__SOKHNACI_ASSISTANT_URL__;
   return ASSISTANT_API_URL;
 }
-export function llmDisponible() { return Boolean(urlAssistante()); }
+// Coupe-circuit : après deux échecs de suite, on cesse d'interroger le service pendant trois minutes
+// (l'assistante répond alors par ses réponses intégrées, sans attente).
+const PAUSE_APRES_ECHECS_MS = 3 * 60 * 1000;
+let echecsConsecutifs = 0;
+let suspenduJusqua = 0;
+export function llmDisponible() { return Boolean(urlAssistante()) && Date.now() >= suspenduJusqua; }
+function noterEchec() { if (++echecsConsecutifs >= 2) { suspenduJusqua = Date.now() + PAUSE_APRES_ECHECS_MS; echecsConsecutifs = 0; } }
+function noterSucces() { echecsConsecutifs = 0; suspenduJusqua = 0; }
+const cacheReponses = new Map();
+const cleCache = (question, model) => `${model.semaineCle}|${model.selection?.periode}|${String(question).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
+export function reinitialiserLLM() { echecsConsecutifs = 0; suspenduJusqua = 0; cacheReponses.clear(); }
 
 export function construireFaits(model) {
   const districts = toutesDistricts(model).filter((d) => d.tauxMoyen !== null && d.tauxMoyen !== undefined);
@@ -50,21 +60,41 @@ export function chiffresVerifies(texte, faits) {
   return nombresDans(texte).every((n) => n <= 1 || autorises.some((a) => Math.abs(a - n) <= 0.051));
 }
 
-export async function interrogerLLM(question, model, { url = urlAssistante(), delaiMs = 12000 } = {}) {
-  if (!url) return null;
+export async function interrogerLLM(question, model, { url = urlAssistante(), delaiMs = 9000 } = {}) {
+  if (!url || Date.now() < suspenduJusqua) return null;
+  const cle = cleCache(question, model);
+  if (cacheReponses.has(cle)) return cacheReponses.get(cle);
   const faits = construireFaits(model);
-  const controle = new AbortController();
-  const minuterie = setTimeout(() => controle.abort(), delaiMs);
-  try {
-    const reponse = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, faits }), signal: controle.signal });
-    if (!reponse.ok) return null;
-    const { texte } = await reponse.json();
-    if (!texte || texte.length < 8) return null;
-    if (!chiffresVerifies(texte, faits)) return null;
-    return texte;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(minuterie);
+  const corps = JSON.stringify({ question, faits });
+  const debut = Date.now();
+  for (let essai = 0; essai < 2; essai += 1) {
+    const restant = delaiMs - (Date.now() - debut);
+    if (restant < 1500) break;
+    const controle = new AbortController();
+    const minuterie = setTimeout(() => controle.abort(), restant);
+    try {
+      const reponse = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: corps, signal: controle.signal });
+      if (reponse.status === 429) return null; // limite atteinte : inutile d'insister
+      if (!reponse.ok) throw new Error(`HTTP ${reponse.status}`);
+      const { texte } = await reponse.json();
+      if (!texte || texte.length < 8) throw new Error("réponse vide");
+      if (!chiffresVerifies(texte, faits)) return null; // réponse refusée : le service fonctionne, c'est son contenu qui est rejeté
+      noterSucces();
+      cacheReponses.set(cle, texte);
+      if (cacheReponses.size > 40) cacheReponses.delete(cacheReponses.keys().next().value);
+      return texte;
+    } catch {
+      if (essai === 1) { noterEchec(); return null; }
+      await new Promise((resolve) => setTimeout(resolve, 350)); // un seul nouvel essai
+    } finally {
+      clearTimeout(minuterie);
+    }
   }
+  noterEchec();
+  return null;
+}
+
+// Découpe la réponse du modèle en phrases lisibles à voix haute ; les gestes sont choisis selon le contenu des phrases.
+export function segmentsDepuisTexteIA(texte) {
+  return texte.split(/(?<=[.!?])\s+/).slice(0, 5).map((phrase) => ({ langue: "fr", texte: phrase, geste: null, audio: null }));
 }

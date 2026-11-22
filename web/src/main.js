@@ -3,6 +3,7 @@ import { ecrireEtatHash, lireEtatHash, lireTheme, appliquerTheme, basculerTheme 
 import { basculerThemeCarte } from "./map.js";
 import { initDrawer } from "./drawer.js";
 import { demarrerDiaporama } from "./slideshow.js";
+import { assistanteTVAutorisee, creerAssistanteTV } from "./sokhnaci-tv.js";
 import { initSokhnaci, mettreAJourSokhnaci, replierSokhnaci, rattacherAvatarWidget } from "./sokhnaci.js";
 import { initTrigger } from "./trigger.js";
 import {
@@ -234,7 +235,7 @@ function initActions() {
     catch { afficherToast("Copiez l’adresse affichée dans votre navigateur."); }
   });
   document.getElementById("btn-tv").addEventListener("click", () => {
-    demarrerDiaporama(modeleCourant, { refresh: actualiserPendantDiaporama, close: () => afficherOnglet(ongletCourant) });
+    demarrerDiaporama(modeleCourant, { refresh: actualiserPendantDiaporama, close: () => afficherOnglet(ongletCourant), assistante: assistanteTVAutorisee() ? creerAssistanteTV() : null });
   });
 }
 function synchroniserHash() {
@@ -302,6 +303,7 @@ async function init() {
       initialSlide: Number(tvParams.get("tv")) || 0,
       refresh: actualiserPendantDiaporama,
       close: () => afficherOnglet(ongletCourant),
+      assistante: assistanteTVAutorisee() ? creerAssistanteTV() : null,
     });
   }
   window.addEventListener("hashchange", synchroniserHash);

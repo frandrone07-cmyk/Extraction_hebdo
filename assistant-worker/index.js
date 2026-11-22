@@ -40,18 +40,22 @@ export default {
     const question = String(donnees.question || "").slice(0, 300).trim();
     const faits = donnees.faits && typeof donnees.faits === "object" ? JSON.stringify(donnees.faits).slice(0, 9000) : "";
     if (!question || !faits) return reponse({ erreur: "question et faits requis" }, 400, origine);
-    try {
-      const sortie = await env.AI.run(env.MODELE, {
-        messages: [
-          { role: "system", content: CONSIGNE },
-          { role: "user", content: `FAITS (seule source autorisée) :\n${faits}\n\nQUESTION : ${question}` },
-        ],
-        max_tokens: 320,
-        temperature: 0.2,
-      });
-      return reponse({ texte: String(sortie?.response ?? sortie?.choices?.[0]?.message?.content ?? "").trim().slice(0, 1200) }, 200, origine);
-    } catch {
-      return reponse({ erreur: "modèle indisponible" }, 502, origine);
+    const messages = [
+      { role: "system", content: CONSIGNE },
+      { role: "user", content: `FAITS (seule source autorisée) :
+${faits}
+
+QUESTION : ${question}` },
+    ];
+    // Modèle principal, puis modèle de secours si Cloudflare le retire ou le sature.
+    const modeles = [env.MODELE, env.MODELE_SECOURS].filter(Boolean);
+    for (const modele of modeles) {
+      try {
+        const sortie = await env.AI.run(modele, { messages, max_tokens: 300, temperature: 0.2 });
+        const texte = String(sortie?.response ?? sortie?.choices?.[0]?.message?.content ?? "").trim().slice(0, 1200);
+        if (texte) return reponse({ texte }, 200, origine);
+      } catch { /* on essaie le modèle suivant */ }
     }
+    return reponse({ erreur: "modèle indisponible" }, 502, origine);
   },
 };

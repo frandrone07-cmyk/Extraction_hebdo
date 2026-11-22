@@ -2,6 +2,7 @@ import { creerSituation, versAffichage, versOral } from "./sokhnaci-dialogue.js"
 import { phraseAction } from "./sokhnaci-actions.js";
 import { interpreterEntree } from "./sokhnaci-cerveau.js";
 import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
+import { gesteA, planifierGestes } from "./sokhnaci-gestes.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
 const CLE_VOIX_CHOISIE = "completude-sokhnaci-voix-nom";
@@ -32,6 +33,8 @@ let contexteAudio = null;
 let volume = 1;
 const avatarsExternes = new Set();
 let fileSynthese = Promise.resolve();
+let planGestes = [];
+let gesteActuel = null;
 const syntheses = new Map();
 
 function moyenne(values) {
@@ -224,6 +227,7 @@ function jouerBlob(blob) {
 function avatars() { return [widget, ...avatarsExternes].filter(Boolean); }
 function emettre(type, detail = {}) { document.dispatchEvent(new CustomEvent("sokhnaci:evenement", { detail: { type, ...detail } })); }
 export function lierAvatarExterne(element) { avatarsExternes.add(element); }
+export function preparerVoixOriginale() { demarrerPiperAutomatique(); }
 export function delierAvatarExterne(element) { avatarsExternes.delete(element); }
 export function definirVolume(valeur) {
   volume = Math.max(0, Math.min(1, Number(valeur)));
@@ -235,6 +239,14 @@ function definirParole(actif, geste = "") {
     element.classList.toggle("speaking", actif);
     element.dataset.geste = actif ? geste : "";
   }
+}
+// Geste synchronisé avec les mots : `fraction` est la progression (0 à 1) dans la phrase en cours de lecture.
+function suivreGeste(fraction) {
+  if (!Number.isFinite(fraction)) return;
+  const geste = gesteA(planGestes, Math.max(0, Math.min(1, fraction)));
+  if (geste === gesteActuel) return;
+  gesteActuel = geste;
+  for (const element of avatars()) if (element.classList.contains("speaking")) element.dataset.geste = geste;
 }
 function definirBouche(ouverture) {
   for (const element of avatars()) {
@@ -263,6 +275,7 @@ function lierBouche(audio) {
       const energie = Math.sqrt(somme / donnees.length);
       lisse += (Math.min(1.7, 0.3 + energie * 9) - lisse) * 0.45;
       definirBouche(lisse);
+      if (audio.duration > 0 && Number.isFinite(audio.duration)) suivreGeste(audio.currentTime / audio.duration);
       requestAnimationFrame(boucle);
     };
     boucle();
@@ -328,7 +341,21 @@ async function jouerVoix(segment) {
       const securite = setTimeout(resolve, Math.max(3500, segment.oral.length * 95));
       const fin = () => { clearTimeout(securite); resolve(); };
       parole.onend = parole.onerror = fin;
-      parole.onstart = () => { for (const element of avatars()) element.classList.add("speaking"); emettre("etat", { etat: "parle" }); };
+      let debut = 0;
+      let frontiere = false;
+      let suivi = null;
+      const duree = Math.max(1200, segment.oral.length * 72);
+      const arreterSuivi = () => clearInterval(suivi);
+      parole.onstart = () => {
+        for (const element of avatars()) element.classList.add("speaking");
+        emettre("etat", { etat: "parle" });
+        debut = Date.now();
+        // Sans événement de mot (voix distantes), la progression est estimée d'après la longueur du texte.
+        suivi = setInterval(() => { if (Date.now() - debut > duree * 2.5) arreterSuivi(); else if (!frontiere) suivreGeste((Date.now() - debut) / duree); }, 120);
+      };
+      parole.onboundary = (evenement) => { frontiere = true; suivreGeste(evenement.charIndex / Math.max(1, segment.oral.length)); };
+      const finOriginale = fin;
+      parole.onend = parole.onerror = () => { arreterSuivi(); finOriginale(); };
       window.speechSynthesis.speak(parole);
     } catch {
       resolve();
@@ -340,21 +367,26 @@ async function lire(segments) {
   arreterLecture();
   const id = lectureId;
   demarrerPiperAutomatique();
+  // La réponse ne doit jamais attendre longtemps : si la voix originale n'est pas encore prête (premier
+  // téléchargement), cette réponse est lue avec la voix de l'appareil et la suivante utilisera la voix originale.
   if (!piper && piperPromesse && !piperAbandonne) {
     emettre("etat", { etat: "prepare" });
-    await Promise.race([piperPromesse.catch(() => null), delai(20000)]);
+    await Promise.race([piperPromesse.catch(() => null), delai(2500)]);
     if (id !== lectureId) return;
   }
   const originale = piper && !piperAbandonne ? segments.map((segment) => (segment.audio ? null : synthetiser(segment.oral, id))) : null;
   for (const [index, segment] of segments.entries()) {
     if (id !== lectureId) return;
-    definirParole(true, segment.geste || "");
+    planGestes = planifierGestes(segment.affichage || segment.oral, segment.geste);
+    gesteActuel = null;
+    definirParole(true, gesteA(planGestes, 0));
+    gesteActuel = gesteA(planGestes, 0);
     emettre("etat", { etat: "prepare" });
     marquerPhrase(index);
     let joue = false;
     if (segment.audio) joue = await jouerAudio(segment.audio);
     if (!joue && originale?.[index]) {
-      const blob = await originale[index];
+      const blob = await Promise.race([originale[index], delai(7000)]);
       if (blob && id === lectureId) joue = await jouerBlob(blob);
     }
     if (!joue && id === lectureId) await jouerVoix(segment);
@@ -368,7 +400,7 @@ async function attendrePuisParler() {
     try { enCache = (await (await importerMoteur()).stored?.())?.includes(VOIX_PIPER) ?? false; } catch { /* repli */ }
     if (enCache) {
       demarrerPiperAutomatique();
-      await Promise.race([piperPromesse || Promise.resolve(), delai(10000)]).catch(() => {});
+      await Promise.race([piperPromesse || Promise.resolve(), delai(4000)]).catch(() => {});
     }
   }
   parler();
@@ -643,7 +675,10 @@ export function initSokhnaci(model) {
   setTimeout(() => widget?.classList.remove("entering", "walking"), 2400);
   setInterval(() => { if (!widget.classList.contains("speaking")) marcher(2600); }, 20000);
   const idle = window.requestIdleCallback || ((rappel) => setTimeout(rappel, 800));
-  idle(() => demarrerPiperAutomatique(), { timeout: 3000 });
+  // La voix originale (gros téléchargement) ne démarre qu'une fois la page affichée et au calme,
+  // pour ne jamais ralentir le chargement du tableau de bord.
+  const apresChargement = () => setTimeout(() => idle(() => demarrerPiperAutomatique(), { timeout: 8000 }), 4000);
+  if (document.readyState === "complete") apresChargement(); else window.addEventListener("load", apresChargement, { once: true });
   window.addEventListener("online", () => demarrerPiperAutomatique());
   render(model);
   idle(() => rattacherAvatarWidget(), { timeout: 2500 });
