@@ -45,8 +45,10 @@ export function planifierGestes(texte, gesteScript = null) {
   });
 }
 
-// Geste à faire quand la phrase est lue à `fraction` (0 = début, 1 = fin) ; "" = simple accompagnement de la voix.
+// Geste à faire quand la phrase est lue à `fraction` (0 = début, 1 = fin) ;
+// « parole » = simple accompagnement rythmé de la voix (mains et tête marquent les mots appuyés).
+export const GESTE_NEUTRE = "parole";
 export function gesteA(plan, fraction) {
   for (const etape of plan) if (fraction >= etape.debut && fraction < etape.fin) return etape.geste;
-  return "";
+  return GESTE_NEUTRE;
 }

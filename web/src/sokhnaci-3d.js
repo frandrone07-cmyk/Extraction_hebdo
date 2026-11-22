@@ -240,7 +240,7 @@ async function creer(tenueInitiale) {
     pose("rightLowerArm", 0, -0.12, 0);
 
     // ----- gestes liés aux paroles -----
-    const G = s.parle ? s.geste : "";
+    const G = s.parle && s.geste !== "parole" ? s.geste : "";
     const ondule = Math.sin(t * 9);
     const accent = s.parle ? s.accent : 0; // pic d'énergie de la voix : la main et la tête marquent les mots appuyés
     const ajoute = (nom, x = 0, y = 0, z = 0) => { const c = cible[nom]; if (c) { c[0] += x; c[1] += y; c[2] += z; } };
@@ -353,10 +353,13 @@ async function creer(tenueInitiale) {
     rendu.setSize(largeur, hauteur, false);
     camera.aspect = largeur / hauteur;
     const buste = cadrage === "buste";
-    const visible = hauteurModele * (buste ? 0.31 : 1.16);
-    const centre = hauteurModele * (buste ? 0.905 : 0.52);
+    // « pied » : présentatrice du mode TV dans une colonne haute et étroite, pieds au bas du cadre.
+    const pied = cadrage === "pied";
+    const visible = hauteurModele * (buste ? 0.31 : pied ? 1.32 : 1.16);
+    const centre = hauteurModele * (buste ? 0.905 : pied ? 0.56 : 0.52);
     distance = visible / 2 / Math.tan((camera.fov * Math.PI) / 360);
-    if (!buste && largeur / hauteur < 0.7) distance *= 0.7 / (largeur / hauteur) * 0.9;
+    if (!buste && !pied && largeur / hauteur < 0.7) distance *= 0.7 / (largeur / hauteur) * 0.9;
+    if (pied && largeur / hauteur < 0.42) distance *= 0.42 / (largeur / hauteur);
     camera.position.set(0, centre, distance);
     camera.lookAt(0, centre, 0);
     camera.updateProjectionMatrix();
@@ -398,7 +401,9 @@ async function creer(tenueInitiale) {
     xLisse = lisser(xLisse, s.x * unitesParPixel, dt, 14);
     echelleLissee = lisser(echelleLissee, s.echelle, dt, 6);
     assiseLissee = lisser(assiseLissee, s.assise ? 1 : 0, dt, 5);
-    const yaw0 = s.marche && !s.assise ? s.sens * 1.15 : s.danse ? 0.25 * Math.sin(temps * 2.5) : 0;
+    // La présentatrice du mode TV se tourne vers les diapositives quand elle les montre.
+    const versContenu = cadrage !== "buste" && acteur.classList.contains("presentatrice") && s.parle && s.geste === "pointer_ecran" && !s.marche;
+    const yaw0 = s.marche && !s.assise ? s.sens * 1.15 : s.danse ? 0.25 * Math.sin(temps * 2.5) : versContenu ? -0.45 : 0;
     yaw.v = lisser(yaw.v, yaw0, dt, 7);
     vrm.scene.rotation.y = orientationBase + yaw.v;
     const tete = os("head");

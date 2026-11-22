@@ -90,3 +90,13 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
 - Corrections de précision : « combien de districts sont en rouge » donne le décompte ; « quel formulaire est le plus en retard » classe les formulaires ; les classements précisent s'il s'agit de régions ou de districts ; l'explication de l'évolution dépend du sens réel de la tendance.
 
 **Conversation** : elle n'est plus enregistrée d'une visite à l'autre ; un rechargement (F5, Ctrl+F5) repart d'une conversation neuve. Elle reste conservée quand on change d'onglet.
+
+## Mode TV : présentatrice en pied et diapositive de bilan (22 novembre 2026)
+
+- Sur grand écran (≥ 1100 px), Sokhna Ci est une présentatrice en pied dans une colonne à droite des diapositives (cadrage 3D « pied ») : elle entre en marchant à chaque diapositive, fait quelques pas d'une phrase à l'autre en continuant ses gestes, et se tourne vers les diapositives quand elle les montre. Sur petit écran, la carte compacte (buste) est conservée. Les mouvements respectent « réduire les animations ».
+- Nouvelle dernière diapositive « Situation globale et solutions » (`web/src/bilan.js`, source unique pour l'écran et pour la voix) :
+  - situation globale : jauge annulaire du taux moyen et de sa tendance, répartition des districts par seuil, région la plus en retard et la mieux placée ;
+  - formulaires sans données : part des cellules district × formulaire vides ou à zéro, par formulaire ;
+  - solutions proposées (au plus cinq, avec priorité Immédiat / Cette semaine / Ce mois), déduites de l'analyse : districts en retard global, formulaires sans données, formulaires bas partout, régions entièrement en rouge, district atypique, valeurs à zéro, régions qui stagnent.
+- Design de la diapositive : fond sombre en dégradé, cartes translucides en relief, icônes en volume, apparition échelonnée en perspective. Il a été réalisé directement en CSS : aucun outil Figma n'est connecté à ce projet.
+- Gestes : sans mot déclencheur, le geste « parole » (accompagnement rythmé de la voix) remplace l'absence de geste.

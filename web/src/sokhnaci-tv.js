@@ -5,6 +5,7 @@ import { arreterLecture, delierAvatarExterne, demarrerEcoute, lierAvatarExterne,
 import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
 import { D, E, T, emotionPour, labelRegion, liste, niveau, nomFormulaire, periodeTexte, segment, versAffichage } from "./sokhnaci-dialogue.js";
 import { interpreterEntree } from "./sokhnaci-cerveau.js";
+import { construireBilan, texteBilan } from "./bilan.js";
 import { interrogerLLM, llmDisponible, segmentsDepuisTexteIA } from "./sokhnaci-llm.js";
 
 const CLE_ATTENTIVE = "sokhna-ci-tv-attentive";
@@ -12,6 +13,10 @@ const CLE_VOIX = "sokhna-ci-tv-voix";
 const CLE_PREFERENCES = "sokhna-ci-ai-preferences-v1";
 const MOT_REVEIL = /\b(sokhna\s?ci|sokhnaci|sokhna|sokna|socna)\b/i;
 const ESPACE_PAGE = "tv-avec-sna";
+const PAGE_PRESENTATRICE = "tv-presentateur";
+const REDUIT = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Sur grand écran, Sokhna Ci est une présentatrice en pied dans une colonne à droite des diapositives.
+const grandEcran = () => window.matchMedia("(min-width: 1100px)").matches;
 
 const moyenne = (valeurs) => { const v = valeurs.filter((x) => x !== null && x !== undefined); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 const un = (x) => Math.round(x * 10) / 10;
@@ -81,6 +86,10 @@ export function commentaire(id, model, { premiere = false } = {}) {
     const rouges = regions.filter((r) => r.tauxMoyen < seuils.critique).length;
     segments.push(segment(`Cette synthèse détaille chaque région et chaque période DHIS2 de l’extraction du ${D(model.semaineCle)}.`, "pointer_ecran"));
     segments.push(segment(`${E(rouges)} ${pluriel(rouges, "région est", "régions sont")} en rouge.`));
+  } else if (id === "bilan") {
+    const bilan = construireBilan(model);
+    emotion = bilan.taux !== null && bilan.taux < seuils.critique ? "preoccupee" : "encourageante";
+    for (const phrase of texteBilan(bilan)) segments.push(segment(phrase));
   } else if (id === "evo") {
     const valeurs = model.evolution?.moyenne_generale || [];
     const semaines = model.evolution?.semaines || [];
@@ -112,6 +121,39 @@ export function creerAssistanteTV() {
   let acteur = null;
   let sousTitre = null;
   let libelleEtat = null;
+  let presentatrice = false;
+  let positionX = 0;
+  let animationMarche = 0;
+
+  // Déplacement de la présentatrice : elle marche (jambes, balancement) vers une position puis se remet de face.
+  function marcherVers(cible, duree = 1100) {
+    if (!acteur || !presentatrice) return Promise.resolve();
+    cancelAnimationFrame(animationMarche);
+    if (REDUIT()) { positionX = cible; acteur.style.setProperty("--x", `${cible}px`); return Promise.resolve(); }
+    const depart = positionX;
+    if (Math.abs(cible - depart) < 4) return Promise.resolve();
+    const debut = performance.now();
+    acteur.style.setProperty("--sens", cible < depart ? "-1" : "1");
+    acteur.classList.add("walking");
+    return new Promise((resolve) => {
+      const pas = (maintenant) => {
+        const k = Math.min(1, (maintenant - debut) / duree);
+        const lisse = k < 0.5 ? 2 * k * k : 1 - ((-2 * k + 2) ** 2) / 2;
+        positionX = depart + (cible - depart) * lisse;
+        acteur?.style.setProperty("--x", `${positionX.toFixed(1)}px`);
+        if (k < 1 && acteur) animationMarche = requestAnimationFrame(pas);
+        else { acteur?.classList.remove("walking"); resolve(); }
+      };
+      animationMarche = requestAnimationFrame(pas);
+    });
+  }
+  // Pendant l'exposé, elle fait quelques pas d'une phrase à l'autre, sans quitter sa zone.
+  function pasPendantExpose(index) {
+    if (!presentatrice || index < 1 || index % 2) return;
+    let cible = positionX;
+    for (let essai = 0; essai < 5 && Math.abs(cible - positionX) < 25; essai += 1) cible = Math.round((Math.random() * 2 - 1) * 30);
+    marcherVers(cible, 1000);
+  }
 
   const voixPossible = () => etat.voix && navigator.userActivation?.hasBeenActive !== false && !(navigator.webdriver && !window.__sokhnaciPiper);
   const dire = (texte) => { if (sousTitre) sousTitre.textContent = texte; };
@@ -119,7 +161,8 @@ export function creerAssistanteTV() {
 
   function construireCarte() {
     carte = document.createElement("aside");
-    carte.className = "tv-sna";
+    presentatrice = grandEcran();
+    carte.className = `tv-sna${presentatrice ? " presentateur" : ""}`;
     carte.setAttribute("aria-label", "Sokhna Ci, assistante du mode TV");
     const micro = reconnaissanceDisponible();
     carte.innerHTML = `<div class="tv-sna-scene"><div class="sna-acteur tv-sna-acteur" aria-hidden="true">${svgMarkup(true)}</div></div>
@@ -136,7 +179,12 @@ export function creerAssistanteTV() {
       </div>`;
     document.body.appendChild(carte);
     document.body.classList.add(ESPACE_PAGE);
+    document.body.classList.toggle(PAGE_PRESENTATRICE, presentatrice);
     acteur = carte.querySelector(".tv-sna-acteur");
+    acteur.classList.toggle("presentatrice", presentatrice);
+    acteur.style.setProperty("--x", "0px");
+    acteur.style.setProperty("--echelle", "1");
+    acteur.style.setProperty("--sens", "1");
     sousTitre = carte.querySelector(".tv-sna-soustitre");
     libelleEtat = carte.querySelector(".tv-sna-etat");
     lierAvatarExterne(acteur);
@@ -185,7 +233,7 @@ export function creerAssistanteTV() {
       if (!etat.actif || !carte) return;
       const zone = carte.querySelector(".tv-sna-scene");
       controleur.habiller(tenue);
-      controleur.relier(zone, acteur, { cadrage: "buste" });
+      controleur.relier(zone, acteur, { cadrage: presentatrice ? "pied" : "buste" });
       zone.classList.add("trois-d");
     } catch { /* l'illustration 2D reste affichée */ }
   }
@@ -193,7 +241,10 @@ export function creerAssistanteTV() {
   // ---------- parole
   function surEvenement(evenement) {
     const detail = evenement.detail || {};
-    if (detail.type === "phrase" && detail.index !== null && etat.parle && etat.segments[detail.index]) dire(etat.segments[detail.index].affichage);
+    if (detail.type === "phrase" && detail.index !== null && etat.parle && etat.segments[detail.index]) {
+      dire(etat.segments[detail.index].affichage);
+      pasPendantExpose(detail.index);
+    }
   }
   async function narrer(dialogue, jeton) {
     etat.segments = dialogue.segments.map((s) => ({ ...s, affichage: versAffichage(s.texte) }));
@@ -373,7 +424,12 @@ export function creerAssistanteTV() {
       etat.fenetre = false;
       arreterLecture();
       arreterEcouteActive();
-      await attendre(500); // laisse la navigation se stabiliser avant de parler
+      // À chaque diapositive, la présentatrice entre en marchant depuis le bord, puis prend la parole.
+      if (presentatrice) {
+        positionX = 70;
+        acteur?.style.setProperty("--x", "70px");
+        await marcherVers(0, 1300);
+      } else await attendre(500); // laisse la navigation se stabiliser avant de parler
       if (jeton !== etat.jeton || !etat.actif) return;
       const dialogue = commentaire(slide.id, modele, { premiere: index === 0 });
       const derniere = index === total - 1;
@@ -403,7 +459,8 @@ export function creerAssistanteTV() {
       document.removeEventListener("sokhnaci:evenement", surEvenement);
       if (acteur) delierAvatarExterne(acteur);
       carte?.remove();
-      document.body.classList.remove(ESPACE_PAGE);
+      document.body.classList.remove(ESPACE_PAGE, PAGE_PRESENTATRICE);
+      cancelAnimationFrame(animationMarche);
       carte = acteur = sousTitre = libelleEtat = null;
     },
   };

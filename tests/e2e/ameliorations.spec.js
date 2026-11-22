@@ -155,7 +155,7 @@ test("mode TV : Sokhna Ci commente la situation, retient la diapositive, répond
   await expect(carte.locator(".tv-sna-soustitre")).toContainText("Voici la situation au", { timeout: 15_000 });
   await expect(carte.locator(".tv-sna-etat")).toHaveText("Je présente…");
   await expect(page.locator("#tv-progress-fill")).toHaveCSS("width", "0px"); // la diapositive est retenue pendant que Sokhna Ci parle
-  await expect(page.locator("#tv-counter")).toHaveText("1 / 8");
+  await expect(page.locator("#tv-counter")).toHaveText("1 / 9");
   // Question au clavier : touche Q, puis réponse issue des données.
   await page.locator("#tv-stage").click({ position: { x: 10, y: 10 } });
   await page.keyboard.press("q");
@@ -163,12 +163,20 @@ test("mode TV : Sokhna Ci commente la situation, retient la diapositive, répond
   await carte.locator("input").fill("quelle région est la plus en retard ?");
   await carte.locator("input").press("Enter");
   await expect(carte.locator(".tv-sna-soustitre")).toContainText("%", { timeout: 20_000 }); // la réponse chiffrée remplace le commentaire
-  await expect(page.locator("#tv-counter")).toHaveText("1 / 8");
+  await expect(page.locator("#tv-counter")).toHaveText("1 / 9");
   // À la fin du cycle, elle demande s'il y a des éclaircissements ou des questions, puis écoute.
   await page.locator("#tv-dots [data-slide-index]").last().click();
+  // Dernière diapositive : bilan global, formulaires sans données et solutions proposées.
+  const bilan = page.locator(".tv-bilan");
+  await expect(bilan).toContainText("Situation globale et solutions");
+  await expect(bilan.locator(".bilan-anneau-texte strong")).toContainText("%");
+  await expect(bilan.locator(".bilan-manquants li").first()).toContainText("attendus");
+  expect(await bilan.locator(".bilan-solution").count()).toBeGreaterThan(0);
+  await expect(bilan.locator(".bilan-solution .bilan-pill").first()).toHaveText(/Immédiat|Cette semaine|Ce mois/);
+  await expect(carte.locator(".tv-sna-soustitre")).toContainText("Pour conclure", { timeout: 20_000 });
   await expect(carte.locator(".tv-sna-soustitre")).toContainText("éclaircissements", { timeout: 60_000 });
   await expect(carte.locator(".tv-sna-etat")).toHaveText("Je vous écoute…", { timeout: 30_000 });
-  await expect(page.locator("#tv-counter")).toHaveText("8 / 8");
+  await expect(page.locator("#tv-counter")).toHaveText("9 / 9");
   // Quitter le mode TV retire l'assistante.
   await page.locator("#tv-close").click();
   await expect(page.locator(".tv-sna")).toHaveCount(0);

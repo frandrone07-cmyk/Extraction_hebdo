@@ -2,6 +2,8 @@ import { grapheBarres, grapheBarresEmpilees, grapheDoughnut, grapheLigne, couleu
 import { afficherDistricts, afficherVueComplete, centrerDistrict, detruireCarte, initCarte } from "./map.js";
 import { afficherRegions, detruireCarteRegions, initCarteRegions, mettreEnEvidenceRegion } from "./region-map.js";
 import { ouvrirFicheDistrict } from "./drawer.js";
+import { construireBilan } from "./bilan.js";
+import { nomFormulaire, versAffichage } from "./sokhnaci-dialogue.js";
 
 const DEFINITIONS = [
   { id: "synth", title: "Synthèse nationale", description: "Les indicateurs clés de l’extraction sélectionnée." },
@@ -12,6 +14,7 @@ const DEFINITIONS = [
   { id: "top", title: "Top et points de vigilance", description: "Les dix niveaux les plus élevés et les plus faibles." },
   { id: "tabreg", title: "Synthèse région et période", description: "Vue consolidée des territoires et périodes DHIS2." },
   { id: "evo", title: "Évolution par date d’extraction", description: "Tendance nationale et régionale entre les extractions." },
+  { id: "bilan", title: "Situation globale et solutions", description: "Bilan, formulaires sans données et actions proposées." },
 ];
 const REDUIT = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -131,9 +134,63 @@ function slideMarkup(id) {
     heat: `<div class="tv-slide-head"><span class="eyebrow">CROISEMENT TERRITORIAL</span><h1>Régions × formulaires</h1><p>Les écarts de couleur suivent les seuils configurés dans DHIS2.</p></div><article class="card"><div class="table-scroll"><table class="heatmap"><thead><tr><th>Région</th>${data.tousFormulaires.map((form) => `<th title="${escapeHtml(form.nom)}">${escapeHtml(form.nom)}</th>`).join("")}</tr></thead><tbody>${data.toutesRegions.map((region) => `<tr><th scope="row">${escapeHtml(labelRegion(region.nom))}</th>${data.tousFormulaires.map((form) => { const value = average(region.districts.flatMap((district) => district.formulaires.filter((item) => item.nom === form.nom).map((item) => item.valeur))); const color = value === null ? "inconnu" : value < data.seuils.critique ? "critique" : value < data.seuils.conforme ? "surveiller" : "conforme"; return `<td class="heatmap-cell" style="background:${couleurStatut(color)}">${value ?? "—"}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div></article>`,
     top: `<div class="tv-slide-head"><span class="eyebrow">CLASSEMENTS</span><h1>Résultats marquants</h1><p>Les taux les plus élevés et les districts à accompagner.</p></div><div class="tv-layout tv-half"><article class="card"><div class="card-head"><h2>10 meilleurs résultats</h2><span class="status-chip conforme">Top 10</span></div>${ranking(data, false)}</article><article class="card"><div class="card-head"><h2>10 taux les plus faibles</h2><span class="status-chip critique">À suivre</span></div>${ranking(data, true)}</article></div>`,
     tabreg: `<div class="tv-slide-head"><span class="eyebrow">SYNTHÈSE CROISÉE</span><h1>Région et période</h1><p>Lecture de l’extraction ${escapeHtml(data.semaineCle)} sur ${escapeHtml(data.selection.periode)}.</p></div><div class="tv-layout tv-half"><article class="card"><h2>Synthèse par région</h2><div class="table-scroll"><table><thead><tr><th>Région</th><th>Taux moyen</th><th>Critiques</th></tr></thead><tbody>${data.toutesRegions.map((region) => `<tr><td>${escapeHtml(labelRegion(region.nom))}</td><td>${pct(region.tauxMoyen)}</td><td class="cell-critique">${region.nbCritique}</td></tr>`).join("")}</tbody></table></div></article><article class="card"><h2>Taux moyen par période</h2><div class="chartbox tv-chart"><canvas id="tv-chart-period"></canvas></div></article></div>`,
+    bilan: bilanMarkup(data),
     evo: `<div class="tv-slide-head"><span class="eyebrow">SUIVI DANS LE TEMPS</span><h1>Évolution par date d’extraction</h1><p>Comparaison des 14 régions au fil des extractions hebdomadaires.</p></div><article class="card tv-chart-card"><div class="chartbox tv-chart-large"><canvas id="tv-chart-evolution"></canvas></div></article>`,
   };
   return `<section class="tv-slide" aria-label="${escapeHtml(DEFINITIONS.find((slide) => slide.id === id)?.title || "Diapositive")}">${titles[id]}</section>`;
+}
+
+// Dernière diapositive : bilan global, formulaires sans données et solutions proposées.
+function bilanMarkup(data) {
+  const b = construireBilan(data);
+  const aff = (texte) => escapeHtml(versAffichage(texte));
+  const statut = b.taux === null ? "inconnu" : b.taux < b.seuils.critique ? "critique" : b.taux < b.seuils.conforme ? "surveiller" : "conforme";
+  const libelleStatut = { critique: "Critique", surveiller: "À surveiller", conforme: "Conforme", inconnu: "Sans taux" }[statut];
+  const rayon = 54;
+  const circonference = 2 * Math.PI * rayon;
+  const rempli = circonference * Math.max(0, Math.min(100, b.taux ?? 0)) / 100;
+  const delta = b.ecart === null ? "" : `<span class="bilan-delta ${b.ecart >= 0 ? "hausse" : "baisse"}">${b.ecart >= 0 ? "▲" : "▼"} ${escapeHtml(Math.abs(b.ecart).toLocaleString("fr-FR"))} pt</span>`;
+  const total = Math.max(1, b.effectifs.total);
+  const part = (n) => `${(n / total) * 100}%`;
+  const PRIORITES = { "Immédiat": "immediat", "Cette semaine": "semaine", "Ce mois": "mois" };
+  const manquants = b.sansDonnees.length
+    ? b.sansDonnees.map((l, i) => `<li style="--i:${i}"><div class="bilan-ligne"><strong title="${escapeHtml(l.nom)}">${escapeHtml(nomFormulaire(l.nom))}</strong><b>${escapeHtml(l.part.toLocaleString("fr-FR"))} %</b></div><div class="bilan-jauge" aria-hidden="true"><i style="width:${Math.min(100, l.part)}%"></i></div><small>${l.vides} district${l.vides > 1 ? "s" : ""} sans donnée · ${l.zeros} à zéro · ${l.attendus} attendus</small></li>`).join("")
+    : `<li class="bilan-vide">Tous les formulaires ont des données pour cette sélection.</li>`;
+  const solutions = b.solutions.map((s, i) => `<li class="bilan-solution" style="--i:${i}"><span class="bilan-icone" aria-hidden="true">${s.icone}</span><div><span class="bilan-pill ${PRIORITES[s.priorite] || "mois"}">${escapeHtml(s.priorite)}</span><strong>${aff(s.titre)}</strong><p>${aff(s.detail)}</p></div></li>`).join("");
+  return `<div class="tv-bilan">
+    <header class="bilan-tete"><div><span class="eyebrow">BILAN DE LA SEMAINE</span><h1>Situation globale et solutions</h1></div><p>Extraction du ${escapeHtml(data.semaineLibelle)} · ${escapeHtml(data.selection.periode)}</p></header>
+    <div class="bilan-grille">
+      <article class="bilan-carte bilan-hero" style="--i:0">
+        <h2>Situation globale</h2>
+        <div class="bilan-anneau ${statut}">
+          <svg viewBox="0 0 140 140" role="img" aria-label="Taux moyen national : ${escapeHtml(pct(b.taux))}">
+            <defs><linearGradient id="bilan-degrade" x1="0" y1="0" x2="1" y2="1"><stop offset="0" class="arret-a"/><stop offset="1" class="arret-b"/></linearGradient></defs>
+            <circle cx="70" cy="70" r="${rayon}" class="anneau-fond"/>
+            <circle cx="70" cy="70" r="${rayon}" class="anneau-valeur" stroke-dasharray="${rempli.toFixed(1)} ${circonference.toFixed(1)}" transform="rotate(-90 70 70)"/>
+          </svg>
+          <div class="bilan-anneau-texte"><strong>${escapeHtml(pct(b.taux))}</strong><span>taux moyen</span>${delta}</div>
+        </div>
+        <span class="bilan-statut ${statut}">${libelleStatut}</span>
+        <div class="bilan-barre" role="img" aria-label="${b.effectifs.rouges} districts critiques, ${b.effectifs.oranges} à surveiller, ${b.effectifs.verts} conformes">
+          <i class="critique" style="width:${part(b.effectifs.rouges)}"></i><i class="surveiller" style="width:${part(b.effectifs.oranges)}"></i><i class="conforme" style="width:${part(b.effectifs.verts)}"></i>
+        </div>
+        <ul class="bilan-legende"><li><i class="critique"></i>${b.effectifs.rouges} critique${b.effectifs.rouges > 1 ? "s" : ""}</li><li><i class="surveiller"></i>${b.effectifs.oranges} à surveiller</li><li><i class="conforme"></i>${b.effectifs.verts} conforme${b.effectifs.verts > 1 ? "s" : ""}</li></ul>
+        <div class="bilan-regions">
+          ${b.regionPire ? `<div><span>Plus en retard</span><strong>${escapeHtml(labelRegion(b.regionPire.nom))}</strong><b class="critique">${escapeHtml(pct(b.regionPire.tauxMoyen))}</b></div>` : ""}
+          ${b.regionMeilleure ? `<div><span>Mieux placée</span><strong>${escapeHtml(labelRegion(b.regionMeilleure.nom))}</strong><b class="conforme">${escapeHtml(pct(b.regionMeilleure.tauxMoyen))}</b></div>` : ""}
+        </div>
+      </article>
+      <article class="bilan-carte bilan-manquants" style="--i:1">
+        <h2>Formulaires sans données</h2>
+        <p class="bilan-sous">${b.totalManquants} cellule${b.totalManquants > 1 ? "s" : ""} district × formulaire vide${b.totalManquants > 1 ? "s" : ""} ou à zéro, sur ${b.totalCellules}.</p>
+        <ol>${manquants}</ol>
+      </article>
+      <article class="bilan-carte bilan-solutions" style="--i:2">
+        <h2>Solutions proposées</h2>
+        <ol>${solutions}</ol>
+      </article>
+    </div>
+  </div>`;
 }
 
 function ranking(data, weakest) {
