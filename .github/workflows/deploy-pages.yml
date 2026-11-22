@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,4 +62,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      # Le service de déploiement voit parfois l'artefact avec retard : on attend puis on réessaie une fois.
+      - name: Nouvelle tentative de déploiement après attente
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 45
+
+      - id: deployment2
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
