@@ -17,6 +17,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read
 
 concurrency:
   group: pages
@@ -47,6 +48,18 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+      # L'API d'artefacts met parfois quelques secondes à lister l'artefact qui vient d'être envoyé.
+      - name: Attendre la disponibilité de l'artefact
+        run: |
+          for essai in 1 2 3 4 5 6; do
+            n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --jq '[.artifacts[]|select(.name=="github-pages")]|length' 2>/dev/null || echo 0)
+            [ "$n" -ge 1 ] && exit 0
+            sleep 10
+          done
+          exit 0
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - id: deployment
         uses: actions/deploy-pages@v4
