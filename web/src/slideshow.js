@@ -1,4 +1,4 @@
-import { grapheBarres, grapheBarresEmpilees, grapheDoughnut, grapheLigne, couleurStatut } from "./charts.js";
+import { detruireGraphiques, grapheBarres, grapheBarresEmpilees, grapheDoughnut, grapheLigne, couleurStatut } from "./charts.js";
 import { afficherDistricts, afficherVueComplete, centrerDistrict, detruireCarte, initCarte } from "./map.js";
 import { afficherRegions, detruireCarteRegions, initCarteRegions, mettreEnEvidenceRegion } from "./region-map.js";
 import { ouvrirFicheDistrict } from "./drawer.js";
@@ -296,6 +296,7 @@ function show(index, { silencieux = false } = {}) {
   const indexAffiche = current;
   const stage = document.getElementById("tv-stage");
   const slide = selectedSlides[current];
+  detruireGraphiques((id) => id.startsWith("tv-"));
   stage.innerHTML = slideMarkup(slide.id);
   document.getElementById("tv-title").textContent = slide.title;
   document.getElementById("tv-counter").textContent = `${current + 1} / ${selectedSlides.length}`;
@@ -362,6 +363,7 @@ function close() {
   document.getElementById("tv-stage")?.remove();
   detruireCarte();
   detruireCarteRegions();
+  detruireGraphiques((id) => id.startsWith("tv-"));
   wakeLock?.release().catch(() => {});
   wakeLock = null;
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});

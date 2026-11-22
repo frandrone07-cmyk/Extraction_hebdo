@@ -14,6 +14,11 @@ function detruire(id) {
   INSTANCES.get(id).destroy();
   INSTANCES.delete(id);
 }
+// Détruit les graphiques dont la zone va disparaître (changement de diapositive) : sans cela, Chart.js continue
+// d'animer un graphique retiré de la page et le module d'étiquettes échoue (« _labels »).
+export function detruireGraphiques(filtre = () => true) {
+  for (const id of [...INSTANCES.keys()]) if (filtre(id)) { try { detruire(id); } catch { INSTANCES.delete(id); } }
+}
 function disponible() { return typeof Chart !== "undefined"; }
 let datalabelsEnregistre = false;
 function enregistrerDatalabels() {
