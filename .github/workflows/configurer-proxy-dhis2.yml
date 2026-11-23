@@ -1,19 +1,21 @@
 # Donne au serveur intermédiaire « dhis2-proxy » les MÊMES identifiants DHIS2 que l'extraction de complétude
 # (secrets GitHub DHIS2_USER et DHIS2_PASSWORD). Les valeurs ne sont jamais affichées : elles partent directement
-# des secrets GitHub vers le proxy (route PUT /identifiants, protégée par la clé partagée PROXY_SYNC_KEY, présente
-# à la fois dans les secrets GitHub et dans les secrets Cloudflare du proxy).
-#
-# Lancé par dhis2-proxy/lier-a-github.ps1, à la main (onglet Actions), et chaque lundi après un changement
-# éventuel de mot de passe dans les secrets GitHub.
+# des secrets GitHub vers le proxy (route PUT /identifiants). Le proxy n'accepte l'envoi que s'il est accompagné du
+# jeton d'identité OIDC signé par GitHub pour CE dépôt, CE workflow et la branche master : aucun secret partagé.
+# Ce workflow est indépendant de l'extraction du lundi, qu'il ne modifie pas.
 name: Configurer le proxy DHIS2
 
 on:
   workflow_dispatch:
+  push:
+    branches: [master]
+    paths: [".github/workflows/configurer-proxy-dhis2.yml", "dhis2-proxy/index.js"]
   schedule:
-    - cron: "30 6 * * 1"
+    - cron: "30 6 * * 1"   # chaque lundi : suit un éventuel changement de mot de passe dans les secrets GitHub
 
 permissions:
   contents: read
+  id-token: write   # jeton OIDC prouvant l'identité du workflow auprès du proxy
 
 jobs:
   configurer:
@@ -25,17 +27,17 @@ jobs:
         env:
           DHIS2_USER: ${{ secrets.DHIS2_USER }}
           DHIS2_PASSWORD: ${{ secrets.DHIS2_PASSWORD }}
-          PROXY_SYNC_KEY: ${{ secrets.PROXY_SYNC_KEY }}
         run: |
-          [ -n "$PROXY_SYNC_KEY" ] || { echo "::error::Secret PROXY_SYNC_KEY manquant."; exit 1; }
           [ -n "$DHIS2_USER" ] && [ -n "$DHIS2_PASSWORD" ] || { echo "::error::Secrets DHIS2_USER / DHIS2_PASSWORD manquants."; exit 1; }
+          jeton=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=dhis2-proxy" | jq -r .value)
+          echo "::add-mask::$jeton"
           corps=$(jq -n --arg user "$DHIS2_USER" --arg pass "$DHIS2_PASSWORD" --arg url "https://senegal.dhis2.org/dhis" '{user: $user, pass: $pass, url: $url}')
           code=$(printf '%s' "$corps" | curl -s -o reponse.json -w '%{http_code}' -X PUT "$PROXY/identifiants" \
-            -H "Content-Type: application/json" -H "X-Cle-Synchro: $PROXY_SYNC_KEY" --data-binary @-)
+            -H "Content-Type: application/json" -H "Authorization: Bearer $jeton" --data-binary @-)
           cat reponse.json; echo
           [ "$code" = "200" ] || { echo "::error::Le proxy a refusé la synchronisation (HTTP $code)."; exit 1; }
       - name: Vérifier la connexion à DHIS2
         run: |
           sleep 3
-          curl -s -H "Origin: https://frandrone07-cmyk.github.io" "$PROXY/sante" | tee sante.json; echo
+          curl -s -H "Origin: https://frandrone07-cmyk.github.io" "$PROXY/sante?actualiser=1" | tee sante.json; echo
           grep -q '"joignable":true' sante.json || { echo "::error::Le proxy ne joint pas DHIS2 (voir la réponse ci-dessus)."; exit 1; }

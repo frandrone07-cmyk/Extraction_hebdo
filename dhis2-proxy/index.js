@@ -92,11 +92,42 @@ async function egal(a, b) {
   for (let i = 0; i < x.length; i += 1) diff |= x[i] ^ y[i];
   return diff === 0;
 }
-// PUT /identifiants (appel serveur à serveur depuis GitHub Actions, sans origine navigateur) : clé SYNC_KEY exigée.
+// Jeton d'identité OIDC de GitHub Actions : prouve que l'appel vient du workflow « configurer-proxy-dhis2.yml » du
+// dépôt, sur la branche master. Signature RS256 vérifiée avec les clés publiques de GitHub ; aucun secret partagé.
+const EMETTEUR_GITHUB = "https://token.actions.githubusercontent.com";
+export const AUDIENCE_OIDC = "dhis2-proxy";
+const b64url = (t) => Uint8Array.from(atob(t.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(t.length / 4) * 4, "=")), (c) => c.charCodeAt(0));
+export async function verifierJetonGithub(jeton, env, maintenant = Date.now()) {
+  const morceaux = String(jeton || "").split(".");
+  if (morceaux.length !== 3) return false;
+  let entete;
+  let charge;
+  try {
+    entete = JSON.parse(new TextDecoder().decode(b64url(morceaux[0])));
+    charge = JSON.parse(new TextDecoder().decode(b64url(morceaux[1])));
+  } catch { return false; }
+  if (entete.alg !== "RS256" || !entete.kid) return false;
+  const depot = env.GITHUB_REPO || "frandrone07-cmyk/Extraction_hebdo";
+  if (charge.iss !== EMETTEUR_GITHUB || charge.aud !== AUDIENCE_OIDC || charge.repository !== depot || charge.ref !== "refs/heads/master") return false;
+  if (!String(charge.job_workflow_ref || "").startsWith(`${depot}/.github/workflows/configurer-proxy-dhis2.yml@`)) return false;
+  if (!(charge.exp * 1000 > maintenant) || charge.nbf * 1000 > maintenant + 60000) return false;
+  const jwks = await (await fetch(`${EMETTEUR_GITHUB}/.well-known/jwks`)).json();
+  const jwk = (jwks.keys || []).find((k) => k.kid === entete.kid);
+  if (!jwk) return false;
+  const cle = await crypto.subtle.importKey("jwk", { kty: jwk.kty, n: jwk.n, e: jwk.e, alg: "RS256", ext: true }, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  return crypto.subtle.verify("RSASSA-PKCS1-v1_5", cle, b64url(morceaux[2]), new TextEncoder().encode(`${morceaux[0]}.${morceaux[1]}`));
+}
+
+// PUT /identifiants (appel serveur à serveur depuis GitHub Actions, sans origine navigateur) : jeton OIDC de
+// GitHub Actions (Authorization: Bearer …) ou, à défaut, clé partagée SYNC_KEY (X-Cle-Synchro).
 export async function recevoirIdentifiants(requete, env) {
   const repondre = (corps, statut) => new Response(JSON.stringify(corps), { status: statut, headers: { "Content-Type": "application/json" } });
+  if (!env.CONFIG) return repondre({ erreur: "stockage indisponible" }, 503);
+  const jeton = (requete.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   const cle = requete.headers.get("X-Cle-Synchro") || "";
-  if (!env.SYNC_KEY || !env.CONFIG || !cle || !(await egal(cle.trim(), String(env.SYNC_KEY).trim()))) return repondre({ erreur: "clé de synchronisation refusée" }, 401);
+  let autorise = false;
+  try { autorise = jeton ? await verifierJetonGithub(jeton, env) : Boolean(env.SYNC_KEY && cle && (await egal(cle.trim(), String(env.SYNC_KEY).trim()))); } catch { autorise = false; }
+  if (!autorise) return repondre({ erreur: "appel non autorisé" }, 401);
   let corps;
   try { corps = JSON.parse((await requete.text()).slice(0, 2000)); } catch { return repondre({ erreur: "corps invalide" }, 400); }
   const user = typeof corps?.user === "string" ? corps.user.trim() : "";

@@ -103,3 +103,30 @@ test("proxy : identifiants synchronisés depuis GitHub (clé exigée) puis utili
   await proxy.fetch(requete("api/system/info"), env, null);
   expect(appels.at(-1).options.headers.Authorization).toBe(`Basic ${Buffer.from("github:motdepasse").toString("base64")}`);
 });
+
+test("proxy : jeton OIDC de GitHub Actions accepté seulement pour ce dépôt, ce workflow et master", async () => {
+  const { verifierJetonGithub } = await import("../../dhis2-proxy/index.js");
+  const paire = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const publique = { ...(await crypto.subtle.exportKey("jwk", paire.publicKey)), kid: "cle-test" };
+  const b64 = (o) => Buffer.from(typeof o === "string" ? o : JSON.stringify(o)).toString("base64url");
+  const signer = async (charge) => {
+    const corps = `${b64({ alg: "RS256", kid: "cle-test" })}.${b64(charge)}`;
+    const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", paire.privateKey, new TextEncoder().encode(corps));
+    return `${corps}.${Buffer.from(sig).toString("base64url")}`;
+  };
+  globalThis.fetch = async (url) => (String(url).includes("/.well-known/jwks") ? new Response(JSON.stringify({ keys: [publique] })) : new Response("{}"));
+  const maintenant = Date.now();
+  const bon = { iss: "https://token.actions.githubusercontent.com", aud: "dhis2-proxy", repository: "frandrone07-cmyk/Extraction_hebdo", ref: "refs/heads/master",
+    job_workflow_ref: "frandrone07-cmyk/Extraction_hebdo/.github/workflows/configurer-proxy-dhis2.yml@refs/heads/master", exp: Math.floor(maintenant / 1000) + 300, nbf: Math.floor(maintenant / 1000) - 10 };
+  const env = environnement();
+  expect(await verifierJetonGithub(await signer(bon), env)).toBe(true);
+  expect(await verifierJetonGithub(await signer({ ...bon, repository: "pirate/depot" }), env)).toBe(false);
+  expect(await verifierJetonGithub(await signer({ ...bon, ref: "refs/heads/autre" }), env)).toBe(false);
+  expect(await verifierJetonGithub(await signer({ ...bon, job_workflow_ref: "frandrone07-cmyk/Extraction_hebdo/.github/workflows/autre.yml@refs/heads/master" }), env)).toBe(false);
+  expect(await verifierJetonGithub(await signer({ ...bon, exp: Math.floor(maintenant / 1000) - 5 }), env)).toBe(false);
+  const falsifie = (await signer(bon)).replace(/\.[^.]+$/, `.${Buffer.from("faux").toString("base64url")}`);
+  expect(await verifierJetonGithub(falsifie, env)).toBe(false);
+  // Bout en bout : le jeton valide permet d'enregistrer les identifiants, qui servent ensuite pour DHIS2.
+  const reponse = await proxy.fetch(new Request("https://dhis2-proxy.test/identifiants", { method: "PUT", body: JSON.stringify({ user: "gh", pass: "pw" }), headers: { Authorization: `Bearer ${await signer(bon)}` } }), env, null);
+  expect(reponse.status).toBe(200);
+});
