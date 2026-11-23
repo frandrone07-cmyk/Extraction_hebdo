@@ -26,7 +26,10 @@ function echapper(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
 }
 
+let observateurTailleRegions = null;
 export function detruireCarteRegions() {
+  observateurTailleRegions?.disconnect();
+  observateurTailleRegions = null;
   carteRegions?.remove();
   carteRegions = null;
   couchesParRegion = new Map();
@@ -48,6 +51,10 @@ export function initCarteRegions(elementId, theme) {
   }).addTo(carteRegions);
   const pane = element.querySelector(".leaflet-tile-pane");
   if (pane && theme === "dark") pane.style.filter = "invert(1) hue-rotate(180deg) brightness(.82) contrast(.92)";
+  if ("ResizeObserver" in window) {
+    observateurTailleRegions = new ResizeObserver(() => carteRegions?.invalidateSize({ pan: false }));
+    observateurTailleRegions.observe(element);
+  }
   return carteRegions;
 }
 

@@ -8,6 +8,7 @@ import { definirNiveauExplication, lireNiveauExplication, pointsAttention, sourc
 import { chargerBibliothequeTableur, imprimerPdf, telechargerConversation, telechargerExcel, telechargerWord } from "./sokhnaci-rapport.js";
 import { grapheBarres, grapheDoughnut, grapheLigne } from "./charts.js";
 import { interrogerLLM, llmDisponible, segmentsDepuisTexteIA } from "./sokhnaci-llm.js";
+import { commandeNavigation, executerNavigation } from "./sokhnaci-navigation.js";
 import { avatar3dAutorise, lire3D, obtenir3D } from "./sokhnaci-3d.js";
 
 const CLE_HISTORIQUE = "sokhna-ci-ai-historique-v1";
@@ -388,6 +389,12 @@ async function envoyer(question) {
   definirIndicateur("reflechit");
   if (etat.fichier && /\b(fichier|document|tableau joint|ce fichier|le fichier)\b/i.test(question)) {
     repondreFichier(question);
+    return;
+  }
+  const navigation = commandeNavigation(question, etat.model);
+  if (navigation) {
+    const dialogue = await executerNavigation(navigation);
+    repondre({ ...dialogue, sources: [], suggestions: [] });
     return;
   }
   const entree = interpreterEntree(question, etat.model);

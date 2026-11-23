@@ -1,4 +1,5 @@
 let carte = null;
+let observateurTaille = null; // la carte suit la taille de son cadre (ex. Sokhna Ci réduite → carte plus grande)
 let coucheDistricts = null;
 let coucheEtiquettes = null;
 let gererZoomEtiquettes = null;
@@ -79,6 +80,8 @@ function appliquerTheme(theme) {
 }
 
 export function detruireCarte() {
+  observateurTaille?.disconnect();
+  observateurTaille = null;
   if (carte) carte.remove();
   carte = null;
   coucheDistricts = null;
@@ -105,6 +108,10 @@ export function initCarte(elementId, theme) {
     crossOrigin: true,
   }).addTo(carte);
   appliquerTheme(theme);
+  if ("ResizeObserver" in window) {
+    observateurTaille = new ResizeObserver(() => carte?.invalidateSize({ pan: false }));
+    observateurTaille.observe(element);
+  }
   return carte;
 }
 

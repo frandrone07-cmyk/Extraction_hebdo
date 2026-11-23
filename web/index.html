@@ -38,11 +38,10 @@
   <link rel="modulepreload" href="src/mise-en-avant.js">
   <link rel="modulepreload" href="src/marche.js">
   <link rel="modulepreload" href="src/sokhnaci-precision.js">
+  <link rel="modulepreload" href="src/sokhnaci-navigation.js">
   <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/","@pixiv/three-vrm":"./vendor/three-vrm/three-vrm.module.min.js"}}</script>
 </head>
 <body>
-  <!-- Réserve dès le premier affichage la colonne de Sokhna Ci (grand écran) : la page ne « saute » pas au chargement. -->
-  <script>try { if (innerWidth >= 1100 && !/[#&]tv=/.test(location.hash)) document.body.classList.add("avec-presentatrice"); } catch (e) { /* stockage indisponible */ }</script>
   <a class="skip-link" href="#contenu">Aller au contenu principal</a>
   <div class="tricolore" aria-hidden="true"></div>
 

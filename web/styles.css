@@ -949,15 +949,15 @@ tr.sna-focus th, tr.sna-focus td { box-shadow: inset 0 0 0 999px rgba(47, 191, 1
 
 /* Grand écran : présentatrice en pied dans une colonne à droite (identique au mode TV) */
 @media (min-width: 1100px) {
-  body.avec-presentatrice:not(.tv):not(.sna-actif) { padding-right: 340px; }
+  body:not(.sans-presentatrice):not(.tv):not(.sna-actif) { padding-right: 340px; }
   /* La bande aux couleurs du drapeau reste sur toute la largeur de l'écran, au-dessus de la colonne de Sokhna Ci. */
-  body.avec-presentatrice:not(.tv):not(.sna-actif) .tricolore { margin-right: -340px; }
-  body.avec-presentatrice:not(.tv):not(.sna-actif) :is(main, .tabs, .filter-panel, .banniere, .site-footer) { margin-inline: max(20px, calc((100% - 1404px) / 2)); }
-  body.avec-presentatrice:not(.tv):not(.sna-actif) :is(.masthead, .intro) { padding-inline: 24px; }
+  body:not(.sans-presentatrice):not(.tv):not(.sna-actif) .tricolore { margin-right: -340px; }
+  body:not(.sans-presentatrice):not(.tv):not(.sna-actif) :is(main, .tabs, .filter-panel, .banniere, .site-footer) { margin-inline: max(20px, calc((100% - 1404px) / 2)); }
+  body:not(.sans-presentatrice):not(.tv):not(.sna-actif) :is(.masthead, .intro) { padding-inline: 24px; }
   /* Place réduite par la colonne : l'en-tête passe sur deux lignes au lieu d'écraser le nom du ministère. */
-  body.avec-presentatrice:not(.tv):not(.sna-actif) .masthead { flex-wrap: wrap; row-gap: 10px; }
-  body.avec-presentatrice:not(.tv):not(.sna-actif) .orgs { min-width: 300px; }
-  body.avec-presentatrice:not(.tv):not(.sna-actif) .masthead-actions { flex-wrap: wrap; }
+  body:not(.sans-presentatrice):not(.tv):not(.sna-actif) .masthead { flex-wrap: wrap; row-gap: 10px; }
+  body:not(.sans-presentatrice):not(.tv):not(.sna-actif) .orgs { min-width: 300px; }
+  body:not(.sans-presentatrice):not(.tv):not(.sna-actif) .masthead-actions { flex-wrap: wrap; }
 }
 .sokhnaci-widget.style-tv.presentatrice { top: 16px; right: 16px; bottom: 16px; width: 310px; }
 .sokhnaci-widget.style-tv.presentatrice .sokhnaci-card { height: 100%; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 10px 5px; padding: 12px; border-radius: 22px; background: linear-gradient(180deg, rgba(18, 45, 50, .97), rgba(11, 31, 35, .98)); }
@@ -1048,4 +1048,19 @@ main#contenu[aria-busy="true"] { min-height: calc(100vh + 240px); }
 @media (prefers-reduced-motion: no-preference) {
   .sokhnaci-widget.invite-question .sokhnaci-ask input { animation: sokhnaci-invite 1.6s ease-in-out 3; }
   @keyframes sokhnaci-invite { 50% { box-shadow: 0 0 0 6px rgba(143, 240, 196, .15); } }
+}
+
+/* Les cartes grandissent avec la largeur de leur cadre : quand Sokhna Ci est réduite, la page s'élargit et les
+   cartes deviennent plus grandes (environ 4/5 de la largeur du cadre, entre 520 et 900 px de haut). */
+.map-card { container-type: inline-size; }
+@supports (height: 1cqw) {
+  .map-card #carte, .map-card #carte-regions { height: clamp(600px, min(96cqw, 85vh), 900px); }
+}
+@media (max-width: 700px) {
+  .map-card #carte, .map-card #carte-regions { height: clamp(340px, 95cqw, 520px); }
+}
+/* Avec la colonne de Sokhna Ci, quand la place est juste, les boutons de l'en-tête sont d'emblée sur leur propre
+   ligne : le chargement tardif de la police ne peut plus les faire passer à la ligne (et décaler toute la page). */
+@media (min-width: 1100px) and (max-width: 1839px) {
+  body:not(.sans-presentatrice):not(.tv):not(.sna-actif) .masthead-actions { flex-basis: 100%; justify-content: flex-start; }
 }

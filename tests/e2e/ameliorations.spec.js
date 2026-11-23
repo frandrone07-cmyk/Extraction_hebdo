@@ -446,7 +446,7 @@ test("l'écran ne bouge pas : aucun décalage au chargement ni défilement horiz
       window.__decalage = 0; window.__sources = [];
       new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) {
         window.__decalage += e.value;
-        for (const src of e.sources || []) window.__sources.push(`${Math.round(e.startTime)}ms ${e.value.toFixed(3)} ${(src.node?.className || src.node?.nodeName || "?").toString().slice(0, 40)} ${Math.round(src.previousRect.y)}→${Math.round(src.currentRect.y)} h${Math.round(src.previousRect.height)}→${Math.round(src.currentRect.height)}`);
+        for (const src of e.sources || []) window.__sources.push(`${Math.round(e.startTime)}ms ${e.value.toFixed(3)} ${(src.node?.className || src.node?.nodeName || "?").toString().slice(0, 40)} y${Math.round(src.previousRect.y)}→${Math.round(src.currentRect.y)} x${Math.round(src.previousRect.x)}→${Math.round(src.currentRect.x)} w${Math.round(src.previousRect.width)}→${Math.round(src.currentRect.width)} h${Math.round(src.previousRect.height)}→${Math.round(src.currentRect.height)} [${document.body.className}]`);
       } }).observe({ type: "layout-shift", buffered: true });
     });
     await page.route("https://cdnjs.cloudflare.com/**", async (route) => {
@@ -487,6 +487,34 @@ test("après Ctrl+F5, la situation se déroule seule en sous-titres puis Sokhna 
   const phraseActive = page.locator(".sokhnaci-bubble .sok-phrase.actif");
   await expect(phraseActive).toHaveCount(1, { timeout: 10_000 }); // la présentation démarre sans aucun clic
   // Sans geste préalable : sous-titres + « Cliquez n’importe où… » ; sinon, lecture directe à voix haute.
-  await expect(phraseActive).toContainText("Avez-vous des questions", { timeout: 90_000 });
-  await expect(page.locator(".sokhnaci-widget")).toHaveClass(/invite-question/, { timeout: 15_000 });
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Avez-vous des questions, ou des éclaircissements à me demander ?");
+  await expect(page.locator(".sokhnaci-widget")).toHaveClass(/invite-question/, { timeout: 100_000 }); // à la fin de la présentation
+});
+
+test("ordres de navigation à Sokhna Ci : aller vers un onglet, zoomer la carte sur une région ou un district, vue nationale", async ({ page }) => {
+  const dire = async (texte) => {
+    await page.locator(".sokhnaci-ask input").fill(texte);
+    await page.locator(".sokhnaci-ask input").press("Enter");
+  };
+  await dire("dirige-toi vers évolution");
+  await expect(page.getByRole("tab", { name: /Évolution/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Voici l’onglet Évolution");
+  await dire("zoome sur Dakar");
+  await expect(page.getByRole("tab", { name: /Vue d’ensemble/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("Je zoome sur la région de Dakar");
+  await dire("zoom sur le district de Bakel");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("district de Bakel");
+  await dire("vue nationale");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("tout le Sénégal");
+  // Une question qui contient un nom d'onglet reste une question.
+  await dire("comment évolue Dakar");
+  await expect(page.locator(".sokhnaci-bubble")).toContainText("le taux des mois comparables est passé de");
+});
+
+test("les cartes grandissent quand Sokhna Ci est réduite", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const hauteur = () => page.evaluate(() => document.getElementById("carte").getBoundingClientRect().height);
+  const avant = await hauteur();
+  await page.locator(".sokhnaci-collapse").click();
+  await expect.poll(hauteur).toBeGreaterThan(avant + 50);
 });

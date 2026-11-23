@@ -4,6 +4,7 @@ import { interpreterEntree } from "./sokhnaci-cerveau.js";
 import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
 import { gesteA, humeurPhrase, planifierGestes } from "./sokhnaci-gestes.js";
 import { creerMarcheur } from "./marche.js";
+import { commandeNavigation, executerNavigation } from "./sokhnaci-navigation.js";
 import { effacerMiseEnAvant, mettreEnAvant } from "./mise-en-avant.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
@@ -659,6 +660,12 @@ function render(model, { speak = false } = {}) {
 
 function poserQuestion(texte) {
   if (!modeleCourant) return;
+  // « Dirige-toi vers Évolution », « zoome sur Dakar », « vue nationale », « passe en mode TV »…
+  const navigation = commandeNavigation(texte, modeleCourant);
+  if (navigation) {
+    executerNavigation(navigation).then((dialogue) => afficherDialogue(dialogue, null, { speak: voiceEnabled }));
+    return;
+  }
   const entree = interpreterEntree(texte, modeleCourant);
   if (entree.commande && MOUVEMENTS.has(entree.commande.action)) {
     document.dispatchEvent(new CustomEvent("sokhnaci:ouvrir-espace", { detail: { question: texte } }));
@@ -811,6 +818,9 @@ export function majPresentatrice() {
   const avant = widget.classList.contains("presentatrice");
   widget.classList.toggle("presentatrice", actif);
   document.body.classList.toggle("avec-presentatrice", actif);
+  // Sur grand écran, la place de la colonne est réservée par le CSS dès le premier affichage ;
+  // on ne la libère (classe « sans-presentatrice ») que lorsque Sokhna Ci est réduite.
+  document.body.classList.toggle("sans-presentatrice", !actif);
   if (avant === actif) return;
   marcheur?.placer(0);
   if (actif) { marcheur?.placer(70); marcheur?.marcherVers(0, 1300); }
@@ -824,7 +834,7 @@ export function initSokhnaci(model) {
   widget = document.createElement("section");
   widget.className = "sokhnaci-widget style-tv"; // même carte que l’assistante du mode TV
   // Créée directement dans sa forme finale (colonne réservée dès le premier affichage) : rien ne bouge au chargement.
-  if (document.body.classList.contains("avec-presentatrice")) widget.classList.add("presentatrice");
+  if (ECRAN_PRESENTATRICE.matches && !document.body.classList.contains("sans-presentatrice")) { widget.classList.add("presentatrice"); document.body.classList.add("avec-presentatrice"); }
   widget.setAttribute("aria-label", "Sokhnaci, guide vocal du tableau de bord");
   widget.innerHTML = `<div class="sokhnaci-card">
     <div class="sokhnaci-top">
