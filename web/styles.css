@@ -1085,3 +1085,32 @@ body.sokhnaci-reduite .map-card #carte, body.sokhnaci-reduite .map-card #carte-r
 
 /* Texte sombre sur le jaune « à surveiller » (étiquettes des cartes, cases de carte thermique) : contraste suffisant. */
 .carte-etiquette span.statut-surveiller, .heatmap-cell.statut-surveiller { color: var(--sur-surveiller); text-shadow: none; }
+
+/* ------------------------------------------------------------------ Pages « temps réel » (DHIS2 via le serveur intermédiaire) */
+.filtres-globaux { display: grid; gap: 12px; padding: 14px 16px; margin-bottom: 16px; }
+.fg-ligne { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-start; }
+.fg-bloc { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin: 0; min-width: 0; }
+.fg-bloc legend { font-weight: 700; font-size: .85rem; color: var(--muted); padding: 0 4px; }
+.fg-puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.fg-puce { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border: 1px solid var(--border-strong); border-radius: 999px; font-size: .85rem; cursor: pointer; background: var(--surface); }
+.fg-puce:has(input:checked) { background: var(--primary-soft); border-color: var(--primary); }
+.fg-actions { display: inline-flex; gap: 10px; margin-top: 6px; }
+.fg-lien { background: none; border: 0; padding: 4px 0; color: var(--primary-strong); text-decoration: underline; cursor: pointer; font: inherit; font-size: .85rem; }
+.fg-champ { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; font-weight: 600; color: var(--muted); }
+.fg-champ select, .fg-recherche { font: inherit; font-weight: 400; color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; padding: 6px 8px; min-height: 36px; }
+.fg-unites { min-width: min(280px, 100%); }
+.fg-liste { max-height: 170px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; display: grid; gap: 2px; font-weight: 400; color: var(--text); }
+.fg-liste label[hidden] { display: none; }
+.fg-desagregations details { font-weight: 400; color: var(--text); }
+.fg-desagregations label { display: block; padding-left: 10px; }
+.fg-reinitialiser { align-self: flex-end; margin-left: auto; font: inherit; font-size: .85rem; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-soft); color: var(--text); cursor: pointer; }
+.live-maj { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--muted); font-size: .9rem; margin: 0 0 12px; }
+.live-actualiser, .live-exports button { font: inherit; font-size: .85rem; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--primary); background: var(--primary-soft); color: var(--primary-strong); cursor: pointer; }
+.live-exports { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.live-erreur { border: 1px solid var(--critique); background: var(--critique-soft); color: var(--text); border-radius: var(--radius-sm); padding: 12px 14px; margin: 0 0 14px; }
+.live-erreur strong { color: var(--critique); }
+.live-chargement { color: var(--muted); font-style: italic; }
+.live-nd { color: var(--muted); font-style: italic; }
+.filtres-globaux button:focus-visible, .filtres-globaux input:focus-visible, .filtres-globaux select:focus-visible,
+.live-actualiser:focus-visible, .live-exports button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 700px) { .fg-reinitialiser { margin-left: 0; } .fg-unites { width: 100%; } }
