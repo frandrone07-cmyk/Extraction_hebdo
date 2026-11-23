@@ -2,7 +2,7 @@
 // globaux, en-tête « Mis à jour le … » avec Actualiser, messages d'erreur, exports CSV et Excel.
 // Aucune valeur n'est inventée : une donnée absente s'affiche « Donnée non disponible ».
 import { ErreurDhis2, etatService, libelleMiseAJour, lireConfiguration, lireDhis2 } from "./dhis2-client.js";
-import { barreFiltresHtml, brancherBarre, ecrireFiltresUrl, lireFiltresUrl } from "./filtres-globaux.js";
+import { barreFiltresHtml, brancherBarre, ecrireFiltresUrl, lireBarre, lireFiltresUrl } from "./filtres-globaux.js";
 
 export const NON_DISPONIBLE = "Donnée non disponible";
 export const echapper = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -64,9 +64,19 @@ export function enregistrerFiltres(etat) {
   const hash = ecrireFiltresUrl(etat, location.hash);
   history.replaceState(null, "", `#${hash}`);
 }
-export function barreFiltres(conteneur, etat, options, surChangement) {
+// Affiche la barre une fois ; elle ne se redessine que si nécessaire (niveau changé, boutons « Tout… »,
+// Réinitialiser) afin de ne pas faire perdre le focus clavier à chaque case cochée.
+export function barreFiltres(conteneur, etat, options, surChangement, { forcer = false } = {}) {
+  if (conteneur.firstElementChild && !forcer) return;
   conteneur.innerHTML = barreFiltresHtml(etat, options);
-  brancherBarre(conteneur.firstElementChild, etat, options, (nouvel) => { enregistrerFiltres(nouvel); surChangement(nouvel); });
+  const section = conteneur.firstElementChild;
+  brancherBarre(section, etat, options, (nouvel) => {
+    enregistrerFiltres(nouvel);
+    if (nouvel.niveau !== etat.niveau || JSON.stringify(lireBarre(section, etat)) !== JSON.stringify(nouvel)) {
+      barreFiltres(conteneur, nouvel, options, surChangement, { forcer: true });
+    }
+    surChangement(nouvel);
+  });
 }
 
 // ---------------------------------------------------------------- éléments d'interface

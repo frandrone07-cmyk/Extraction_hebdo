@@ -154,7 +154,9 @@ export default {
         const r = await appelerDhis2(new Request(`${url.origin}/api/system/info`), env, "system/info", "?fields=version,revision,serverDate", contexte);
         if (r.statut !== 200) return json({ configure: true, joignable: false, message: `DHIS2 a répondu ${r.statut}.` }, 200, origine);
         const info = JSON.parse(r.corps);
-        return json({ configure: true, joignable: true, version: info.version, dateServeur: info.serverDate }, 200, origine);
+        // Adresse publique de DHIS2 (pour les liens « ouvrir dans DHIS2 » ; DHIS2_PUBLIC_URL si elle diffère de DHIS2_URL).
+        const lienDhis2 = String(env.DHIS2_PUBLIC_URL || env.DHIS2_URL).replace(/\/+$/, "");
+        return json({ configure: true, joignable: true, version: info.version, dateServeur: info.serverDate, lienDhis2 }, 200, origine);
       } catch {
         return json({ configure: true, joignable: false, message: "DHIS2 est injoignable pour le moment." }, 200, origine);
       }

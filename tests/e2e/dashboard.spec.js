@@ -202,7 +202,7 @@ test("parle avec Sokhnaci animée", async ({ page }) => {
 });
 
 test("rend visibles les cellules manquantes par formulaire dans l’onglet qualité", async ({ page }) => {
-  await page.getByRole("tab", { name: /Qualité et méthode/ }).click();
+  await page.getByRole("tab", { name: /Qualité des données/ }).click();
   const rows = page.locator("#table-qualite-formulaires tbody tr[data-empty-count]");
   await expect(rows).toHaveCount(20);
   const missingCounts = await rows.evaluateAll((items) => items.map((item) => Number(item.dataset.emptyCount)));

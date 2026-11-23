@@ -1114,3 +1114,31 @@ body.sokhnaci-reduite .map-card #carte, body.sokhnaci-reduite .map-card #carte-r
 .filtres-globaux button:focus-visible, .filtres-globaux input:focus-visible, .filtres-globaux select:focus-visible,
 .live-actualiser:focus-visible, .live-exports button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 700px) { .fg-reinitialiser { margin-left: 0; } .fg-unites { width: 100%; } }
+.qualite-live { display: grid; gap: 16px; margin-bottom: 20px; }
+.ql-titre-extraction { font-size: 1.1rem; margin: 8px 0 0; color: var(--muted); }
+.ql-formulaires { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 10px; }
+.ql-outils { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ql-outils .segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+.ql-outils .segmented button { font: inherit; font-size: .85rem; padding: 6px 12px; border: 0; background: var(--surface); color: var(--text); cursor: pointer; }
+.ql-outils .segmented button[aria-pressed="true"] { background: var(--primary); color: var(--primary-contrast); }
+.ql-classement, .ql-compteurs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ql-classement li, .ql-compteurs li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; }
+
+.ql-sous-titre { font-size: .95rem; margin: 12px 0 6px; }
+.qualite-live a[target="_blank"] { color: var(--primary-strong); font-weight: 600; white-space: nowrap; }
+.live-dialogue { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 32px); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 0; background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); }
+.live-dialogue::backdrop { background: rgba(10, 20, 18, .5); }
+.live-dialogue-corps { padding: 16px 18px; display: grid; gap: 12px; }
+.live-dialogue-corps header { display: flex; justify-content: space-between; align-items: center; }
+.live-dialogue-corps h2 { margin: 0; font-size: 1.2rem; }
+.dlg-f-grille { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.dlg-f-grille h3 { font-size: .95rem; margin: 0 0 8px; }
+.dlg-f-grille input[type="search"] { width: 100%; margin-bottom: 8px; font: inherit; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); color: var(--text); }
+.dlg-f-liste { max-height: 50vh; }
+.dlg-f-choisis { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.dlg-f-choisis li { display: flex; gap: 6px; align-items: center; }
+.dlg-f-choisis input { flex: 1; min-width: 0; font: inherit; padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+.dlg-f-choisis button { font: inherit; font-size: .8rem; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-soft); color: var(--text); cursor: pointer; }
+.dlg-f-pied { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.dlg-f-pied input { font: inherit; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 8px; width: 120px; background: var(--surface); color: var(--text); }
+@media (max-width: 700px) { .dlg-f-grille { grid-template-columns: 1fr; } }

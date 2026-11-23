@@ -3,6 +3,7 @@ import { grapheBarres, grapheBarresEmpilees, grapheDoughnut, grapheLigne, couleu
 import { afficherDistricts, centrerRegion, detruireCarte, initCarte } from "./map.js";
 import { afficherRegions, detruireCarteRegions, initCarteRegions } from "./region-map.js";
 import { ouvrirFicheDistrict } from "./drawer.js";
+import { monterQualite } from "./page-qualite.js";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -320,7 +321,7 @@ export function apresRenduDistricts(modele) {
   });
 }
 
-// --------------------------- Qualité et méthode ---------------------------
+// --------------------------- Qualité des données ---------------------------
 
 function cellulesManquantesParFormulaire(modele) {
   const periodes = new Map();
@@ -360,7 +361,9 @@ export function renderQualite(modele) {
     ? `<ul>${districtsNonResolus.map((district) => `<li>${escapeHtml(district)}</li>`).join("")}</ul>`
     : `<p class="note">Tous les districts affichés possèdent une correspondance DHIS2 exploitable.</p>`;
   return `<div class="page-stack">
-    ${enteteSection("Qualité et méthode", "Contrôlez la complétude des données et consultez les règles de lecture.", `Seuils : ${seuils.critique}% / ${seuils.conforme}%`)}
+    ${enteteSection("Qualité des données", "Complétude, promptitude, règles de validation et valeurs aberrantes lues en direct dans DHIS2, puis contrôle de l’extraction hebdomadaire et règles de lecture.", `Seuils : ${seuils.critique}% / ${seuils.conforme}%`)}
+    <section id="qualite-live" class="qualite-live" aria-label="Qualité des données en temps réel (DHIS2)"></section>
+    <h2 class="ql-titre-extraction">Extraction hebdomadaire et méthode</h2>
     <section class="grid grid2"><article class="card"><div class="card-head"><div><h2>Cases renseignées par extraction</h2><p class="card-subtitle">Part des cellules district × période × formulaire contenant une valeur DHIS2.</p></div></div><div class="chartbox"><canvas id="ch-qualite"></canvas></div></article>
       <article class="card"><div class="card-head"><div><h2>Diagnostic des districts</h2><p class="card-subtitle">Correspondance des unités avec le gabarit d’extraction.</p></div></div><div class="diag-summary"><span class="diag-count ${districtsNonResolus.length ? "warn" : ""}">${districtsNonResolus.length}</span><div><strong>${districtsNonResolus.length ? "Correspondance à vérifier" : "Correspondances reconnues"}</strong><div class="note">${districtsNonResolus.length ? `${districtsNonResolus.length} district(s) sans UID dans les données affichées.` : "Aucun district sans UID détecté pour cette sélection."}</div></div></div>${unresolvedMarkup}</article></section>
     <section class="card"><div class="card-head"><div><h2>Cellules vides par formulaire</h2><p class="card-subtitle">Les valeurs absentes sont comptées et détaillées par district, région et période (${escapeHtml(modele.selection.periode)}).</p></div></div><div class="table-scroll"><table id="table-qualite-formulaires"><thead><tr><th>Formulaire</th><th>Cellules renseignées</th><th>Cellules vides</th><th>Couverture</th><th>Détail des cellules vides</th></tr></thead><tbody>${lignesQualite || `<tr><td colspan="5"><p class="empty-state">Aucun formulaire disponible pour cette sélection.</p></td></tr>`}</tbody></table></div></section>
@@ -370,6 +373,7 @@ export function renderQualite(modele) {
   </div>`;
 }
 export function apresRenduQualite(modele) {
+  monterQualite(document.getElementById("qualite-live"));
   grapheLigne("ch-qualite", modele.evolution.semaines.map(formaterDate), [{ label: "Cases renseignées", data: modele.evolution.taux_remplissage }], { percent: true });
 }
 

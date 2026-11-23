@@ -33,10 +33,10 @@ async function poserEspace(page, question) {
   await page.locator("#sna-question").press("Enter");
 }
 
-test("l'onglet Sokhna Ci AI vient en dernière position, après Qualité et méthode", async ({ page }) => {
+test("l'onglet Sokhna Ci AI vient en dernière position, après Qualité des données", async ({ page }) => {
   const noms = (await page.locator('[role="tab"][data-tab]').allInnerTexts()).map((texte) => texte.replace(/^\S\s+/, "").trim());
   expect(noms.at(-1)).toBe("Sokhna Ci AI");
-  expect(noms.at(-2)).toBe("Qualité et méthode");
+  expect(noms.at(-2)).toBe("Qualité des données");
 });
 
 test("le modèle de données se construit vite (index par district, plus de balayage quadratique)", async ({ page }) => {

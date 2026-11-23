@@ -12,6 +12,8 @@ export function ecrireEtatHash(partiel) {
   for (const key of CLES_ETAT) if (etat[key]) params.set(key, etat[key]);
   const current = new URLSearchParams(location.hash.slice(1));
   if (current.has("tv")) params.set("tv", current.get("tv"));
+  // Filtres globaux des pages temps réel (fa, fm, fp, fn, fu, fd) : conservés d'un onglet à l'autre.
+  for (const key of ["fa", "fm", "fp", "fn", "fu", "fd"]) if (current.has(key)) params.set(key, current.get(key));
   history.replaceState(null, "", params.size ? `#${params.toString()}` : location.pathname + location.search);
 }
 

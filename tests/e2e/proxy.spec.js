@@ -75,7 +75,7 @@ test("proxy : l'analyse de validation ne peut rien enregistrer dans DHIS2 (persi
 
 test("proxy : état du service et version de DHIS2 lue via /api/system/info", async () => {
   const sante = await (await proxy.fetch(requete("sante"), environnement(), null)).json();
-  expect(sante).toMatchObject({ configure: true, joignable: true, version: "2.40.4" });
+  expect(sante).toMatchObject({ configure: true, joignable: true, version: "2.40.4", lienDhis2: "https://dhis2.test/dhis" });
   const nonConfigure = await (await proxy.fetch(requete("sante"), environnement({ DHIS2_URL: "" }), null)).json();
   expect(nonConfigure.configure).toBe(false);
 });
