@@ -442,7 +442,13 @@ test("avatar 3D : la forme des lèvres suit le timbre de la voix (grave → arro
 test("l'écran ne bouge pas : aucun décalage au chargement ni défilement horizontal, du téléphone au grand écran", async ({ browser }) => {
   for (const [largeur, hauteur] of [[360, 740], [768, 1024], [1280, 720], [1920, 1080]]) {
     const page = await browser.newPage({ viewport: { width: largeur, height: hauteur } });
-    await page.addInitScript(() => { window.__decalage = 0; new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) window.__decalage += e.value; }).observe({ type: "layout-shift", buffered: true }); });
+    await page.addInitScript(() => {
+      window.__decalage = 0; window.__sources = [];
+      new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) {
+        window.__decalage += e.value;
+        for (const src of e.sources || []) window.__sources.push(`${Math.round(e.startTime)}ms ${e.value.toFixed(3)} ${(src.node?.className || src.node?.nodeName || "?").toString().slice(0, 40)} ${Math.round(src.previousRect.y)}→${Math.round(src.currentRect.y)} h${Math.round(src.previousRect.height)}→${Math.round(src.currentRect.height)}`);
+      } }).observe({ type: "layout-shift", buffered: true });
+    });
     await page.route("https://cdnjs.cloudflare.com/**", async (route) => {
       const url = new URL(route.request().url());
       if (url.pathname.endsWith("/leaflet.css")) return route.fulfill({ status: 200, contentType: "text/css", body: leafletCss });
@@ -455,9 +461,9 @@ test("l'écran ne bouge pas : aucun décalage au chargement ni défilement horiz
     await page.goto("/");
     await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
     await page.waitForTimeout(1500);
-    const mesure = await page.evaluate(() => ({ decalage: window.__decalage, debordement: document.documentElement.scrollWidth - window.innerWidth }));
+    const mesure = await page.evaluate(() => ({ decalage: window.__decalage, sources: window.__sources, debordement: document.documentElement.scrollWidth - window.innerWidth }));
     expect(mesure.debordement, `débordement horizontal à ${largeur}px`).toBeLessThanOrEqual(0);
-    expect(mesure.decalage, `décalage de mise en page à ${largeur}px`).toBeLessThan(0.1);
+    expect(mesure.decalage, `décalage de mise en page à ${largeur}px : ${mesure.sources.join(" | ")}`).toBeLessThan(0.1);
     await page.close();
   }
 });
