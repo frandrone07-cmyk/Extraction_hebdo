@@ -5,13 +5,11 @@ run-name: Extraction DHIS2 · ${{ github.event.inputs.request_id || 'planifiée'
 # mardi si la semaine du lundi manque + declenchement manuel.
 on:
   schedule:
-    - cron: "0 0 * * 1"   # lundi 00:00 UTC = 00:00 Dakar
-    # GitHub retarde ou abandonne parfois les tâches planifiées à minuit (heure de pointe) : relances le lundi,
-    # qui n'extraient que si la semaine manque encore (voir job check-week), puis rattrapage du mardi.
-    - cron: "20 0 * * 1"  # lundi 00:20
-    - cron: "0 2 * * 1"   # lundi 02:00
-    - cron: "0 5 * * 1"   # lundi 05:00
-    - cron: "0 6 * * 2"   # mardi 06:00 UTC, rattrapage conditionnel
+    # Lundi dès 00:00 UTC (= 00:00 Dakar). GitHub retarde ou abandonne souvent les tâches planifiées à minuit (heure de pointe) : le lundi, une tentative
+    # toutes les 15 minutes jusqu'à 05:45. La première exécutée extrait ; les suivantes voient que la semaine est
+    # déjà présente (job check-week) et s'arrêtent en quelques secondes. Jamais de double extraction.
+    - cron: "*/15 0-5 * * 1"   # lundi 00:00, 00:15, 00:30 … 05:45
+    - cron: "0 6 * * 2"   # mardi 06:00 UTC, dernier rattrapage conditionnel
   workflow_dispatch:
     inputs:
       mois:
