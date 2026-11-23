@@ -16,6 +16,7 @@ const ONGLETS = [
   { onglet: "evolution", libelle: "Évolution", motif: /\bevolution\b/ },
   { onglet: "districts", libelle: "Districts", motif: /\b(onglet districts?|liste des districts|vers les districts|aux districts)\b/ },
   { onglet: "qualite", libelle: "Qualité des données", motif: /\b(qualite|methode)\b/ },
+  { onglet: "fars", libelle: "Indicateurs FARS", motif: /\b(fars|indicateurs fars|indicateurs du fars)\b/ },
   { onglet: "assistante", libelle: "Sokhna Ci AI", motif: /\b(sokhna ci ai|espace complet|espace sokhna|ton espace)\b/ },
 ];
 // « centre » seul ne suffit pas (district « Dakar Centre ») : il faut « centre sur », « recentre », « zoome »…

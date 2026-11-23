@@ -93,7 +93,7 @@ function valueColor(value, thresholds) {
   return color("conforme");
 }
 
-export function grapheBarres(id, labels, values, { horizontal = false, couleurParValeur = null, statut = false, seuils = { critique: 70, conforme: 90 }, onSelect = null, etiquettes = false } = {}) {
+export function grapheBarres(id, labels, values, { horizontal = false, couleurParValeur = null, statut = false, seuils = { critique: 70, conforme: 90 }, onSelect = null, etiquettes = false, pourcent = true } = {}) {
   if (!disponible()) return;
   detruire(id);
   const canvas = document.getElementById(id);
@@ -104,10 +104,13 @@ export function grapheBarres(id, labels, values, { horizontal = false, couleurPa
     : statut ? values.map((value) => valueColor(value, seuils)) : color("primaire");
   options.indexAxis = horizontal ? "y" : "x";
   options.plugins.legend.display = false;
-  options.plugins.datalabels = datalabelsOptions(etiquettes, (value) => (value === null || value === undefined ? "" : `${value}%`));
+  const suffixe = pourcent ? "%" : "";
+  options.plugins.datalabels = datalabelsOptions(etiquettes, (value) => (value === null || value === undefined ? "" : `${pourcent ? value : value.toLocaleString("fr-FR")}${suffixe}`));
   options.plugins.datalabels.anchor = horizontal ? "end" : "end";
   options.plugins.datalabels.align = horizontal ? "end" : "end";
-  options.scales = horizontal
+  // Valeurs qui ne sont pas des pourcentages (indicateurs FARS) : échelle libre, sans « % ».
+  if (!pourcent) options.scales = { [horizontal ? "x" : "y"]: { ...axisOptions(), beginAtZero: true }, [horizontal ? "y" : "x"]: { ...axisOptions(), grid: { display: false } } };
+  else options.scales = horizontal
     ? { x: { ...axisOptions(), beginAtZero: true, max: 100, ticks: { ...axisOptions().ticks, callback: (value) => `${value}%` } }, y: { ...axisOptions(), grid: { display: false } } }
     : { x: { ...axisOptions(), grid: { display: false } }, y: { ...axisOptions(), beginAtZero: true, max: 100, ticks: { ...axisOptions().ticks, callback: (value) => `${value}%` } } };
   INSTANCES.set(id, new Chart(canvas, {

@@ -1142,3 +1142,10 @@ body.sokhnaci-reduite .map-card #carte, body.sokhnaci-reduite .map-card #carte-r
 .dlg-f-pied { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .dlg-f-pied input { font: inherit; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 8px; width: 120px; background: var(--surface); color: var(--text); }
 @media (max-width: 700px) { .dlg-f-grille { grid-template-columns: 1fr; } }
+.fa-choix { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: flex-end; margin: 0 0 12px; }
+.fa-variation { font-weight: 700; white-space: nowrap; }
+.fa-variation.hausse, .fa-variation.baisse { color: var(--text); } /* neutre : une hausse n’est pas toujours une bonne nouvelle (ex. mortalité) */
+.fa-variation.stable { color: var(--muted); }
+.card-subtitle select { font: inherit; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+.dlg-fars-table input { font: inherit; width: 100%; min-width: 70px; padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
+.dlg-fars-table button { font: inherit; font-size: .8rem; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-soft); color: var(--text); cursor: pointer; }

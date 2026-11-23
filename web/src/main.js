@@ -14,6 +14,7 @@ import {
   renderQualite, apresRenduQualite,
 } from "./tabs.js";
 import { apresRenduEspace, poserDansEspace, renderEspace } from "./sokhnaci-espace.js";
+import { apresRenduFars, renderFars } from "./page-fars.js";
 
 const RENDUS = {
   vue: { render: renderVue, apres: apresRenduVue },
@@ -21,6 +22,7 @@ const RENDUS = {
   evolution: { render: renderEvolution, apres: apresRenduEvolution },
   districts: { render: renderDistricts, apres: apresRenduDistricts },
   qualite: { render: renderQualite, apres: apresRenduQualite },
+  fars: { render: renderFars, apres: apresRenduFars },
   assistante: { render: renderEspace, apres: apresRenduEspace },
 };
 const SELECTORS = {
