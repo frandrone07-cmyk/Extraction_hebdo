@@ -18,7 +18,10 @@ const UNITES = {
 };
 
 async function simulerProxy(page, { configure = true } = {}) {
-  await page.addInitScript((url) => { window.__PROXY_URL__ = url; }, PROXY);
+  await page.addInitScript(([url, form]) => {
+    window.__PROXY_URL__ = url;
+    if (!localStorage.getItem("suivi-formulaires-v1")) localStorage.setItem("suivi-formulaires-v1", JSON.stringify([{ uid: form, nom: "Paludisme", ordre: 0 }]));
+  }, [PROXY, FORM]);
   await page.route(`${PROXY}/**`, async (route) => {
     const url = new URL(route.request().url());
     const json = (corps, statut = 200) => route.fulfill({ status: statut, contentType: "application/json", headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Expose-Headers": "X-Mis-A-Jour", "X-Mis-A-Jour": "2026-11-23T09:05:00Z" }, body: JSON.stringify(corps) });
@@ -28,6 +31,12 @@ async function simulerProxy(page, { configure = true } = {}) {
     if (url.pathname === "/api/dataSets.json") return json({ dataSets: [{ id: FORM, displayName: "Paludisme", periodType: "Monthly" }] });
     if (url.pathname === "/api/analytics.json") {
       if (url.searchParams.getAll("dimension").some((d) => d.includes("LAST_10_YEARS"))) return json({ rows: [[`${FORM}.ACTUAL_REPORTS`, "2025", "10"], [`${FORM}.ACTUAL_REPORTS`, "2026", "12"]] });
+      // Qualité par district, mois par mois (dx × pe × ou).
+      if (url.searchParams.getAll("dimension").some((d) => d.startsWith("pe:")) && url.searchParams.getAll("dimension").some((d) => d.includes("LEVEL-3"))) {
+        return json({ headers: [{ name: "dx" }, { name: "pe" }, { name: "ou" }, { name: "value" }], rows: [
+          [`${FORM}.EXPECTED_REPORTS`, "202610", "DiStRiCt001", "20"], [`${FORM}.ACTUAL_REPORTS`, "202610", "DiStRiCt001", "12"],
+          [`${FORM}.EXPECTED_REPORTS`, "202609", "DiStRiCt001", "20"], [`${FORM}.ACTUAL_REPORTS`, "202609", "DiStRiCt001", "20"]] });
+      }
       return json({
         headers: [{ name: "dx" }, { name: "ou" }, { name: "value" }],
         rows: [[`${FORM}.EXPECTED_REPORTS`, "ReGiOn00001", "100"], [`${FORM}.ACTUAL_REPORTS`, "ReGiOn00001", "95"], [`${FORM}.ACTUAL_REPORTS_ON_TIME`, "ReGiOn00001", "60"],
@@ -52,12 +61,17 @@ test("qualité des données : complétude DHIS2 affichée avec date de mise à j
   await simulerProxy(page);
   await page.goto("/#tab=qualite");
   const live = page.locator("#qualite-live");
-  await expect(live.locator(".live-maj")).toContainText(/Mis à jour le \d{2}\/\d{2}\/2026 à \d{2}:\d{2}/, { timeout: 20_000 });
+  await expect(live.locator(".live-maj").first()).toContainText(/Mis à jour le \d{2}\/\d{2}\/2026 à \d{2}:\d{2}/, { timeout: 20_000 });
   await expect(page.getByRole("tab", { name: /Qualité des données/ })).toHaveAttribute("aria-selected", "true");
   const synthese = live.locator("#ql-synthese tbody tr").first();
   await expect(synthese).toContainText("Paludisme");
   await expect(synthese).toContainText("130"); // 100 + 30 attendus
   await expect(live.locator("#ql-detail")).toContainText("Dakar");
+  // Qualité par district, mensuelle et annuelle : Pikine 100 % en septembre, 60 % en octobre, 80 % sur l'année.
+  const districts = live.locator("#ql-table-districts");
+  await expect(districts).toContainText("Pikine", { timeout: 20_000 });
+  await expect(districts.locator("tbody tr").first()).toContainText("60");
+  await expect(districts.locator("tbody tr").first()).toContainText("80,0 %");
   // Kolda : 30 rapports attendus, aucun reçu → listé parmi les unités sans rapport, avec un lien vers DHIS2.
   const sansRapport = live.locator(".card", { hasText: "Unités sans aucun rapport" });
   await expect(sansRapport).toContainText("Kolda");

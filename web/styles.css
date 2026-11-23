@@ -1149,3 +1149,22 @@ body.sokhnaci-reduite .map-card #carte, body.sokhnaci-reduite .map-card #carte-r
 .card-subtitle select { font: inherit; padding: 2px 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
 .dlg-fars-table input { font: inherit; width: 100%; min-width: 70px; padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
 .dlg-fars-table button { font: inherit; font-size: .8rem; padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-soft); color: var(--text); cursor: pointer; }
+/* Qualité par district (mensuelle et annuelle) : cases colorées selon les seuils. */
+.ql-districts-table table { font-size: .85rem; }
+.ql-districts-table .heatmap-cell { text-align: center; font-weight: 700; min-width: 48px; }
+.ql-districts-table .heatmap-cell.statut-critique { background: var(--critique); color: #fff; }
+.ql-districts-table .heatmap-cell.statut-surveiller { background: var(--surveiller); color: var(--sur-surveiller); }
+.ql-districts-table .heatmap-cell.statut-conforme { background: var(--conforme); color: #fff; }
+.ql-districts-table .heatmap-cell.statut-inconnu { background: var(--inconnu-soft); color: var(--muted); }
+.ql-districts-table tbody th { white-space: nowrap; }
+.ql-liste-formulaires { margin: 6px 0 0; padding-left: 20px; columns: 2 280px; font-size: .85rem; }
+.ql-formulaires details summary { cursor: pointer; font-weight: 600; }
+/* Situation des indicateurs de performance (FARS) : présentation du canevas de revue. */
+.fa-tableau thead th { background: #0b5a43; color: #fff; }
+.fa-tableau .fa-programme { font-size: 1.05rem; font-weight: 800; vertical-align: middle; background: var(--surface-soft); min-width: 110px; }
+.fa-actions { white-space: nowrap; }
+.fa-actions button { font: inherit; font-size: .78rem; padding: 3px 8px; margin: 0 2px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface-soft); color: var(--text); cursor: pointer; }
+.fa-actions button[data-associer] { border-color: var(--primary); color: var(--primary-strong); }
+/* Détail formulaire × unité : hauteur limitée, défilement interne avec en-tête fixe. */
+#ql-vue > .table-scroll, .ql-districts-table { max-height: 640px; overflow: auto; }
+#ql-vue thead th, .ql-districts-table thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }

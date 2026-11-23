@@ -23,6 +23,9 @@ test("FARS : cible, variation, tableau multi-indicateurs sans valeur inventée",
   expect(statutCible(65, 80)).toBe("surveiller");
   expect(statutCible(50, 80)).toBe("critique");
   expect(statutCible(50, null)).toBe("inconnu");
+  expect(statutCible(1.8, 2, "bas")).toBe("conforme"); // cible maximale (ex. taux de décès)
+  expect(statutCible(2.4, 2, "bas")).toBe("surveiller");
+  expect(statutCible(3, 2, "bas")).toBe("critique");
   expect(variation(72.5, 70)).toEqual({ ecart: 2.5, sens: "hausse", fleche: "▲" });
   expect(variation(70, null).sens).toBeNull();
   const t = tableauIndicateurs([
@@ -58,7 +61,8 @@ async function simulerProxy(page, config) {
       if (dims.includes("CaTAge00001")) return json({ headers: [{ name: "dx" }, { name: "CaTAge00001" }, { name: "value" }], rows: [["InDiCaTeUr1", "OpT00000001", "40"], ["InDiCaTeUr1", "OpT00000002", "88"]] });
       if (dims.includes("LEVEL-2")) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "value" }, { name: "numerator" }, { name: "denominator" }], rows: [["InDiCaTeUr1", "ReGiOn00001", "82", "82", "100"], ["InDiCaTeUr1", "ReGiOn00002", "55", "55", "100"]], metaData: { items: { ReGiOn00001: { name: "Dakar" }, ReGiOn00002: { name: "Kolda" } } } });
       if (dims.includes("pe:")) return json({ headers: [{ name: "dx" }, { name: "pe" }, { name: "value" }, { name: "numerator" }, { name: "denominator" }], rows: [["InDiCaTeUr1", "202609", "70", "70", "100"], ["InDiCaTeUr1", "202610", "75.3", "753", "1000"]] });
-      return json({ rows: [] });
+      // Réalisation agrégée sur toute la période (périodes en filtre).
+      return json({ headers: [{ name: "dx" }, { name: "value" }, { name: "numerator" }, { name: "denominator" }], rows: [["InDiCaTeUr1", "74", "301", "400"]] });
     }
     return route.fulfill({ status: 404, body: "{}" });
   });
@@ -71,27 +75,45 @@ async function simulerProxy(page, config) {
   await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
 }
 
-test("FARS : onglet avant Sokhna Ci, tableau avec numérateur, dénominateur, variation, cible, comparaison et désagrégation", async ({ page }) => {
-  await simulerProxy(page, { formulaires: [], fars: { groupe: null, indicateurs: [{ uid: "InDiCaTeUr1", nom: "CPN4", programme: "Santé de la mère" }], cibles: { InDiCaTeUr1: 80 } } });
+const LISTE = [
+  { id: "InDiCaTeUr1", uid: "InDiCaTeUr1", nom: "Taux de couverture en CPN1", programme: "SRMNIA_Nut", cible: 80, sens: "haut" },
+  { id: "a-associer-1", uid: null, nom: "Espace ado-jeune", programme: "SRMNIA_Nut", cible: 41.6, sens: "haut" },
+];
+
+test("FARS : situation des indicateurs (cible, réalisation, écart, statut), comparaison, désagrégation, retrait", async ({ page }) => {
+  await simulerProxy(page, { formulaires: [], fars: { indicateurs: [], cibles: {} } });
+  await page.addInitScript((liste) => { if (!sessionStorage.getItem("init")) { localStorage.setItem("suivi-fars-v1", JSON.stringify(liste)); sessionStorage.setItem("init", "1"); } }, LISTE);
   await page.goto("/#tab=fars&fa=2026&fm=9,10");
   const live = page.locator("#fars-live");
   await expect(live.locator(".live-maj")).toContainText("Mis à jour le", { timeout: 20_000 });
   const ligne = live.locator("#fa-tableau tbody tr").first();
-  await expect(ligne).toContainText("CPN4");
-  await expect(ligne).toContainText("Octobre 2026");
-  await expect(ligne).toContainText("753");
-  await expect(ligne).toContainText(/1\s000/); // séparateur de milliers français (espace insécable)
+  await expect(ligne).toContainText("SRMNIA_Nut");
+  await expect(ligne).toContainText("Taux de couverture en CPN1");
+  await expect(ligne).toContainText("74"); // réalisation sur toute la période (septembre + octobre)
+  await expect(ligne).toContainText("-6"); // écart à la cible
+  await expect(ligne).toContainText("301");
+  await expect(ligne).toContainText("400");
   await expect(ligne).toContainText("▲");
   await expect(ligne).toContainText("Proche de la cible");
+  const aAssocier = live.locator("#fa-tableau tbody tr").nth(1);
+  await expect(aAssocier).toContainText("à associer");
+  await expect(aAssocier.getByRole("button", { name: "Associer" })).toBeVisible();
   await expect(live.locator("#fa-comparaison")).toContainText("Kolda");
   await expect(live.locator("#fa-desagregation")).toContainText("Moins de 15 ans");
-  await expect(live.locator('select[data-fa="programme"]')).toHaveValue("Santé de la mère");
+  // Retirer un indicateur du suivi (confirmation acceptée) : la ligne disparaît et le choix est gardé.
+  page.once("dialog", (d) => d.accept());
+  await aAssocier.getByRole("button", { name: /Retirer/ }).click();
+  await expect(live.locator("#fa-tableau tbody tr")).toHaveCount(1);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("suivi-fars-v1")).length)).toBe(1);
+  await expect(live.getByRole("button", { name: /Rétablir la liste par défaut/ })).toBeVisible();
 });
 
-test("FARS : sans indicateur configuré, la page invite à les choisir (aucun chiffre inventé)", async ({ page }) => {
-  await simulerProxy(page, { formulaires: [], fars: { groupe: null, indicateurs: [], cibles: {} } });
-  await page.goto("/#tab=fars");
-  await expect(page.locator("#fars-live")).toContainText("Aucun indicateur FARS n’est encore configuré", { timeout: 20_000 });
-  await expect(page.locator("#fars-live table")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Configurer les indicateurs FARS/ })).toBeVisible();
+test("FARS : par défaut, les indicateurs du canevas par programme, sans chiffre inventé", async ({ page }) => {
+  await simulerProxy(page, { formulaires: [], fars: { indicateurs: [], cibles: {} } });
+  await page.goto("/#tab=fars&fa=2026&fm=9,10");
+  const tableau = page.locator("#fa-tableau");
+  await expect(tableau).toContainText("Couverture RR 1", { timeout: 20_000 });
+  for (const programme of ["SRMNIA_Nut", "Paludisme", "Tuberculose", "PEV", "Santé com.", "MNT", "MTN"]) await expect(tableau.locator("th.fa-programme", { hasText: programme })).toHaveCount(1);
+  await expect(tableau).toContainText("Donnée non disponible"); // valeurs absentes du DHIS2 simulé : jamais de faux chiffre
+  await expect(page.getByRole("button", { name: /Ajouter un indicateur/ })).toBeVisible();
 });

@@ -3,6 +3,7 @@
 // l'adresse (lien partageable). Les fonctions de transformation sont pures et testées.
 
 export const MOIS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+const MOIS_COURTS = ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."];
 export const PERIODICITES = { M: "Mensuelle", T: "Trimestrielle", A: "Annuelle" };
 // Niveaux de la pyramide sanitaire dans DHIS2 Sénégal. DÉPEND DE VOTRE DHIS2 : niveau 1 = pays, 2 = région (DRS),
 // 3 = district ; à vérifier dans /api/organisationUnitLevels si la hiérarchie change.
@@ -95,7 +96,7 @@ export function dimensionsDesagregation(etat) {
 }
 
 export function resumeFiltres(etat) {
-  const mois = etat.mois.length === 12 ? "tous les mois" : etat.mois.map((m) => MOIS[m - 1].slice(0, 4).toLowerCase()).join(", ");
+  const mois = etat.mois.length === 12 ? "tous les mois" : etat.mois.map((m) => MOIS_COURTS[m - 1].toLowerCase()).join(", ");
   return `${etat.annees.join(", ")} · ${mois} · ${PERIODICITES[etat.periodicite].toLowerCase()} · ${NIVEAUX[etat.niveau].libelle.toLowerCase()}${etat.unites.length ? ` (${etat.unites.length} sélectionnée${etat.unites.length > 1 ? "s" : ""})` : ""}`;
 }
 
@@ -114,7 +115,7 @@ export function barreFiltresHtml(etat, options) {
         <button type="button" class="fg-lien" data-fg="toutes-annees">Toutes les années</button>
       </fieldset>
       <fieldset class="fg-bloc fg-mois"><legend>Mois</legend>
-        <div class="fg-puces">${MOIS.map((m, i) => `<label class="fg-puce"><input type="checkbox" name="fg-mois" value="${i + 1}" ${etat.mois.includes(i + 1) ? "checked" : ""}> ${m.slice(0, 4)}.</label>`).join("")}</div>
+        <div class="fg-puces">${MOIS.map((m, i) => `<label class="fg-puce"><input type="checkbox" name="fg-mois" value="${i + 1}" ${etat.mois.includes(i + 1) ? "checked" : ""}> ${MOIS_COURTS[i]}</label>`).join("")}</div>
         <span class="fg-actions"><button type="button" class="fg-lien" data-fg="tous-mois">Tout sélectionner</button><button type="button" class="fg-lien" data-fg="aucun-mois">Tout désélectionner</button></span>
       </fieldset>
     </div>

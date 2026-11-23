@@ -1,8 +1,9 @@
 // « Ajouter un formulaire » : choix des formulaires DHIS2 suivis (liste /api/dataSets avec recherche), renommage,
-// ordre, retrait. La liste est enregistrée côté serveur (Cloudflare KV, protégée par le code PIN) et sert à la
-// complétude, à la qualité des données et aux exports. Rien n'est écrit dans DHIS2.
-import { enregistrerConfiguration, lireDhis2 } from "./dhis2-client.js";
-import { echapper, erreurHtml, metadonnees, viderMemoire } from "./pages-live.js";
+// ordre, retrait. La liste est gardée dans le navigateur (aucun code PIN) et sert à la complétude, à la qualité
+// des données et aux exports. Par défaut : les formulaires de l'extraction hebdomadaire. Rien n'est écrit dans DHIS2.
+import { lireDhis2 } from "./dhis2-client.js";
+import { echapper, erreurHtml } from "./pages-live.js";
+import { enregistrerFormulaires, formulairesSuivis, reinitialiserFormulaires } from "./suivi-local.js";
 
 export function nettoyerFormulaires(liste) {
   return liste.filter((f) => /^[A-Za-z0-9]{11}$/.test(f.uid)).map((f, ordre) => ({ uid: f.uid, nom: String(f.nom || "").trim().slice(0, 120) || f.uid, ordre }));
@@ -24,17 +25,15 @@ export async function ouvrirGestionFormulaires(apresEnregistrement) {
   dialogue.showModal();
 
   const contenu = dialogue.querySelector("#dlg-f-contenu");
-  let meta;
   let disponibles;
   try {
-    meta = await metadonnees();
     const r = await lireDhis2("dataSets.json", { fields: "id,displayName,periodType", paging: "false" });
     disponibles = (r.donnees?.dataSets || []).map((d) => ({ uid: d.id, nom: d.displayName, periodicite: d.periodType })).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
   } catch (erreur) {
     contenu.innerHTML = erreurHtml(erreur);
     return;
   }
-  let choisis = nettoyerFormulaires([...(meta.config.formulaires || [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0)));
+  let choisis = nettoyerFormulaires(formulairesSuivis());
 
   const dessinerChoisis = () => {
     const zone = contenu.querySelector("#dlg-f-choisis");
@@ -52,8 +51,8 @@ export async function ouvrirGestionFormulaires(apresEnregistrement) {
         <div class="fg-liste dlg-f-liste" role="group" aria-label="Formulaires DHIS2">${disponibles.map((d) => `<label data-nom="${echapper(d.nom.toLowerCase())}"><input type="checkbox" name="dlg-f-ds" value="${d.uid}"> ${echapper(d.nom)} <small>(${echapper(d.periodicite || "")})</small></label>`).join("")}</div></section>
       <section><h3>Suivis, dans l’ordre d’affichage</h3><ol id="dlg-f-choisis" class="dlg-f-choisis"></ol></section>
     </div>
-    <footer class="dlg-f-pied"><label>Code PIN <input type="password" id="dlg-f-pin" inputmode="numeric" autocomplete="off" required></label>
-      <button type="button" class="live-actualiser" id="dlg-f-enregistrer">Enregistrer</button><span id="dlg-f-message" role="status"></span></footer>`;
+    <footer class="dlg-f-pied"><button type="button" class="live-actualiser" id="dlg-f-enregistrer">Appliquer</button>
+      <button type="button" class="fg-lien" id="dlg-f-defaut">Rétablir les formulaires de l’extraction hebdomadaire</button><span id="dlg-f-message" role="status"></span></footer>`;
   dessinerChoisis();
 
   contenu.querySelector("#dlg-f-recherche").addEventListener("input", (e) => {
@@ -77,18 +76,14 @@ export async function ouvrirGestionFormulaires(apresEnregistrement) {
     else if (b.dataset.descendre) echanger(Number(b.dataset.descendre), Number(b.dataset.descendre) + 1);
     else if (b.dataset.retirer) { choisis.splice(Number(b.dataset.retirer), 1); dessinerChoisis(); }
     else if (b.id === "dlg-f-enregistrer") {
-      const message = contenu.querySelector("#dlg-f-message");
-      const pin = contenu.querySelector("#dlg-f-pin").value.trim();
-      if (!pin) { message.textContent = "Saisissez le code PIN."; return; }
-      message.textContent = "Enregistrement…";
-      try {
-        await enregistrerConfiguration({ ...meta.config, formulaires: nettoyerFormulaires(choisis) }, pin);
-        viderMemoire();
-        dialogue.close();
-        apresEnregistrement?.();
-      } catch (erreur) {
-        message.textContent = erreur.message;
-      }
+      if (!choisis.length) { contenu.querySelector("#dlg-f-message").textContent = "Gardez au moins un formulaire."; return; }
+      enregistrerFormulaires(nettoyerFormulaires(choisis));
+      dialogue.close();
+      apresEnregistrement?.();
+    } else if (b.id === "dlg-f-defaut") {
+      reinitialiserFormulaires();
+      dialogue.close();
+      apresEnregistrement?.();
     }
   });
 }

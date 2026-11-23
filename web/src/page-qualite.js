@@ -13,10 +13,14 @@ import {
   tableauCompletude, unitesSansRapport, valeursNegatives, versionAuMoins,
 } from "./qualite-calculs.js";
 import { ouvrirGestionFormulaires } from "./formulaires-config.js";
+import { formulairesSuivis } from "./suivi-local.js";
+import { tableauDistrictsMensuel } from "./qualite-calculs.js";
 
 let vue = "tableau"; // tableau | barres | courbes
 let dernier = null; // dernières données calculées (exports, résumé pour Sokhna Ci)
 let generation = 0;
+let formulaireDistricts = "tous"; // tableau mensuel/annuel par district : un formulaire ou tous
+let anneeDistricts = null;
 
 const cellule = (v, rendu = nombre) => (v === null || v === undefined ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td>${rendu(v)}</td>`);
 const celluleTaux = (v) => (v === null || v === undefined ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td><span class="status-chip ${statutTaux(v)}">${pourcent(v)}</span></td>`);
@@ -33,6 +37,12 @@ export function monterQualite(racine) {
   if (!racine) return;
   racine.innerHTML = `<div id="ql-filtres"></div><div id="ql-corps">${chargementHtml()}</div>`;
   racine.addEventListener("click", (e) => surClic(e, racine));
+  racine.addEventListener("change", (e) => {
+    if (!dernier || !e.target.dataset?.ql) return;
+    if (e.target.dataset.ql === "formulaire") formulaireDistricts = e.target.value;
+    if (e.target.dataset.ql === "annee") anneeDistricts = Number(e.target.value);
+    dessinerDistricts(dernier, generation);
+  });
   charger(racine);
 }
 
@@ -55,11 +65,11 @@ async function charger(racine, { actualiser = false } = {}) {
   const etat = filtresCourants();
   barreFiltres(racine.querySelector("#ql-filtres"), etat, { annees, unites: { region: meta.regions, district: meta.districts }, categories: [] }, () => charger(racine), { forcer: actualiser });
 
-  const formulaires = [...(meta.config.formulaires || [])].sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+  const formulaires = formulairesSuivis();
   const periodes = periodesDhis2(etat);
-  const enteteFormulaires = `<div class="ql-formulaires"><span>Formulaires suivis : ${formulaires.length ? formulaires.map((f) => `<b>${echapper(f.nom)}</b>`).join(", ") : "aucun"}</span> <button type="button" class="live-actualiser" data-action="formulaires">＋ Ajouter un formulaire</button></div>`;
+  const enteteFormulaires = `<div class="ql-formulaires"><details><summary>${formulaires.length} formulaire${formulaires.length > 1 ? "s" : ""} suivi${formulaires.length > 1 ? "s" : ""}</summary><ul class="ql-liste-formulaires">${formulaires.map((f) => `<li>${echapper(f.nom)}</li>`).join("")}</ul></details> <button type="button" class="live-actualiser" data-action="formulaires">＋ Ajouter ou retirer des formulaires</button></div>`;
   if (!formulaires.length) {
-    corps.innerHTML = `${enteteFormulaires}<p class="live-erreur" role="status">Aucun formulaire n’est encore suivi. Cliquez sur « Ajouter un formulaire » pour choisir les formulaires DHIS2 à contrôler.</p>`;
+    corps.innerHTML = `${enteteFormulaires}<p class="live-erreur" role="status">Aucun formulaire n’est encore suivi. Cliquez sur « Ajouter ou retirer des formulaires » pour choisir les formulaires DHIS2 à contrôler.</p>`;
     return;
   }
   if (!periodes.length) {
@@ -74,6 +84,7 @@ async function charger(racine, { actualiser = false } = {}) {
     dernier = { meta, etat, formulaires, periodes, unites, lignes, synthese: syntheseParFormulaire(lignes), misAJour: r.misAJour, violations: null };
     corps.innerHTML = rendu(dernier, enteteFormulaires);
     dessinerVue(dernier);
+    dessinerDistricts(dernier, ma);
   } catch (erreur) {
     if (ma !== generation) return;
     corps.innerHTML = `${enteteFormulaires}${erreurHtml(erreur)}<p><button type="button" class="live-actualiser" data-action="actualiser">↻ Réessayer</button></p>`;
@@ -91,9 +102,13 @@ function rendu(d, enteteFormulaires) {
   return `${enteteMiseAJour(d.misAJour)}
     ${enteteFormulaires}
     <p class="note">Sélection : ${echapper(resumeFiltres(etat))} · ${d.periodes.length} période${d.periodes.length > 1 ? "s" : ""} (${echapper(libellePeriode(d.periodes[0]))}${d.periodes.length > 1 ? ` à ${echapper(libellePeriode(d.periodes.at(-1)))}` : ""}). DHIS2 ${echapper(meta.sante.version || "")}.</p>
-    <section class="card"><div class="card-head"><div><h2>Complétude et promptitude par formulaire</h2><p class="card-subtitle">Rapports attendus, reçus, reçus à temps et manquants (${echapper(niveau)}s affichées, périodes cumulées).</p></div></div>
+    <section class="card"><div class="card-head"><div><h2>Complétude et promptitude par formulaire</h2><p class="card-subtitle">Rapports attendus, reçus, reçus à temps et manquants (unités affichées : ${echapper(niveau)}, périodes cumulées).</p></div></div>
       <div class="table-scroll"><table id="ql-synthese"><thead><tr><th>Formulaire</th><th>Attendus</th><th>Reçus</th><th>À temps</th><th>Complétude</th><th>Promptitude</th><th>Manquants</th></tr></thead>
       <tbody>${synthese.map((s) => `<tr><th scope="row">${echapper(s.formulaire)}</th>${cellule(s.attendus, (v) => nombre(v, 0))}${cellule(s.recus, (v) => nombre(v, 0))}${cellule(s.aTemps, (v) => nombre(v, 0))}${celluleTaux(s.completude)}${celluleTaux(s.promptitude)}${cellule(s.manquants, (v) => nombre(v, 0))}</tr>`).join("")}</tbody></table></div></section>
+    <section class="card" id="ql-districts"><div class="card-head"><div><h2>Qualité par district — mensuelle et annuelle</h2><p class="card-subtitle">Complétude (rapports reçus / attendus) de chaque district, mois par mois et sur l’année ; districts les plus faibles en premier.</p></div>
+      <div class="ql-outils"><label class="fg-champ">Formulaire <select data-ql="formulaire"><option value="tous">Tous les formulaires suivis</option>${d.formulaires.map((f) => `<option value="${f.uid}" ${formulaireDistricts === f.uid ? "selected" : ""}>${echapper(f.nom)}</option>`).join("")}</select></label>
+      ${d.etat.annees.length > 1 ? `<label class="fg-champ">Année <select data-ql="annee">${[...d.etat.annees].sort().reverse().map((a) => `<option ${a === anneeDistricts ? "selected" : ""}>${a}</option>`).join("")}</select></label>` : ""}${boutonsExport("districts")}</div></div>
+      <div id="ql-districts-corps">${chargementHtml()}</div></section>
     <section class="card"><div class="card-head"><div><h2>Détail par ${echapper(niveau)}</h2><p class="card-subtitle">Choisissez la présentation ; les exports reprennent les filtres appliqués.</p></div>
       <div class="ql-outils"><span class="segmented" role="group" aria-label="Présentation">${[["tableau", "Tableau"], ["barres", "Barres"], ["courbes", "Courbes"]].map(([k, v]) => `<button type="button" data-vue="${k}" aria-pressed="${vue === k}">${v}</button>`).join("")}</span>${boutonsExport("qualite")}</div></div>
       <div id="ql-vue"></div></section>
@@ -108,6 +123,41 @@ function rendu(d, enteteFormulaires) {
     <section class="card" id="ql-anomalies"><div class="card-head"><div><h2>Valeurs aberrantes, négatives et doublons</h2><p class="card-subtitle">Formulaires suivis, périodes sélectionnées.</p></div>
       <span class="ql-outils"><button type="button" class="live-actualiser" data-action="aberrantes">Valeurs aberrantes</button><button type="button" class="live-actualiser" data-action="negatives">Valeurs négatives</button></span></div>
       <div id="ql-anomalies-corps"><p class="note">Doublons : DHIS2 n’enregistre qu’une seule valeur par élément, période, structure et combinaison de catégories ; un doublon ne peut donc pas exister dans la base. Les valeurs manquantes correspondent aux rapports manquants ci-dessus.</p></div></section>`;
+}
+
+// Districts concernés par la sélection : districts choisis, districts des régions choisies, ou tous.
+function districtsDeLaSelection(d) {
+  const nomRegion = new Map(d.meta.regions.map((r) => [r.id, r.nom]));
+  const avecRegion = (liste) => liste.map((x) => ({ ...x, region: nomRegion.get(x.parent) || "" }));
+  if (d.etat.niveau === "district" && d.etat.unites.length) return avecRegion(d.meta.districts.filter((x) => d.etat.unites.includes(x.id)));
+  if (d.etat.niveau === "region" && d.etat.unites.length) return avecRegion(d.meta.districts.filter((x) => d.etat.unites.includes(x.parent)));
+  return avecRegion(d.meta.districts);
+}
+
+async function dessinerDistricts(d, ma) {
+  const zone = document.getElementById("ql-districts-corps");
+  if (!zone) return;
+  const annee = d.etat.annees.includes(anneeDistricts) ? anneeDistricts : Math.max(...d.etat.annees);
+  const limite = new Date().getFullYear() * 100 + new Date().getMonth() + 1;
+  const mois = [...d.etat.mois].sort((a, b) => a - b).map((m) => `${annee}${String(m).padStart(2, "0")}`).filter((pe) => Number(pe) <= limite);
+  const formulaires = formulaireDistricts === "tous" ? d.formulaires : d.formulaires.filter((f) => f.uid === formulaireDistricts);
+  const districts = districtsDeLaSelection(d);
+  if (!mois.length || !formulaires.length || !districts.length) { zone.innerHTML = `<p class="live-nd">${NON_DISPONIBLE}</p>`; return; }
+  zone.innerHTML = chargementHtml("Chargement de la complétude par district…");
+  const tous = districts.length === d.meta.districts.length;
+  try {
+    const r = await lireDhis2("analytics.json", {
+      dimension: [`dx:${formulaires.flatMap((f) => [`${f.uid}.ACTUAL_REPORTS`, `${f.uid}.EXPECTED_REPORTS`]).join(";")}`, `pe:${mois.join(";")}`, tous ? `ou:${d.meta.racine.id};LEVEL-${NIVEAUX.district.niveau}` : `ou:${districts.map((x) => x.id).join(";")}`],
+      skipMeta: "true",
+    });
+    if (ma !== generation || !zone.isConnected) return;
+    const lignes = tableauDistrictsMensuel(lignesAnalytics(r.donnees), formulaires.map((f) => f.uid), districts, mois);
+    d.districts = { annee, mois, lignes, formulaire: formulaireDistricts === "tous" ? "Tous les formulaires suivis" : formulaires[0].nom };
+    const cellule = (v) => (v === null ? `<td class="heatmap-cell statut-inconnu" title="${NON_DISPONIBLE}">—</td>` : `<td class="heatmap-cell statut-${statutTaux(v)}">${nombre(v)}</td>`);
+    zone.innerHTML = `${enteteMiseAJour(r.misAJour)}<div class="table-scroll ql-districts-table"><table id="ql-table-districts"><thead><tr><th>District</th><th>Région</th>${mois.map((pe) => `<th>${echapper(libellePeriode(pe).split(" ")[0].slice(0, 4))}</th>`).join("")}<th>Année ${annee}</th><th>Rapports manquants</th></tr></thead>
+      <tbody>${lignes.map((l) => `<tr><th scope="row">${echapper(l.district)}</th><td>${echapper(l.region.replace(/^DRS[_ ]/, ""))}</td>${l.parMois.map(cellule).join("")}${l.annuel === null ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td><span class="status-chip ${statutTaux(l.annuel)}">${pourcent(l.annuel)}</span></td>`}<td>${l.manquants > 0 ? nombre(l.manquants, 0) : "0"}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note">Rouge : moins de 70 % · jaune : 70 à 90 % · vert : 90 % et plus. « — » : aucun rapport attendu ce mois-là. L’annuel additionne les rapports reçus et attendus des mois choisis.</p>`;
+  } catch (erreur) { if (zone.isConnected) zone.innerHTML = erreurHtml(erreur); }
 }
 
 function enTetesExport() { return ["Formulaire", "Unité", "Attendus", "Reçus", "À temps", "Complétude (%)", "Promptitude (%)", "Manquants"]; }
@@ -230,6 +280,15 @@ function surClic(e, racine) {
     vue = bouton.dataset.vue;
     racine.querySelectorAll("[data-vue]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.vue === vue)));
     dessinerVue(dernier);
+  } else if (bouton.dataset.export === "districts") {
+    const t = dernier.districts;
+    if (!t) return;
+    const entetes = ["District", "Région", ...t.mois.map(libellePeriode), `Année ${t.annee}`, "Rapports manquants"];
+    const lignes = t.lignes.map((l) => [l.district, l.region, ...l.parMois.map((v) => v ?? NON_DISPONIBLE), l.annuel ?? NON_DISPONIBLE, l.manquants]);
+    const nom = `qualite_districts_${t.annee}_${new Date().toISOString().slice(0, 10)}`;
+    const filtres = `${resumeFiltres(dernier.etat)} · ${t.formulaire}`;
+    if (bouton.dataset.format === "csv") exporterCsv(nom, entetes, lignes, filtres);
+    else exporterXlsx(nom, entetes, lignes, filtres).catch((erreur) => alert(erreur.message));
   } else if (bouton.dataset.export === "qualite") {
     const nom = `qualite_donnees_${new Date().toISOString().slice(0, 10)}`;
     const filtres = resumeFiltres(dernier.etat);

@@ -17,9 +17,12 @@ export function categoriesDisponibles(dataElements) {
   return communes.map((c) => ({ id: c.id, nom: c.displayName, options: (c.categoryOptions || []).map((o) => ({ id: o.id, nom: o.displayName })) }));
 }
 
-// Statut par rapport à la cible : atteinte (≥ cible), proche (≥ 80 % de la cible), loin (< 80 %).
-export function statutCible(valeur, cible) {
+// Statut par rapport à la cible. Sens « haut » (le plus courant) : atteinte si ≥ cible, proche si ≥ 80 % de la
+// cible, loin en dessous. Sens « bas » (ex. taux de décès, mortinaissance : la cible est un maximum) : atteinte si
+// ≤ cible, proche jusqu'à 125 % de la cible, loin au-delà.
+export function statutCible(valeur, cible, sens = "haut") {
   if (valeur === null || valeur === undefined || !Number.isFinite(cible) || cible <= 0) return "inconnu";
+  if (sens === "bas") return valeur <= cible ? "conforme" : valeur <= 1.25 * cible ? "surveiller" : "critique";
   if (valeur >= cible) return "conforme";
   return valeur >= 0.8 * cible ? "surveiller" : "critique";
 }
@@ -46,12 +49,13 @@ export function tableauIndicateurs(lignes, indicateurs, periodes, cibles = {}, p
     const valeur = nombreOuNull(ligne?.valeur);
     const precedente = derniere ? periodePrecedente(derniere) : null;
     const valeurPrecedente = precedente ? nombreOuNull(parPeriode.get(precedente)?.valeur) : null;
-    const cible = nombreOuNull(cibles[ind.uid]);
+    const cible = nombreOuNull(ind.cible ?? cibles[ind.uid]);
     return {
       ...ind, serie, periode: derniere, valeur,
+      ecart: valeur !== null && cible !== null ? Math.round((valeur - cible) * 10) / 10 : null,
       numerateur: nombreOuNull(ligne?.numerator), denominateur: nombreOuNull(ligne?.denominator),
       periodePrecedente: precedente, valeurPrecedente, variation: variation(valeur, valeurPrecedente),
-      cible, statut: statutCible(valeur, cible),
+      cible, statut: statutCible(valeur, cible, ind.sens),
     };
   });
 }
@@ -59,4 +63,21 @@ export function tableauIndicateurs(lignes, indicateurs, periodes, cibles = {}, p
 // Programmes (regroupements) des indicateurs configurés, dans l'ordre de première apparition.
 export function programmes(indicateurs) {
   return [...new Set(indicateurs.map((i) => i.programme || "Sans programme"))];
+}
+
+// Réalisation sur TOUTE la sélection (ex. un semestre) : réponse analytics dx avec les périodes en filtre, que
+// DHIS2 agrège correctement (numérateurs et dénominateurs sommés). Remplace valeur, numérateur, dénominateur,
+// écart et statut ; la série par période et la variation restent celles du détail mensuel.
+export function appliquerRealisation(tableau, lignesAgregees) {
+  const parDx = new Map(lignesAgregees.map((l) => [l.dx, l]));
+  return tableau.map((t) => {
+    const l = parDx.get(t.uid);
+    const valeur = nombreOuNull(l?.valeur);
+    return {
+      ...t, valeur,
+      numerateur: nombreOuNull(l?.numerator), denominateur: nombreOuNull(l?.denominator),
+      ecart: valeur !== null && t.cible !== null ? Math.round((valeur - t.cible) * 10) / 10 : null,
+      statut: statutCible(valeur, t.cible, t.sens),
+    };
+  });
 }

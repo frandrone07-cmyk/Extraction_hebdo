@@ -133,3 +133,32 @@ export function lienSaisieDhis2(lienDhis2, version, { ou = "", pe = "", ds = "" 
 export function valeursNegatives(lignes) {
   return lignes.filter((l) => Number.isFinite(l.valeur) && l.valeur < 0);
 }
+
+// Complétude par district, mois par mois et sur l'année. lignes : réponse analytics dx × pe × ou avec, pour chaque
+// formulaire, <uid>.ACTUAL_REPORTS et <uid>.EXPECTED_REPORTS. Taux = reçus / attendus × 100, en additionnant les
+// formulaires retenus ; annuel = somme des reçus / somme des attendus sur les mois choisis (et non une moyenne de
+// taux). DHIS2 n'envoie pas les zéros : attendus sans reçus = 0 reçu. Aucun attendu = « non disponible » (null).
+export function tableauDistrictsMensuel(lignes, formulairesUids, districts, mois) {
+  const valeurs = new Map();
+  for (const l of lignes) valeurs.set(`${l.dx}|${l.pe}|${l.ou}`, Number.isFinite(l.valeur) ? l.valeur : null);
+  const v = (f, m, pe, ou) => valeurs.get(`${f}.${m}|${pe}|${ou}`) ?? null;
+  const taux = (recus, attendus) => (attendus > 0 ? Math.round((recus / attendus) * 1000) / 10 : null);
+  return districts.map((d) => {
+    let totalRecus = 0;
+    let totalAttendus = 0;
+    const parMois = mois.map((pe) => {
+      let recus = 0;
+      let attendus = 0;
+      for (const f of formulairesUids) {
+        const a = v(f, "EXPECTED_REPORTS", pe, d.id);
+        if (a === null || a === 0) continue;
+        attendus += a;
+        recus += v(f, "ACTUAL_REPORTS", pe, d.id) ?? 0;
+      }
+      totalRecus += recus;
+      totalAttendus += attendus;
+      return taux(recus, attendus);
+    });
+    return { district: d.nom, districtUid: d.id, region: d.region || "", parMois, annuel: taux(totalRecus, totalAttendus), manquants: totalAttendus - totalRecus };
+  }).sort((a, b) => (a.annuel ?? Infinity) - (b.annuel ?? Infinity) || a.district.localeCompare(b.district, "fr"));
+}

@@ -1,6 +1,7 @@
-// Page « Indicateurs FARS » : indicateurs DHIS2 choisis à l'écran de configuration, regroupés par programme.
-// Valeur, numérateur et dénominateur, évolution, comparaison entre régions ou districts, variation, désagrégations,
-// cibles. Toutes les valeurs viennent de /api/analytics (dx / pe / ou) via le serveur intermédiaire.
+// Page « Indicateurs FARS » — « Situation des indicateurs de performance » sur le modèle du canevas de revue :
+// Programme | Indicateur | Cible | Réalisation | Écart | Statut, regroupés par programme. Liste par défaut issue du
+// canevas ; chacun peut ajouter, associer ou retirer des indicateurs (choix gardé dans son navigateur).
+// Toutes les valeurs viennent de /api/analytics (dx / pe / ou) via le serveur intermédiaire ; rien n'est inventé.
 import { lireDhis2 } from "./dhis2-client.js";
 import { grapheBarres, grapheLigne } from "./charts.js";
 import { dimensionOu, libellePeriode, NIVEAUX, periodePrecedente, periodesDhis2, resumeFiltres } from "./filtres-globaux.js";
@@ -8,11 +9,13 @@ import {
   anneesDisponibles, barreFiltres, boutonsExport, chargementHtml, echapper, enteteMiseAJour, erreurHtml, exporterCsv,
   exporterXlsx, filtresCourants, lignesAnalytics, memoriser, metadonnees, NON_DISPONIBLE, nombre,
 } from "./pages-live.js";
-import { categoriesDisponibles, elementsDeLExpression, programmes, statutCible, tableauIndicateurs } from "./fars-calculs.js";
-import { ouvrirConfigurationFars } from "./fars-config.js";
+import { appliquerRealisation, categoriesDisponibles, elementsDeLExpression, statutCible, tableauIndicateurs } from "./fars-calculs.js";
+import { ouvrirAjoutIndicateur } from "./fars-config.js";
+import { PROGRAMMES_ORDRE } from "./fars-defaut.js";
+import { enregistrerIndicateurs, indicateursPersonnalises, indicateursSuivis, reinitialiserIndicateurs } from "./suivi-local.js";
 
-let programmeChoisi = null;
-let coches = null; // Set des UID coches (null = tous ceux du programme)
+const TOUS = "Tous les programmes";
+let programmeChoisi = TOUS;
 let focus = null;
 let generation = 0;
 let dernier = null;
@@ -20,11 +23,17 @@ let dernier = null;
 export function dernieresDonneesFars() { return dernier; }
 
 const valeurCellule = (v, dec = 1) => (v === null || v === undefined ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td>${nombre(v, dec)}</td>`);
+const libelleStatut = (t) => (!t.uid ? "À associer" : t.valeur === null || t.valeur === undefined ? "Non disponible" : LIBELLE_STATUT[t.statut]);
 const LIBELLE_STATUT = { conforme: "Cible atteinte", surveiller: "Proche de la cible", critique: "Loin de la cible", inconnu: "Sans cible" };
+
+function programmesOrdonnes(indicateurs) {
+  const presents = [...new Set(indicateurs.map((i) => i.programme))];
+  return [...PROGRAMMES_ORDRE.filter((p) => presents.includes(p)), ...presents.filter((p) => !PROGRAMMES_ORDRE.includes(p))];
+}
 
 export function renderFars() {
   return `<div class="page-stack">
-    <div class="section-intro"><div><p class="eyebrow">DHIS2 · TEMPS RÉEL</p><h2>Indicateurs FARS</h2><p>Indicateurs choisis par programme : valeur, numérateur et dénominateur, évolution, comparaison géographique, désagrégations et cibles.</p></div></div>
+    <div class="section-intro"><div><p class="eyebrow">DHIS2 · TEMPS RÉEL</p><h2>Indicateurs FARS — situation des indicateurs de performance</h2><p>Cible, réalisation sur la période choisie, écart et statut, par programme. Ajoutez ou retirez des indicateurs à tout moment.</p></div></div>
     <section id="fars-live" class="qualite-live" aria-label="Indicateurs FARS en temps réel (DHIS2)"></section>
   </div>`;
 }
@@ -39,11 +48,13 @@ export function monterFars(racine) {
 }
 
 // Catégories de désagrégation propres à chaque indicateur (via les éléments de données de ses expressions).
-function categoriesParIndicateur(indicateurs) {
-  const cle = `fars-cat-${indicateurs.map((i) => i.uid).join(",")}`;
-  return memoriser(cle, async () => {
-    const r = await lireDhis2("indicators.json", { filter: `id:in:[${indicateurs.map((i) => i.uid).join(",")}]`, fields: "id,numerator,denominator", paging: "false" });
-    const parInd = new Map((r.donnees?.indicators || []).map((i) => [i.id, elementsDeLExpression(i.numerator, i.denominator)]));
+function categoriesParIndicateur(uids) {
+  return memoriser(`fars-cat-${uids.join(",")}`, async () => {
+    const parInd = new Map();
+    for (let i = 0; i < uids.length; i += 60) {
+      const r = await lireDhis2("indicators.json", { filter: `id:in:[${uids.slice(i, i + 60).join(",")}]`, fields: "id,numerator,denominator", paging: "false" });
+      for (const ind of r.donnees?.indicators || []) parInd.set(ind.id, elementsDeLExpression(ind.numerator, ind.denominator));
+    }
     const tous = [...new Set([...parInd.values()].flat())];
     const des = new Map();
     for (let i = 0; i < tous.length; i += 100) {
@@ -53,6 +64,14 @@ function categoriesParIndicateur(indicateurs) {
     return new Map([...parInd].map(([uid, liste]) => [uid, categoriesDisponibles(liste.map((id) => des.get(id)).filter(Boolean))]));
   });
 }
+
+// Trimestres DHIS2 (2026Q1…) couvrant des périodes mensuelles (202601…) ; vide si la sélection n'est pas mensuelle.
+export function trimestresCouvrant(periodes) {
+  if (!periodes.every((p) => /^\d{6}$/.test(p))) return [];
+  return [...new Set(periodes.map((p) => `${p.slice(0, 4)}Q${Math.ceil(Number(p.slice(4)) / 3)}`))];
+}
+
+const ouDeLaSelection = (etat, meta) => (etat.unites.length ? `ou:${etat.unites.join(";")}` : `ou:${meta.racine.id}`);
 
 async function charger(racine, { actualiser = false } = {}) {
   const ma = ++generation;
@@ -66,103 +85,148 @@ async function charger(racine, { actualiser = false } = {}) {
     dernier = null;
     return;
   }
-  const indicateurs = meta.config.fars?.indicateurs || [];
-  const configurer = `<button type="button" class="live-actualiser" data-action="configurer">⚙ Configurer les indicateurs FARS</button>`;
-  if (!indicateurs.length) {
-    racine.querySelector("#fa-filtres").innerHTML = "";
-    corps.innerHTML = `<p class="live-erreur" role="status">Aucun indicateur FARS n’est encore configuré. Choisissez-les dans DHIS2 (par groupe d’indicateurs ou par nom) et indiquez leur programme et leur cible.</p>${configurer}`;
-    return;
-  }
-  const [annees, categories] = await Promise.all([anneesDisponibles(meta).catch(() => [new Date().getFullYear()]), categoriesParIndicateur(indicateurs).catch(() => new Map())]);
+  const indicateurs = indicateursSuivis();
+  const associes = indicateurs.filter((i) => i.uid);
+  const [annees, categories] = await Promise.all([
+    anneesDisponibles(meta).catch(() => [new Date().getFullYear()]),
+    associes.length ? categoriesParIndicateur(associes.map((i) => i.uid)).catch(() => new Map()) : Promise.resolve(new Map()),
+  ]);
   if (ma !== generation || !racine.isConnected) return;
   const toutesCategories = [...new Map([...categories.values()].flat().map((c) => [c.id, c])).values()];
   const etat = filtresCourants();
   barreFiltres(racine.querySelector("#fa-filtres"), etat, { annees, unites: { region: meta.regions, district: meta.districts }, categories: toutesCategories }, () => charger(racine), { forcer: actualiser });
 
-  const listeProgrammes = programmes(indicateurs);
-  if (!listeProgrammes.includes(programmeChoisi)) { programmeChoisi = listeProgrammes[0]; coches = null; }
-  const duProgramme = indicateurs.filter((i) => (i.programme || "Sans programme") === programmeChoisi);
-  const choisis = duProgramme.filter((i) => !coches || coches.has(i.uid));
-  if (!choisis.some((i) => i.uid === focus)) focus = choisis[0]?.uid || null;
-  const selecteurs = `<div class="fa-choix">
-      <label class="fg-champ">Programme <select data-fa="programme">${listeProgrammes.map((p) => `<option ${p === programmeChoisi ? "selected" : ""}>${echapper(p)}</option>`).join("")}</select></label>
-      <fieldset class="fg-bloc"><legend>Indicateurs</legend><div class="fg-puces">${duProgramme.map((i) => `<label class="fg-puce"><input type="checkbox" data-fa="indicateur" value="${i.uid}" ${choisis.includes(i) ? "checked" : ""}> ${echapper(i.nom)}</label>`).join("")}</div></fieldset>
-      ${configurer}</div>`;
+  const listeProgrammes = programmesOrdonnes(indicateurs);
+  if (programmeChoisi !== TOUS && !listeProgrammes.includes(programmeChoisi)) programmeChoisi = TOUS;
+  const visibles = indicateurs.filter((i) => programmeChoisi === TOUS || i.programme === programmeChoisi);
+  const visiblesAssocies = visibles.filter((i) => i.uid);
+
+  const outils = `<div class="fa-choix">
+      <label class="fg-champ">Programme <select data-fa="programme">${[TOUS, ...listeProgrammes].map((p) => `<option ${p === programmeChoisi ? "selected" : ""}>${echapper(p)}</option>`).join("")}</select></label>
+      <button type="button" class="live-actualiser" data-action="ajouter">＋ Ajouter un indicateur</button>
+      ${indicateursPersonnalises() ? `<button type="button" class="fg-lien" data-action="defaut">Rétablir la liste par défaut du canevas</button>` : ""}
+      <span class="note">${indicateurs.length} indicateur${indicateurs.length > 1 ? "s" : ""} suivi${indicateurs.length > 1 ? "s" : ""}${indicateurs.length - associes.length ? `, dont ${indicateurs.length - associes.length} à associer à DHIS2` : ""}.</span></div>`;
   const periodes = periodesDhis2(etat);
-  if (!choisis.length || !periodes.length) {
-    corps.innerHTML = `${selecteurs}<p class="live-erreur" role="status">${!choisis.length ? "Cochez au moins un indicateur." : "Aucune période sélectionnée : cochez au moins une année et un mois (les périodes futures sont exclues)."}</p>`;
+  if (!periodes.length) {
+    corps.innerHTML = `${outils}<p class="live-erreur" role="status">Aucune période sélectionnée : cochez au moins une année et un mois (les périodes futures sont exclues).</p>`;
     return;
   }
-  const ouFiltre = etat.unites.length ? `ou:${etat.unites.join(";")}` : `ou:${meta.racine.id}`;
-  const avecPrecedente = [...new Set([...periodes, periodePrecedente(periodes[0])].filter(Boolean))].sort();
   try {
-    const r = await lireDhis2("analytics.json", { dimension: [`dx:${choisis.map((i) => i.uid).join(";")}`, `pe:${avecPrecedente.join(";")}`], filter: ouFiltre, includeNumDen: "true", skipMeta: "true" }, { actualiser });
-    if (ma !== generation || !racine.isConnected) return;
-    const tableau = tableauIndicateurs(lignesAnalytics(r.donnees), choisis, periodes, meta.config.fars.cibles || {}, periodePrecedente);
-    dernier = { meta, etat, periodes, tableau, programme: programmeChoisi, misAJour: r.misAJour, categories };
-    corps.innerHTML = rendu(dernier, selecteurs);
-    grapheLigne("fa-evolution", periodes.map(libellePeriode), tableau.map((t) => ({ label: t.nom, data: t.serie })), { percent: false });
+    let tableau = [];
+    let misAJour = new Date().toISOString();
+    if (visiblesAssocies.length) {
+      const dx = `dx:${visiblesAssocies.map((i) => i.uid).join(";")}`;
+      const ou = ouDeLaSelection(etat, meta);
+      const avecPrecedente = [...new Set([...periodes, periodePrecedente(periodes[0])].filter(Boolean))].sort();
+      const [agrege, detail] = await Promise.all([
+        lireDhis2("analytics.json", { dimension: dx, filter: [`pe:${periodes.join(";")}`, ou], includeNumDen: "true", skipMeta: "true" }, { actualiser }),
+        lireDhis2("analytics.json", { dimension: [dx, `pe:${avecPrecedente.join(";")}`], filter: ou, skipMeta: "true" }, { actualiser }),
+      ]);
+      if (ma !== generation || !racine.isConnected) return;
+      tableau = appliquerRealisation(tableauIndicateurs(lignesAnalytics(detail.donnees), visiblesAssocies, periodes, {}, periodePrecedente), lignesAnalytics(agrege.donnees));
+      misAJour = agrege.misAJour;
+      // Indicateurs de rapports trimestriels (ex. tuberculose, lèpre) : rien au mois près, on relit DHIS2 sur les
+      // trimestres qui couvrent les mois choisis.
+      const sansValeur = tableau.filter((t) => t.valeur === null);
+      const trimestres = trimestresCouvrant(periodes);
+      if (sansValeur.length && trimestres.length) {
+        const r = await lireDhis2("analytics.json", { dimension: `dx:${sansValeur.map((t) => t.uid).join(";")}`, filter: [`pe:${trimestres.join(";")}`, ou], includeNumDen: "true", skipMeta: "true" }, { actualiser });
+        if (ma !== generation || !racine.isConnected) return;
+        const trimestriels = new Map(appliquerRealisation(sansValeur, lignesAnalytics(r.donnees)).filter((t) => t.valeur !== null).map((t) => [t.uid, { ...t, trimestriel: true }]));
+        tableau = tableau.map((t) => trimestriels.get(t.uid) || t);
+      }
+    }
+    const parId = new Map(tableau.map((t) => [t.uid, t]));
+    const lignes = visibles.map((i) => (i.uid && parId.get(i.uid)) || { ...i, valeur: null, ecart: null, numerateur: null, denominateur: null, variation: { sens: null }, statut: "inconnu", serie: [] });
+    if (!lignes.some((t) => t.uid && t.uid === focus)) focus = (lignes.find((t) => t.uid && t.valeur !== null) || lignes.find((t) => t.uid))?.uid || null;
+    dernier = { meta, etat, periodes, tableau: lignes, programme: programmeChoisi, misAJour, categories };
+    corps.innerHTML = rendu(dernier, outils);
+    dessinerEvolution(dernier);
     dessinerComparaison(dernier, ma);
     dessinerDesagregation(dernier, ma);
   } catch (erreur) {
     if (ma !== generation) return;
-    corps.innerHTML = `${selecteurs}${erreurHtml(erreur)}<p><button type="button" class="live-actualiser" data-action="actualiser">↻ Réessayer</button></p>`;
+    corps.innerHTML = `${outils}${erreurHtml(erreur)}<p><button type="button" class="live-actualiser" data-action="actualiser">↻ Réessayer</button></p>`;
     dernier = null;
   }
 }
 
-function rendu(d, selecteurs) {
+function libelleCible(t) {
+  if (t.cible === null || t.cible === undefined) return "—";
+  return `${t.sens === "bas" ? "≤ " : ""}${nombre(t.cible)}`;
+}
+
+function rendu(d, outils) {
   const niveau = d.etat.niveau === "pays" ? "région" : NIVEAUX[d.etat.niveau].libelle.toLowerCase();
-  const ind = d.tableau.find((t) => t.uid === focus) || d.tableau[0];
-  return `${enteteMiseAJour(d.misAJour)}${selecteurs}
-    <p class="note">Sélection : ${echapper(resumeFiltres(d.etat))}. Valeur affichée : dernière période renseignée de la sélection ; variation par rapport à la période précédente.</p>
-    <section class="card"><div class="card-head"><div><h2>Tableau des indicateurs — ${echapper(d.programme)}</h2><p class="card-subtitle">Couleur selon la cible : verte si atteinte, jaune à partir de 80 % de la cible, rouge en dessous.</p></div>${boutonsExport("fars")}</div>
-      <div class="table-scroll"><table id="fa-tableau"><thead><tr><th>Indicateur</th><th>Période</th><th>Valeur</th><th>Numérateur</th><th>Dénominateur</th><th>Période précédente</th><th>Variation</th><th>Cible</th><th>Statut</th></tr></thead><tbody>
-      ${d.tableau.map((t) => `<tr><th scope="row">${echapper(t.nom)}</th><td>${t.periode ? echapper(libellePeriode(t.periode)) : `<span class="live-nd">${NON_DISPONIBLE}</span>`}</td>${valeurCellule(t.valeur)}${valeurCellule(t.numerateur, 0)}${valeurCellule(t.denominateur, 0)}${valeurCellule(t.valeurPrecedente)}
-        <td>${t.variation.sens ? `<span class="fa-variation ${t.variation.sens}" aria-label="${t.variation.sens}">${t.variation.fleche} ${t.variation.ecart > 0 ? "+" : ""}${nombre(t.variation.ecart)}</span>` : `<span class="live-nd">${NON_DISPONIBLE}</span>`}</td>
-        ${t.cible === null ? "<td>—</td>" : `<td>${nombre(t.cible)}</td>`}<td><span class="status-chip ${t.statut}">${LIBELLE_STATUT[t.statut]}</span></td></tr>`).join("")}
+  const associes = d.tableau.filter((t) => t.uid);
+  const ind = associes.find((t) => t.uid === focus) || associes[0];
+  const periodeTexte = `${libellePeriode(d.periodes[0])}${d.periodes.length > 1 ? ` à ${libellePeriode(d.periodes.at(-1))}` : ""}`;
+  const groupes = programmesOrdonnes(d.tableau).map((p) => [p, d.tableau.filter((t) => t.programme === p)]);
+  const lignesHtml = groupes.map(([programme, items]) => items.map((t, n) => `<tr data-id="${echapper(t.id)}">
+      ${n === 0 ? `<th scope="rowgroup" rowspan="${items.length}" class="fa-programme">${echapper(programme)}</th>` : ""}
+      <td>${echapper(t.nom)}${t.uid ? "" : ` <span class="status-chip inconnu">à associer</span>`}</td>
+      <td>${libelleCible(t)}</td>
+      ${t.uid ? (t.valeur === null ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td>${nombre(t.valeur)}${t.trimestriel ? ` <small class="note" title="Rapport trimestriel : valeur calculée sur les trimestres couvrant la période">(trim.)</small>` : ""}</td>`) : `<td class="live-nd">${NON_DISPONIBLE}</td>`}
+      ${t.ecart === null || t.ecart === undefined ? `<td class="live-nd">—</td>` : `<td>${t.ecart > 0 ? "+" : ""}${nombre(t.ecart)}</td>`}
+      ${t.uid ? valeurCellule(t.numerateur, 0) : "<td>—</td>"}${t.uid ? valeurCellule(t.denominateur, 0) : "<td>—</td>"}
+      <td>${t.variation?.sens ? `<span class="fa-variation ${t.variation.sens}" title="Dernier mois par rapport au précédent">${t.variation.fleche} ${t.variation.ecart > 0 ? "+" : ""}${nombre(t.variation.ecart)}</span>` : "—"}</td>
+      <td><span class="status-chip ${t.statut}">${libelleStatut(t)}</span></td>
+      <td class="fa-actions">${t.uid ? "" : `<button type="button" data-associer="${echapper(t.id)}">Associer</button>`}<button type="button" data-retirer="${echapper(t.id)}" aria-label="Retirer ${echapper(t.nom)} du suivi">Retirer</button></td>
+    </tr>`).join("")).join("");
+  return `${enteteMiseAJour(d.misAJour)}${outils}
+    <p class="note">Sélection : ${echapper(resumeFiltres(d.etat))}. Réalisation calculée par DHIS2 sur toute la période choisie (${echapper(periodeTexte)}). Statut : vert si la cible est atteinte, jaune si proche (au moins 80 % de la cible, ou au plus 125 % pour une cible maximale « ≤ »), rouge sinon.</p>
+    <section class="card"><div class="card-head"><div><h2>Situation des indicateurs de performance${d.programme === TOUS ? "" : ` — ${echapper(d.programme)}`}</h2><p class="card-subtitle">${echapper(periodeTexte)}</p></div>${boutonsExport("fars")}</div>
+      <div class="table-scroll"><table id="fa-tableau" class="fa-tableau"><thead><tr><th>Programme</th><th>Indicateur</th><th>Cible</th><th>Réalisation</th><th>Écart</th><th>Numérateur</th><th>Dénominateur</th><th>Tendance</th><th>Statut</th><th><span class="fa-actions-titre">Suivi</span></th></tr></thead><tbody>
+      ${lignesHtml || `<tr><td colspan="10" class="note">Aucun indicateur suivi : cliquez sur « Ajouter un indicateur ».</td></tr>`}
       </tbody></table></div></section>
-    <section class="card"><div class="card-head"><div><h2>Évolution par période</h2><p class="card-subtitle">Une période sans valeur DHIS2 apparaît comme un trou dans la courbe.</p></div></div><div class="chartbox"><canvas id="fa-evolution" role="img" aria-label="Évolution des indicateurs par période"></canvas></div></section>
-    <section class="card"><div class="card-head"><div><h2>Comparaison par ${echapper(niveau)}</h2><p class="card-subtitle">Indicateur : <select data-fa="focus" aria-label="Indicateur comparé">${d.tableau.map((t) => `<option value="${t.uid}" ${t.uid === ind.uid ? "selected" : ""}>${echapper(t.nom)}</option>`).join("")}</select> · période : ${ind.periode ? echapper(libellePeriode(ind.periode)) : echapper(libellePeriode(d.periodes.at(-1)))}</p></div></div>
-      <div id="fa-comparaison">${chargementHtml()}</div></section>
-    <section class="card"><div class="card-head"><div><h2>Désagrégation</h2><p class="card-subtitle">Selon les caractéristiques des éléments de données de l’indicateur (choix dans « Caractéristiques » des filtres).</p></div></div>
-      <div id="fa-desagregation">${chargementHtml()}</div></section>`;
+    ${ind ? `<section class="card"><div class="card-head"><div><h2>Analyse détaillée</h2><p class="card-subtitle">Indicateur : <select data-fa="focus" aria-label="Indicateur analysé">${associes.map((t) => `<option value="${t.uid}" ${t.uid === ind.uid ? "selected" : ""}>${echapper(t.programme)} · ${echapper(t.nom)}</option>`).join("")}</select></p></div></div>
+      <h3 class="ql-sous-titre">Évolution par période</h3><div class="chartbox"><canvas id="fa-evolution" role="img" aria-label="Évolution de l’indicateur par période"></canvas></div>
+      <h3 class="ql-sous-titre">Comparaison par ${echapper(niveau)} (${echapper(periodeTexte)})</h3><div id="fa-comparaison">${chargementHtml()}</div>
+      <h3 class="ql-sous-titre">Désagrégation</h3><div id="fa-desagregation">${chargementHtml()}</div></section>` : ""}`;
+}
+
+function indicateurFocus(d) { const a = d.tableau.filter((t) => t.uid); return a.find((t) => t.uid === focus) || a[0]; }
+
+function dessinerEvolution(d) {
+  const ind = indicateurFocus(d);
+  if (!ind) return;
+  const series = [{ label: ind.nom, data: ind.serie }];
+  if (ind.cible !== null && ind.cible !== undefined) series.push({ label: `Cible (${libelleCible(ind)})`, data: d.periodes.map(() => ind.cible) });
+  grapheLigne("fa-evolution", d.periodes.map(libellePeriode), series, { percent: false });
 }
 
 async function dessinerComparaison(d, ma) {
   const zone = document.getElementById("fa-comparaison");
-  const ind = d.tableau.find((t) => t.uid === focus) || d.tableau[0];
-  const periode = ind.periode || d.periodes.at(-1);
+  const ind = indicateurFocus(d);
+  if (!zone || !ind) return;
   const ou = d.etat.niveau === "pays" && !d.etat.unites.length ? `ou:${d.meta.racine.id};LEVEL-${NIVEAUX.region.niveau}` : dimensionOu(d.etat, d.meta.racine.id);
   try {
-    const r = await lireDhis2("analytics.json", { dimension: [`dx:${ind.uid}`, ou], filter: `pe:${periode}`, includeNumDen: "true" });
+    const r = await lireDhis2("analytics.json", { dimension: [`dx:${ind.uid}`, ou], filter: `pe:${d.periodes.join(";")}`, includeNumDen: "true" });
     if (ma !== generation || !zone.isConnected) return;
     const lignes = lignesAnalytics(r.donnees).map((l) => ({ ...l, nom: r.donnees?.metaData?.items?.[l.ou]?.name || l.ou })).sort((a, b) => b.valeur - a.valeur);
     if (!lignes.length) { zone.innerHTML = `<p class="live-nd">${NON_DISPONIBLE}</p>`; return; }
-    const cible = ind.cible;
     zone.innerHTML = `<div class="chartbox" style="height:${Math.max(220, lignes.length * 24 + 60)}px"><canvas id="fa-barres" role="img" aria-label="Comparaison géographique de ${echapper(ind.nom)}"></canvas></div>
-      <details><summary>Voir le tableau</summary><div class="table-scroll"><table><thead><tr><th>Unité</th><th>Valeur</th><th>Numérateur</th><th>Dénominateur</th><th>Statut</th></tr></thead><tbody>${lignes.map((l) => { const s = statutCible(l.valeur, cible); return `<tr><th scope="row">${echapper(l.nom)}</th>${valeurCellule(l.valeur)}${valeurCellule(Number(l.numerator), 0)}${valeurCellule(Number(l.denominator), 0)}<td><span class="status-chip ${s}">${LIBELLE_STATUT[s]}</span></td></tr>`; }).join("")}</tbody></table></div></details>`;
-    const couleur = (v) => getComputedStyle(document.documentElement).getPropertyValue(`--${statutCible(v, cible) === "inconnu" ? "primary" : statutCible(v, cible)}`).trim() || "#087f5b";
+      <details><summary>Voir le tableau</summary><div class="table-scroll"><table><thead><tr><th>Unité</th><th>Réalisation</th><th>Numérateur</th><th>Dénominateur</th><th>Statut</th></tr></thead><tbody>${lignes.map((l) => { const s = statutCible(l.valeur, ind.cible, ind.sens); return `<tr><th scope="row">${echapper(l.nom)}</th>${valeurCellule(l.valeur)}${valeurCellule(Number(l.numerator), 0)}${valeurCellule(Number(l.denominator), 0)}<td><span class="status-chip ${s}">${LIBELLE_STATUT[s]}</span></td></tr>`; }).join("")}</tbody></table></div></details>`;
+    const couleur = (v) => { const s = statutCible(v, ind.cible, ind.sens); return getComputedStyle(document.documentElement).getPropertyValue(`--${s === "inconnu" ? "primary" : s}`).trim() || "#087f5b"; };
     grapheBarres("fa-barres", lignes.map((l) => l.nom), lignes.map((l) => Math.round(l.valeur * 10) / 10), { horizontal: true, pourcent: false, etiquettes: true, couleurParValeur: couleur });
   } catch (erreur) { if (zone.isConnected) zone.innerHTML = erreurHtml(erreur); }
 }
 
 async function dessinerDesagregation(d, ma) {
   const zone = document.getElementById("fa-desagregation");
-  const ind = d.tableau.find((t) => t.uid === focus) || d.tableau[0];
+  const ind = indicateurFocus(d);
+  if (!zone || !ind) return;
   const dispo = d.categories.get(ind.uid) || [];
   if (!dispo.length) { zone.innerHTML = `<p class="note">Cet indicateur n’a pas de désagrégation dans DHIS2 (catégorie « default » seulement).</p>`; return; }
   // Caractéristique choisie dans les filtres si elle existe pour cet indicateur, sinon la première disponible.
   const choisie = dispo.find((c) => d.etat.desagregations[c.id]?.length) || dispo[0];
   const options = d.etat.desagregations[choisie.id]?.length ? d.etat.desagregations[choisie.id] : choisie.options.map((o) => o.id);
-  const ouFiltre = d.etat.unites.length ? `ou:${d.etat.unites.join(";")}` : `ou:${d.meta.racine.id}`;
-  const periode = ind.periode || d.periodes.at(-1);
   try {
-    const r = await lireDhis2("analytics.json", { dimension: [`dx:${ind.uid}`, `${choisie.id}:${options.join(";")}`], filter: [`pe:${periode}`, ouFiltre] });
+    const r = await lireDhis2("analytics.json", { dimension: [`dx:${ind.uid}`, `${choisie.id}:${options.join(";")}`], filter: [`pe:${d.periodes.join(";")}`, ouDeLaSelection(d.etat, d.meta)] });
     if (ma !== generation || !zone.isConnected) return;
     const lignes = lignesAnalytics(r.donnees);
     const valeurs = options.map((o) => { const l = lignes.find((x) => x[choisie.id] === o); return { nom: choisie.options.find((x) => x.id === o)?.nom || o, valeur: l ? Math.round(l.valeur * 10) / 10 : null }; });
-    zone.innerHTML = `<p class="note">${echapper(choisie.nom)} · ${echapper(ind.nom)} · ${echapper(libellePeriode(periode))}${dispo.length > 1 ? ` (autres caractéristiques disponibles : ${dispo.filter((c) => c !== choisie).map((c) => echapper(c.nom)).join(", ")})` : ""}</p>
+    zone.innerHTML = `<p class="note">${echapper(choisie.nom)} · ${echapper(ind.nom)}${dispo.length > 1 ? ` (autres caractéristiques disponibles dans les filtres : ${dispo.filter((c) => c !== choisie).map((c) => echapper(c.nom)).join(", ")})` : ""}</p>
       <div class="chartbox" style="height:${Math.max(200, valeurs.length * 28 + 60)}px"><canvas id="fa-desag" role="img" aria-label="Désagrégation par ${echapper(choisie.nom)}"></canvas></div>
       <ul class="ql-compteurs">${valeurs.map((v) => `<li><span>${echapper(v.nom)}</span>${v.valeur === null ? `<span class="live-nd">${NON_DISPONIBLE}</span>` : `<b>${nombre(v.valeur)}</b>`}</li>`).join("")}</ul>`;
     grapheBarres("fa-desag", valeurs.map((v) => v.nom), valeurs.map((v) => v.valeur), { horizontal: true, pourcent: false, etiquettes: true });
@@ -171,26 +235,47 @@ async function dessinerDesagregation(d, ma) {
 
 function lignesExport(d) {
   const v = (x) => (x === null || x === undefined ? NON_DISPONIBLE : x);
-  return d.tableau.map((t) => [d.programme, t.nom, t.periode ? libellePeriode(t.periode) : NON_DISPONIBLE, v(t.valeur), v(t.numerateur), v(t.denominateur), v(t.valeurPrecedente), v(t.variation.ecart), v(t.cible), LIBELLE_STATUT[t.statut]]);
+  return d.tableau.map((t) => [t.programme, t.nom, t.cible === null ? "" : `${t.sens === "bas" ? "≤ " : ""}${t.cible}`, t.uid ? v(t.valeur) : "à associer", v(t.ecart), v(t.numerateur), v(t.denominateur), libelleStatut(t)]);
 }
 
 function surChangement(e, racine) {
   const champ = e.target.dataset?.fa;
   if (!champ) return;
   e.stopPropagation();
-  if (champ === "programme") { programmeChoisi = e.target.value; coches = null; focus = null; charger(racine); }
-  else if (champ === "indicateur") { coches = new Set([...racine.querySelectorAll('input[data-fa="indicateur"]:checked')].map((c) => c.value)); charger(racine); }
-  else if (champ === "focus" && dernier) { focus = e.target.value; const ma = generation; dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma); }
+  if (champ === "programme") { programmeChoisi = e.target.value; focus = null; charger(racine); }
+  else if (champ === "focus" && dernier) { focus = e.target.value; const ma = generation; dessinerEvolution(dernier); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma); }
 }
 
 function surClic(e, racine) {
   const b = e.target.closest("button");
   if (!b) return;
+  const liste = indicateursSuivis();
+  const programmes = programmesOrdonnes(liste);
   if (b.dataset.action === "actualiser") charger(racine, { actualiser: true });
-  else if (b.dataset.action === "configurer") ouvrirConfigurationFars(() => charger(racine, { actualiser: true }));
-  else if (b.dataset.export === "fars" && dernier) {
-    const entetes = ["Programme", "Indicateur", "Période", "Valeur", "Numérateur", "Dénominateur", "Période précédente", "Variation", "Cible", "Statut"];
-    const nom = `indicateurs_fars_${new Date().toISOString().slice(0, 10)}`;
+  else if (b.dataset.action === "ajouter") {
+    ouvrirAjoutIndicateur({ programmes, modele: programmeChoisi === TOUS ? null : { nom: "", programme: programmeChoisi, cible: null, sens: "haut" } }, (nouvel) => {
+      if (liste.some((i) => i.uid === nouvel.uid)) { alert("Cet indicateur est déjà suivi."); return; }
+      enregistrerIndicateurs([...liste, { ...nouvel, id: nouvel.uid }]);
+      charger(racine);
+    });
+  } else if (b.dataset.associer) {
+    const modele = liste.find((i) => i.id === b.dataset.associer);
+    if (!modele) return;
+    ouvrirAjoutIndicateur({ programmes, modele }, (choisi) => {
+      enregistrerIndicateurs(liste.map((i) => (i.id === modele.id ? { ...i, ...choisi, id: choisi.uid } : i)));
+      charger(racine);
+    });
+  } else if (b.dataset.retirer) {
+    const cible = liste.find((i) => i.id === b.dataset.retirer);
+    if (cible && confirm(`Retirer « ${cible.nom} » du suivi ? (vous pourrez le rajouter plus tard)`)) {
+      enregistrerIndicateurs(liste.filter((i) => i.id !== cible.id));
+      charger(racine);
+    }
+  } else if (b.dataset.action === "defaut") {
+    if (confirm("Rétablir la liste d’indicateurs du canevas ? Vos ajouts et retraits seront effacés.")) { reinitialiserIndicateurs(); charger(racine); }
+  } else if (b.dataset.export === "fars" && dernier) {
+    const entetes = ["Programme", "Indicateur", "Cible", "Réalisation", "Écart", "Numérateur", "Dénominateur", "Statut"];
+    const nom = `situation_indicateurs_fars_${new Date().toISOString().slice(0, 10)}`;
     if (b.dataset.format === "csv") exporterCsv(nom, entetes, lignesExport(dernier), resumeFiltres(dernier.etat));
     else exporterXlsx(nom, entetes, lignesExport(dernier), resumeFiltres(dernier.etat)).catch((erreur) => alert(erreur.message));
   }

@@ -86,3 +86,18 @@ test("Sokhna Ci : résumé calculé (moyennes, 3 plus faibles, 2 meilleures, ret
   });
   expect(r.indicateurs_fars.indicateur_le_plus_en_retard).toMatchObject({ nom: "CPN4", valeur: 60, cible: 80 });
 });
+
+test("qualité : complétude par district mois par mois et annuelle (reçus / attendus additionnés)", async () => {
+  const { tableauDistrictsMensuel } = await import("../../web/src/qualite-calculs.js");
+  const l = (f, m, pe, ou, valeur) => ({ dx: `${f}.${m}`, pe, ou, valeur });
+  const lignes = [
+    l("FoRmUlAiRe1", "EXPECTED_REPORTS", "202601", "DiStRiCt001", 10), l("FoRmUlAiRe1", "ACTUAL_REPORTS", "202601", "DiStRiCt001", 9),
+    l("FoRmUlAiRe2", "EXPECTED_REPORTS", "202601", "DiStRiCt001", 10), l("FoRmUlAiRe2", "ACTUAL_REPORTS", "202601", "DiStRiCt001", 5),
+    l("FoRmUlAiRe1", "EXPECTED_REPORTS", "202602", "DiStRiCt001", 10), // aucun reçu en février
+    l("FoRmUlAiRe1", "EXPECTED_REPORTS", "202601", "DiStRiCt002", 4), l("FoRmUlAiRe1", "ACTUAL_REPORTS", "202601", "DiStRiCt002", 4),
+  ];
+  const t = tableauDistrictsMensuel(lignes, ["FoRmUlAiRe1", "FoRmUlAiRe2"], [{ id: "DiStRiCt001", nom: "Pikine", region: "Dakar" }, { id: "DiStRiCt002", nom: "Kolda", region: "Kolda" }, { id: "DiStRiCt003", nom: "Vide" }], ["202601", "202602"]);
+  expect(t[0]).toMatchObject({ district: "Pikine", parMois: [70, 0], annuel: 46.7, manquants: 16 });
+  expect(t[1]).toMatchObject({ district: "Kolda", parMois: [100, null], annuel: 100, manquants: 0 });
+  expect(t[2]).toMatchObject({ district: "Vide", parMois: [null, null], annuel: null }); // rien d'attendu : non disponible, pas 0
+});
