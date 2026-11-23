@@ -821,6 +821,8 @@ export function majPresentatrice() {
   // Sur grand écran, la place de la colonne est réservée par le CSS dès le premier affichage ;
   // on ne la libère (classe « sans-presentatrice ») que lorsque Sokhna Ci est réduite.
   document.body.classList.toggle("sans-presentatrice", !actif);
+  // Réduite (bouton « − » ou icône), quelle que soit la largeur d'écran : les cartes prennent toute la largeur.
+  document.body.classList.toggle("sokhnaci-reduite", widget.classList.contains("collapsed"));
   if (avant === actif) return;
   marcheur?.placer(0);
   if (actif) { marcheur?.placer(70); marcheur?.marcherVers(0, 1300); }

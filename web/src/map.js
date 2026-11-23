@@ -1,5 +1,9 @@
 let carte = null;
-let observateurTaille = null; // la carte suit la taille de son cadre (ex. Sokhna Ci réduite → carte plus grande)
+let observateurTaille = null;
+// Dernier cadrage demandé (Sénégal, région ou district) : réappliqué quand le cadre change de taille, pour que
+// le pays (ou la zone choisie) remplisse toujours la carte agrandie.
+let cadrageActuel = null;
+let minuterieCadrage = 0; // la carte suit la taille de son cadre (ex. Sokhna Ci réduite → carte plus grande)
 let coucheDistricts = null;
 let coucheEtiquettes = null;
 let gererZoomEtiquettes = null;
@@ -82,6 +86,7 @@ function appliquerTheme(theme) {
 export function detruireCarte() {
   observateurTaille?.disconnect();
   observateurTaille = null;
+  cadrageActuel = null;
   if (carte) carte.remove();
   carte = null;
   coucheDistricts = null;
@@ -101,7 +106,7 @@ export function initCarte(elementId, theme) {
   const element = document.getElementById(elementId);
   if (!element) return null;
   detruireCarte();
-  carte = L.map(element, { scrollWheelZoom: false, zoomControl: true, preferCanvas: true }).setView([14.5, -14.5], 7);
+  carte = L.map(element, { scrollWheelZoom: false, zoomControl: true, preferCanvas: true, zoomSnap: 0.25, zoomDelta: 0.5 }).setView([14.5, -14.5], 7);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 18,
@@ -109,7 +114,11 @@ export function initCarte(elementId, theme) {
   }).addTo(carte);
   appliquerTheme(theme);
   if ("ResizeObserver" in window) {
-    observateurTaille = new ResizeObserver(() => carte?.invalidateSize({ pan: false }));
+    observateurTaille = new ResizeObserver(() => {
+      carte?.invalidateSize({ pan: false });
+      clearTimeout(minuterieCadrage);
+      minuterieCadrage = setTimeout(() => { if (carte) cadrageActuel?.(); }, 120);
+    });
     observateurTaille.observe(element);
   }
   return carte;
@@ -120,7 +129,8 @@ export function basculerThemeCarte(theme) { appliquerTheme(theme); }
 export function centrerRegion(region) {
   if (!carte || !limitesRegions.has(region)) return false;
   regionEtiquettes = region;
-  carte.fitBounds(limitesRegions.get(region), { padding: [28, 28], maxZoom: 10 });
+  cadrageActuel = () => carte.fitBounds(limitesRegions.get(region), { padding: [28, 28], maxZoom: 10 });
+  cadrageActuel();
   gererZoomEtiquettes?.();
   return true;
 }
@@ -131,7 +141,8 @@ export function afficherVueComplete() {
   districtActif?.closeTooltip();
   districtActif = null;
   regionEtiquettes = null;
-  carte.fitBounds(limitesCarte, { padding: [28, 28], maxZoom: 8 });
+  cadrageActuel = () => carte.fitBounds(limitesCarte, { padding: [28, 28], maxZoom: 8 });
+  cadrageActuel();
   etiquetteDistrictActive = null;
   gererZoomEtiquettes?.();
   return true;
@@ -152,6 +163,7 @@ export function centrerDistrict(region, nom) {
   layer.setStyle({ color: "#fff", weight: 3, fillOpacity: 1, opacity: 1 });
   layer.bringToFront();
   regionEtiquettes = region;
+  cadrageActuel = () => carte.fitBounds(bounds, { padding: [48, 48], maxZoom: 11 });
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
     carte.fitBounds(bounds, { padding: [48, 48], maxZoom: 11 });
   } else {
@@ -270,7 +282,9 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
 
   try {
     limitesCarte = coucheDistricts.getBounds();
-    carte.fitBounds(limitesCarte, { padding: [16, 16], maxZoom: 8 });
+    const limites = limitesCarte;
+    cadrageActuel = () => carte.fitBounds(limites, { padding: [16, 16], maxZoom: 8 });
+    cadrageActuel();
   } catch { /* contours partiels */ }
   requestAnimationFrame(() => {
     carte?.invalidateSize();

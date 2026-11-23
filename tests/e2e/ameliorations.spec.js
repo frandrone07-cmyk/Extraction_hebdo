@@ -518,3 +518,23 @@ test("les cartes grandissent quand Sokhna Ci est réduite", async ({ page }) => 
   await page.locator(".sokhnaci-collapse").click();
   await expect.poll(hauteur).toBeGreaterThan(avant + 50);
 });
+
+test("Sokhna Ci réduite : les deux cartes passent en pleine largeur, plus hautes, et le Sénégal remplit la carte", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  const taille = (id) => page.evaluate((i) => { const r = document.getElementById(i).getBoundingClientRect(); return { l: r.width, h: r.height }; }, id);
+  const avant = await taille("carte");
+  await page.locator(".sokhnaci-collapse").click();
+  await expect.poll(async () => (await taille("carte")).l).toBeGreaterThan(avant.l * 2);
+  const apres = await taille("carte");
+  expect(apres.h).toBeGreaterThanOrEqual(avant.h);
+  expect((await taille("carte-regions")).l).toBeCloseTo(apres.l, 0); // l'une sous l'autre, même largeur
+});
+
+test("changer d'onglet ramène au début de l'onglet, même si la page était défilée vers le bas", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.mouse.wheel(0, 3000);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(800);
+  await page.getByRole("tab", { name: /Évolution/ }).click();
+  const haut = await page.evaluate(() => document.querySelector(".tabs-wrap").getBoundingClientRect().top);
+  expect(Math.abs(haut)).toBeLessThanOrEqual(8); // la barre des onglets est en haut de l'écran, le début de l'onglet visible
+});

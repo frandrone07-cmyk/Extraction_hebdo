@@ -103,6 +103,14 @@ function afficherOnglet(name) {
   });
   ecrireEtatHash({ tab: ongletCourant });
 }
+// Changement d'onglet par l'utilisateur : la page revient au début de l'onglet (barre des onglets en haut de
+// l'écran) au lieu de rester défilée vers le bas, là où se trouvait l'onglet précédent.
+function revenirAuDebutDeLOnglet() {
+  const barre = document.querySelector(".tabs-wrap");
+  if (!barre) return;
+  const haut = barre.getBoundingClientRect().top + window.scrollY - 4; // 4 px : la bande du drapeau, fixée en haut
+  if (window.scrollY > haut) window.scrollTo({ top: haut, behavior: "instant" });
+}
 function afficherToast(message) {
   const toast = document.getElementById("toast");
   toast.textContent = message;
@@ -188,7 +196,7 @@ function initTabs() {
     poserDansEspace(evenement.detail?.question || "");
   });
   document.querySelectorAll('[role="tab"][data-tab]').forEach((button) => {
-    button.addEventListener("click", () => { ongletCourant = button.dataset.tab; afficherOnglet(ongletCourant); });
+    button.addEventListener("click", () => { ongletCourant = button.dataset.tab; afficherOnglet(ongletCourant); revenirAuDebutDeLOnglet(); });
     button.addEventListener("keydown", (event) => {
       if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
       event.preventDefault();

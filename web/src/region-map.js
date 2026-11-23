@@ -27,9 +27,12 @@ function echapper(value) {
 }
 
 let observateurTailleRegions = null;
+let cadrageRegions = null; // dernier cadrage, réappliqué quand la carte change de taille
+let minuterieCadrageRegions = 0;
 export function detruireCarteRegions() {
   observateurTailleRegions?.disconnect();
   observateurTailleRegions = null;
+  cadrageRegions = null;
   carteRegions?.remove();
   carteRegions = null;
   couchesParRegion = new Map();
@@ -43,7 +46,7 @@ export function initCarteRegions(elementId, theme) {
   const element = document.getElementById(elementId);
   if (!element) return null;
   detruireCarteRegions();
-  carteRegions = L.map(element, { scrollWheelZoom: false, zoomControl: true, preferCanvas: true }).setView([14.5, -14.5], 7);
+  carteRegions = L.map(element, { scrollWheelZoom: false, zoomControl: true, preferCanvas: true, zoomSnap: 0.25, zoomDelta: 0.5 }).setView([14.5, -14.5], 7);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 18,
@@ -52,7 +55,11 @@ export function initCarteRegions(elementId, theme) {
   const pane = element.querySelector(".leaflet-tile-pane");
   if (pane && theme === "dark") pane.style.filter = "invert(1) hue-rotate(180deg) brightness(.82) contrast(.92)";
   if ("ResizeObserver" in window) {
-    observateurTailleRegions = new ResizeObserver(() => carteRegions?.invalidateSize({ pan: false }));
+    observateurTailleRegions = new ResizeObserver(() => {
+      carteRegions?.invalidateSize({ pan: false });
+      clearTimeout(minuterieCadrageRegions);
+      minuterieCadrageRegions = setTimeout(() => { if (carteRegions) cadrageRegions?.(); }, 120);
+    });
     observateurTailleRegions.observe(element);
   }
   return carteRegions;
@@ -134,7 +141,10 @@ export function afficherRegions(regions, seuils, selectionRegion = null) {
   carteRegions.on("zoomend moveend", gererEtiquettes);
   try {
     const bounds = regionSelectionnee ? couchesParRegion.get(regionSelectionnee)?.getBounds() : null;
-    carteRegions.fitBounds(bounds || couche.getBounds(), { padding: [20, 20], maxZoom: regionSelectionnee ? 9 : 8 });
+    const limites = bounds || couche.getBounds();
+    const maxZoom = regionSelectionnee ? 9 : 8;
+    cadrageRegions = () => carteRegions.fitBounds(limites, { padding: [20, 20], maxZoom });
+    cadrageRegions();
   } catch {
     return;
   }
@@ -152,7 +162,10 @@ export function mettreEnEvidenceRegion(nom) {
   }
   const layer = couchesParRegion.get(nom);
   layer?.bringToFront();
-  if (layer) carteRegions.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 9 });
+  if (layer) {
+    cadrageRegions = () => carteRegions.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 9 });
+    cadrageRegions();
+  }
   gererEtiquettes?.();
   return Boolean(layer);
 }

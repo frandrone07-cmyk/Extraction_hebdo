@@ -1064,3 +1064,11 @@ main#contenu[aria-busy="true"] { min-height: calc(100vh + 240px); }
 @media (min-width: 1100px) and (max-width: 1839px) {
   body:not(.sans-presentatrice):not(.tv):not(.sna-actif) .masthead-actions { flex-basis: 100%; justify-content: flex-start; }
 }
+
+/* Sokhna Ci réduite : les deux cartes passent l'une sous l'autre, sur toute la largeur et bien plus hautes,
+   pour être lues confortablement. Ouverte, elles restent côte à côte. */
+body.sokhnaci-reduite .map-pair { grid-template-columns: minmax(0, 1fr); }
+body.sokhnaci-reduite .map-card #carte, body.sokhnaci-reduite .map-card #carte-regions { height: clamp(620px, 82vh, 980px); }
+@media (max-width: 700px) {
+  body.sokhnaci-reduite .map-card #carte, body.sokhnaci-reduite .map-card #carte-regions { height: clamp(380px, 70vh, 620px); }
+}
