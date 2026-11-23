@@ -25,6 +25,22 @@ const LECTURE = [
 // Analyses autorisées en POST (aucune écriture dans DHIS2).
 const ANALYSES = [/^dataAnalysis\/validationRules(\.json)?$/, /^dataAnalysis\/outlier(\.json)?$/];
 
+// Messages clairs selon la réponse de DHIS2 (aucun secret n'y figure, seulement le nom du serveur).
+function nomServeur(env) { try { return new URL(String(env.DHIS2_URL).trim()).host; } catch { return "adresse DHIS2_URL invalide"; } }
+// Le texte de l'erreur n'est jamais recopié tel quel : il peut contenir la valeur d'un secret (ex. adresse mal saisie).
+function messageErreur(env, erreur) {
+  const hote = nomServeur(env);
+  if (hote === "adresse DHIS2_URL invalide") return "Le secret DHIS2_URL ne contient pas une adresse web valide (attendu : https://senegal.dhis2.org/dhis). Ressaisissez-le avec « npx wrangler secret put DHIS2_URL ».";
+  return `DHIS2 (${hote}) est injoignable depuis le serveur intermédiaire${erreur?.name ? ` (${String(erreur.name).slice(0, 40)})` : ""}.`;
+}
+function diagnostic(statut) {
+  if (statut === 401) return "DHIS2 refuse l’identifiant ou le mot de passe (401) : vérifiez DHIS2_USER et DHIS2_PASS.";
+  if (statut === 403) return "Le compte DHIS2 n’a pas le droit de lire ces données (403).";
+  if (statut >= 300 && statut < 400) return `DHIS2 redirige la requête (${statut}) : identifiants refusés ou adresse DHIS2_URL incomplète (ex. https://senegal.dhis2.org/dhis).`;
+  if (statut === 404) return "Adresse DHIS2 introuvable (404) : vérifiez DHIS2_URL.";
+  return `DHIS2 a répondu ${statut}.`;
+}
+
 const CONFIG_PAR_DEFAUT = { formulaires: [], fars: { groupe: null, indicateurs: [], cibles: {} } };
 
 function entetesCors(origine) {
@@ -105,7 +121,9 @@ async function lireConfig(env) {
 
 // Appel DHIS2 avec cache (Cache API de Cloudflare). La date de mise à jour voyage dans X-Mis-A-Jour.
 async function appelerDhis2(requete, env, chemin, recherche, contexte) {
-  const url = `${String(env.DHIS2_URL).replace(/\/+$/, "")}/api/${chemin}${recherche}`;
+  // Adresse tolérante : espaces ou guillemets saisis par erreur autour de DHIS2_URL sont retirés.
+  const base = String(env.DHIS2_URL).trim().replace(/^["']|["']$/g, "").replace(/\/+$/, "");
+  const url = `${base}/api/${chemin}${recherche}`;
   const duree = /^analytics/.test(chemin) ? 600 : 300;
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const cleCache = new Request(`https://cache.dhis2-proxy/${chemin}${recherche}`);
@@ -114,7 +132,7 @@ async function appelerDhis2(requete, env, chemin, recherche, contexte) {
     const enCache = await cache.match(cleCache);
     if (enCache) return { corps: await enCache.text(), statut: 200, date: enCache.headers.get("X-Mis-A-Jour"), cache: "HIT" };
   }
-  const options = { headers: { Authorization: enteteAuth(env), Accept: "application/json" } };
+  const options = { redirect: "manual", headers: { Authorization: enteteAuth(env), Accept: "application/json" } };
   if (requete.method === "POST") {
     let corps = {};
     try { corps = JSON.parse((await requete.text()).slice(0, MAX_CORPS) || "{}"); } catch { corps = {}; }
@@ -152,13 +170,17 @@ export default {
       if (!configure(env)) return json({ configure: false, message: "Connexion DHIS2 non configurée (secrets DHIS2_URL, DHIS2_USER, DHIS2_PASS)." }, 200, origine);
       try {
         const r = await appelerDhis2(new Request(`${url.origin}/api/system/info`), env, "system/info", "?fields=version,revision,serverDate", contexte);
-        if (r.statut !== 200) return json({ configure: true, joignable: false, message: `DHIS2 a répondu ${r.statut}.` }, 200, origine);
-        const info = JSON.parse(r.corps);
+        if (r.statut !== 200) return json({ configure: true, joignable: false, message: diagnostic(r.statut) }, 200, origine);
+        let info;
+        try { info = JSON.parse(r.corps); } catch {
+          return json({ configure: true, joignable: false, message: "DHIS2 a renvoyé une page web au lieu de données : vérifiez l’adresse DHIS2_URL (elle doit finir par /dhis si l’API est sous /dhis/api)." }, 200, origine);
+        }
         // Adresse publique de DHIS2 (pour les liens « ouvrir dans DHIS2 » ; DHIS2_PUBLIC_URL si elle diffère de DHIS2_URL).
         const lienDhis2 = String(env.DHIS2_PUBLIC_URL || env.DHIS2_URL).replace(/\/+$/, "");
         return json({ configure: true, joignable: true, version: info.version, dateServeur: info.serverDate, lienDhis2 }, 200, origine);
-      } catch {
-        return json({ configure: true, joignable: false, message: "DHIS2 est injoignable pour le moment." }, 200, origine);
+      } catch (erreur) {
+        console.error("sante", nomServeur(env), erreur?.name);
+        return json({ configure: true, joignable: false, message: messageErreur(env, erreur) }, 200, origine);
       }
     }
 
@@ -189,13 +211,14 @@ export default {
       try {
         const r = await appelerDhis2(requete, env, cheminDhis2, chaine, contexte);
         if (r.statut === 401 || r.statut === 403) return json({ erreur: "DHIS2 refuse l'accès (identifiants ou droits)." }, 502, origine);
-        if (r.statut >= 400) return json({ erreur: `DHIS2 a répondu ${r.statut}.`, detail: r.corps.slice(0, 300) }, 502, origine);
+        if (r.statut >= 300) return json({ erreur: diagnostic(r.statut), detail: r.corps.slice(0, 300) }, 502, origine);
         return new Response(r.corps, {
           status: 200,
           headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Mis-A-Jour": r.date || new Date().toISOString(), "X-Cache": r.cache, ...entetesCors(origine) },
         });
-      } catch {
-        return json({ erreur: "DHIS2 est injoignable pour le moment." }, 502, origine);
+      } catch (erreur) {
+        console.error("api", nomServeur(env), erreur?.name);
+        return json({ erreur: messageErreur(env, erreur) }, 502, origine);
       }
     }
     return json({ erreur: "introuvable" }, 404, origine);
