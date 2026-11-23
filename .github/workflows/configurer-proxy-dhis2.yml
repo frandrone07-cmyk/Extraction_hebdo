@@ -1,0 +1,53 @@
+# Recopie les identifiants DHIS2 déjà enregistrés dans les secrets GitHub (DHIS2_USER, DHIS2_PASSWORD) vers les
+# secrets du serveur intermédiaire Cloudflare « dhis2-proxy ». Les valeurs ne sont jamais affichées : elles passent
+# directement d'un coffre à l'autre. À lancer à la main (onglet Actions) après chaque changement de mot de passe.
+#
+# Prérequis (une seule fois) : secret GitHub CLOUDFLARE_API_TOKEN (jeton Cloudflare « Edit Cloudflare Workers »).
+# Facultatif : secrets GitHub PIN_SALT et PIN_HASH (code PIN de configuration, voir trigger-worker/generer_secrets.py).
+name: Configurer le proxy DHIS2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  configurer:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 843a67230208351e9803606950b8dbcc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Vérifier les prérequis
+        env:
+          DHIS2_USER: ${{ secrets.DHIS2_USER }}
+          DHIS2_PASSWORD: ${{ secrets.DHIS2_PASSWORD }}
+        run: |
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || { echo "::error::Secret CLOUDFLARE_API_TOKEN manquant (voir l'en-tête du workflow)."; exit 1; }
+          [ -n "$DHIS2_USER" ] && [ -n "$DHIS2_PASSWORD" ] || { echo "::error::Secrets DHIS2_USER / DHIS2_PASSWORD manquants."; exit 1; }
+      - name: Recopier les secrets vers Cloudflare
+        working-directory: dhis2-proxy
+        env:
+          DHIS2_URL: https://senegal.dhis2.org/dhis
+          DHIS2_USER: ${{ secrets.DHIS2_USER }}
+          DHIS2_PASS: ${{ secrets.DHIS2_PASSWORD }}
+          PIN_SALT: ${{ secrets.PIN_SALT }}
+          PIN_HASH: ${{ secrets.PIN_HASH }}
+        run: |
+          for nom in DHIS2_URL DHIS2_USER DHIS2_PASS PIN_SALT PIN_HASH; do
+            valeur="${!nom}"
+            if [ -z "$valeur" ]; then echo "$nom : absent, ignoré"; continue; fi
+            printf '%s' "$valeur" | npx --yes wrangler@3 secret put "$nom" > /dev/null
+            echo "$nom : enregistré"
+          done
+      - name: Vérifier la connexion à DHIS2
+        run: |
+          sleep 5
+          curl -s -H "Origin: https://frandrone07-cmyk.github.io" https://dhis2-proxy.sokhnaci-completude-sn.workers.dev/sante | tee sante.json
+          echo
+          grep -q '"joignable":true' sante.json || { echo "::error::Le proxy ne joint pas DHIS2 (voir la réponse ci-dessus)."; exit 1; }
