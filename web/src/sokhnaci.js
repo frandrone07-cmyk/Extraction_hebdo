@@ -318,9 +318,12 @@ function suivreGeste(fraction) {
   gesteActuel = geste;
   for (const element of avatars()) if (element.classList.contains("speaking")) element.dataset.geste = geste;
 }
-function definirBouche(ouverture) {
+function definirBouche(ouverture, timbre = null) {
   for (const element of avatars()) {
-    if (ouverture === null) { element.style.removeProperty("--bouche"); delete element.dataset.sync; } else { element.style.setProperty("--bouche", String(ouverture)); element.dataset.sync = "audio"; }
+    if (ouverture === null) { element.style.removeProperty("--bouche"); element.style.removeProperty("--timbre"); delete element.dataset.sync; continue; }
+    element.style.setProperty("--bouche", String(ouverture));
+    if (timbre !== null) element.style.setProperty("--timbre", timbre.toFixed(3));
+    element.dataset.sync = "audio";
   }
 }
 
@@ -335,8 +338,10 @@ function lierBouche(audio, surProgression = null) {
     source.connect(analyseur);
     analyseur.connect(contexteAudio.destination);
     const donnees = new Uint8Array(analyseur.fftSize);
+    const spectre = new Uint8Array(analyseur.frequencyBinCount);
     let actif = true;
     let lisse = 0.3;
+    let timbre = 0.12;
     const boucle = () => {
       if (!actif) return;
       analyseur.getByteTimeDomainData(donnees);
@@ -344,7 +349,13 @@ function lierBouche(audio, surProgression = null) {
       for (const valeur of donnees) { const centre = (valeur - 128) / 128; somme += centre * centre; }
       const energie = Math.sqrt(somme / donnees.length);
       lisse += (Math.min(1.7, 0.3 + energie * 9) - lisse) * 0.45;
-      definirBouche(lisse);
+      // Timbre : centre de gravité du spectre (sons graves « ou/o » → lèvres arrondies, aigus « i/é » → étirées).
+      analyseur.getByteFrequencyData(spectre);
+      let poids = 0;
+      let total = 0;
+      for (let i = 1; i < spectre.length; i += 1) { poids += i * spectre[i]; total += spectre[i]; }
+      if (total > 200) timbre += ((poids / total) / spectre.length - timbre) * 0.35;
+      definirBouche(lisse, timbre);
       if (audio.duration > 0 && Number.isFinite(audio.duration)) (surProgression || suivreGeste)(audio.currentTime / audio.duration);
       requestAnimationFrame(boucle);
     };
@@ -776,6 +787,8 @@ export function initSokhnaci(model) {
   try { voiceEnabled = localStorage.getItem(CLE_VOIX) !== "false"; } catch { voiceEnabled = true; }
   widget = document.createElement("section");
   widget.className = "sokhnaci-widget style-tv"; // même carte que l’assistante du mode TV
+  // Créée directement dans sa forme finale (colonne réservée dès le premier affichage) : rien ne bouge au chargement.
+  if (document.body.classList.contains("avec-presentatrice")) widget.classList.add("presentatrice");
   widget.setAttribute("aria-label", "Sokhnaci, guide vocal du tableau de bord");
   widget.innerHTML = `<div class="sokhnaci-card">
     <div class="sokhnaci-top">

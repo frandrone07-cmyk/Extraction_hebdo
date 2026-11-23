@@ -218,7 +218,7 @@ async function creer(tenueInitiale) {
     return {
       parle: cl.contains("speaking"), ecoute: cl.contains("listening"), marche: !buste && cl.contains("walking"), assise: !buste && cl.contains("assise"), danse: !buste && cl.contains("danse"),
       sourire: cl.contains("grand-sourire"), geste: e.dataset.geste || "", emotion: e.dataset.emotion || "neutre", mainGauche: e.dataset.main === "gauche",
-      bouche: e.dataset.sync === "audio" ? nombre("--bouche", 0.4) : null, x: buste ? 0 : nombre("--x", 0), echelle: buste ? 1 : nombre("--echelle", 1), sens: buste ? 1 : nombre("--sens", 1),
+      bouche: e.dataset.sync === "audio" ? nombre("--bouche", 0.4) : null, timbre: e.dataset.sync === "audio" ? nombre("--timbre", null) : null, x: buste ? 0 : nombre("--x", 0), echelle: buste ? 1 : nombre("--echelle", 1), sens: buste ? 1 : nombre("--sens", 1),
       posture: cl.contains("posture-a") ? 1 : cl.contains("posture-b") ? -1 : 0,
       applaudit: cl.contains("applaudit"), incline: cl.contains("incline"), reflechit: cl.contains("reflechit"), pense: cl.contains("pense"),
     };
@@ -375,9 +375,18 @@ async function creer(tenueInitiale) {
     if (s.sourire || s.geste === "sourire") E.happy = Math.max(E.happy, 0.9);
     if (s.ecoute) E.relaxed = 0.35;
     // bouche : suit l'énergie réelle du son, sinon mouvement naturel pendant la parole
-    let aa = 0; let ih = 0; let ou = 0;
+    let aa = 0; let ih = 0; let ou = 0; let ee = 0; let oh = 0;
     if (s.parle) {
-      if (s.bouche !== null) {
+      if (s.bouche !== null && s.timbre !== null) {
+        // Lèvres guidées par le son réel : ouverture = énergie, forme = timbre (grave → o/ou, médium → a, aigu → i/é).
+        const ouverture = limiter((s.bouche - 0.3) / 1.1, 0, 1);
+        const tn = limiter((s.timbre - 0.04) / 0.22, 0, 1);
+        aa = ouverture * limiter(1 - Math.abs(tn - 0.45) * 1.8, 0.15, 1) * 0.9;
+        oh = ouverture * limiter(0.45 - tn, 0, 0.45) * 1.3;
+        ou = ouverture * limiter(0.3 - tn, 0, 0.3) * 1.6;
+        ih = ouverture * limiter(tn - 0.55, 0, 0.45) * 1.5;
+        ee = ouverture * limiter(tn - 0.4, 0, 0.6) * 0.9;
+      } else if (s.bouche !== null) {
         aa = limiter((s.bouche - 0.3) / 1.1, 0, 1) * 0.85;
         ih = 0.28 * Math.abs(Math.sin(t * 5.3)) * aa;
         ou = 0.22 * Math.abs(Math.sin(t * 3.7)) * (1 - aa * 0.5);
@@ -387,7 +396,7 @@ async function creer(tenueInitiale) {
         ou = 0.2 * Math.abs(Math.sin(t * 4.3));
       }
     }
-    expression("aa", aa); expression("ih", ih); expression("ou", ou);
+    expression("aa", aa); expression("ih", ih); expression("ou", ou); expression("ee", ee); expression("oh", oh);
     for (const [nom, valeur] of Object.entries(E)) expression(nom, valeur);
     tempsClignement -= dt;
     if (tempsClignement <= 0) { blink = 1; tempsClignement = 2 + Math.random() * 3.5; }

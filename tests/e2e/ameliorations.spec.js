@@ -419,3 +419,44 @@ test("à chaque nouvelle visite, Sokhna Ci est ouverte et présente la situation
   await expect(nouvelleVisite.locator(".sokhnaci-card")).toBeVisible();
   await expect(nouvelleVisite.locator(".sokhnaci-bubble")).toContainText("point de situation");
 });
+
+test("avatar 3D : la forme des lèvres suit le timbre de la voix (grave → arrondie, aigu → étirée)", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.addInitScript(() => { window.__sokhnaci3d = true; window.speechSynthesis.speak = (u) => setTimeout(() => u.onend?.(), 0); });
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await ouvrirEspace(page);
+  await expect(page.locator(".sna-scene.trois-d")).toBeVisible({ timeout: 120_000 });
+  const forme = async (timbre) => {
+    await page.evaluate((t) => { const a = document.getElementById("sna-acteur"); a.classList.add("speaking"); a.dataset.sync = "audio"; a.style.setProperty("--bouche", "1.5"); a.style.setProperty("--timbre", String(t)); }, timbre);
+    await page.waitForTimeout(400);
+    return page.evaluate(() => window.__sna3d.etat());
+  };
+  const grave = await forme(0.05);
+  const aigu = await forme(0.26);
+  expect(grave.ou).toBeGreaterThan(aigu.ou); // lèvres arrondies sur les sons graves
+  expect(aigu.ih).toBeGreaterThan(grave.ih); // lèvres étirées sur les sons aigus
+});
+
+test("l'écran ne bouge pas : aucun décalage au chargement ni défilement horizontal, du téléphone au grand écran", async ({ browser }) => {
+  for (const [largeur, hauteur] of [[360, 740], [768, 1024], [1280, 720], [1920, 1080]]) {
+    const page = await browser.newPage({ viewport: { width: largeur, height: hauteur } });
+    await page.addInitScript(() => { window.__decalage = 0; new PerformanceObserver((l) => { for (const e of l.getEntries()) if (!e.hadRecentInput) window.__decalage += e.value; }).observe({ type: "layout-shift", buffered: true }); });
+    await page.route("https://cdnjs.cloudflare.com/**", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith("/leaflet.css")) return route.fulfill({ status: 200, contentType: "text/css", body: leafletCss });
+      if (url.pathname.endsWith("/leaflet.js")) return route.fulfill({ status: 200, contentType: "text/javascript", body: leafletJs });
+      if (url.pathname.endsWith("/chart.umd.min.js")) return route.fulfill({ status: 200, contentType: "text/javascript", body: chartJs });
+      if (url.pathname.endsWith("/chartjs-plugin-datalabels.min.js")) return route.fulfill({ status: 200, contentType: "text/javascript", body: chartDataLabelsJs });
+      return route.abort();
+    });
+    await page.route("https://tile.openstreetmap.org/**", (route) => route.abort());
+    await page.goto("/");
+    await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+    await page.waitForTimeout(1500);
+    const mesure = await page.evaluate(() => ({ decalage: window.__decalage, debordement: document.documentElement.scrollWidth - window.innerWidth }));
+    expect(mesure.debordement, `débordement horizontal à ${largeur}px`).toBeLessThanOrEqual(0);
+    expect(mesure.decalage, `décalage de mise en page à ${largeur}px`).toBeLessThan(0.1);
+    await page.close();
+  }
+});
