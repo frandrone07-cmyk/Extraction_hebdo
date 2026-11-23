@@ -63,3 +63,26 @@ test("qualité : valeurs négatives et nettoyage de la liste des formulaires sui
   expect(nettoyerFormulaires([{ uid: "FoRmUlAiRe1", nom: "  Paludisme " }, { uid: "court", nom: "x" }, { uid: "FoRmUlAiRe2", nom: "" }]))
     .toEqual([{ uid: "FoRmUlAiRe1", nom: "Paludisme", ordre: 0 }, { uid: "FoRmUlAiRe2", nom: "FoRmUlAiRe2", ordre: 1 }]);
 });
+
+test("Sokhna Ci : résumé calculé (moyennes, 3 plus faibles, 2 meilleures, retards, violations), sans tableau brut", async () => {
+  const { resumePourSokhnaci } = await import("../../web/src/resume-live.js");
+  expect(resumePourSokhnaci(null, null)).toBeNull();
+  const lignes = ["Dakar:100:95:90", "Kolda:100:50:20", "Matam:100:70:60", "Thiès:100:99:99"].map((x) => {
+    const [unite, attendus, recus, aTemps] = x.split(":");
+    return { unite, formulaire: "Paludisme", formulaireUid: "FoRmUlAiRe1", attendus: +attendus, recus: +recus, aTemps: +aTemps };
+  });
+  const r = resumePourSokhnaci({
+    lignes, etat: { annees: [2026], mois: [10], periodicite: "M", niveau: "region", unites: [], desagregations: {} }, misAJour: "2026-11-23T09:05:00",
+    synthese: [{ formulaire: "Paludisme", attendus: 400, recus: 314, aTemps: 269, promptitude: 67.3 }], violations: 4,
+  }, { programme: "Mère", misAJour: "2026-11-23T09:05:00", tableau: [
+    { nom: "CPN4", valeur: 60, cible: 80, periode: "202610", variation: { ecart: 2 } },
+    { nom: "Accouchements assistés", valeur: 78, cible: 80, periode: "202610", variation: { ecart: -1 } },
+  ] });
+  expect(r.qualite_des_donnees).toMatchObject({
+    mise_a_jour: "Mis à jour le 23/11/2026 à 09:05", completude_moyenne: 78.5, promptitude_moyenne: 67.3, rapports_manquants: 86,
+    unites_les_plus_faibles: [{ nom: "Kolda", completude: 50 }, { nom: "Matam", completude: 70 }, { nom: "Dakar", completude: 95 }],
+    unites_les_meilleures: [{ nom: "Thiès", completude: 99 }, { nom: "Dakar", completude: 95 }],
+    formulaire_le_plus_en_retard: { nom: "Paludisme", promptitude: 67.3 }, violations_regles_de_validation: 4,
+  });
+  expect(r.indicateurs_fars.indicateur_le_plus_en_retard).toMatchObject({ nom: "CPN4", valeur: 60, cible: 80 });
+});

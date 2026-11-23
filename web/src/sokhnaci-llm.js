@@ -4,6 +4,9 @@ import { ASSISTANT_API_URL } from "./assistant-config.js";
 import { toutesDistricts, labelRegion, nomFormulaire } from "./sokhnaci-dialogue.js";
 import { analyser } from "./sokhnaci-analyse.js";
 import { construireBilan } from "./bilan.js";
+import { dernieresDonneesQualite } from "./page-qualite.js";
+import { dernieresDonneesFars } from "./page-fars.js";
+import { resumePourSokhnaci } from "./resume-live.js";
 
 const arrondi = (x) => (x === null || x === undefined ? null : Math.round(x * 10) / 10);
 
@@ -21,7 +24,7 @@ export function llmDisponible() { return Boolean(urlAssistante()) && Date.now() 
 function noterEchec() { if (++echecsConsecutifs >= 2) { suspenduJusqua = Date.now() + PAUSE_APRES_ECHECS_MS; echecsConsecutifs = 0; } }
 function noterSucces() { echecsConsecutifs = 0; suspenduJusqua = 0; }
 const cacheReponses = new Map();
-const cleCache = (question, model) => `${model.semaineCle}|${model.selection?.periode}|${String(question).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
+const cleCache = (question, model) => `${model.semaineCle}|${model.selection?.periode}|${dernieresDonneesQualite()?.misAJour || ""}|${dernieresDonneesFars()?.misAJour || ""}|${String(question).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
 export function reinitialiserLLM() { echecsConsecutifs = 0; suspenduJusqua = 0; cacheReponses.clear(); }
 
 export function construireFaits(model) {
@@ -32,8 +35,12 @@ export function construireFaits(model) {
   const triees = [...districts].sort((a, b) => a.tauxMoyen - b.tauxMoyen);
   const ligne = (d) => ({ nom: d.nom, region: labelRegion(d.region), taux: arrondi(d.tauxMoyen), ecart: arrondi(d.variation) });
   const a = analyser(model);
+  const tempsReel = resumePourSokhnaci(dernieresDonneesQualite(), dernieresDonneesFars());
   const regionsTriees = [...(model.toutesRegions || [])].filter((r) => r.tauxMoyen !== null && r.tauxMoyen !== undefined).sort((x, y) => x.tauxMoyen - y.tauxMoyen);
   return {
+    // Pages temps réel (Qualité des données, Indicateurs FARS) : résumé calculé de la sélection en cours, si chargée.
+    // Placé en tête : le service coupe les faits au-delà de 9 000 caractères.
+    ...(tempsReel ? { temps_reel_dhis2: tempsReel } : {}),
     extraction_dhis2: model.semaineCle,
     comparaison_avec: model.comparaisonCle || null,
     periode: model.selection?.periode,
