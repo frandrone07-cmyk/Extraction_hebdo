@@ -35,3 +35,7 @@ Thumbs.db
 
 # Fichiers sources bruts (deja convertis/nettoyes dans data/exports/)
 /Extraction_ulterieure_mis_à_jour/
+
+# Secrets locaux des Cloudflare Workers
+.dev.vars
+**/.dev.vars

@@ -1,0 +1,6 @@
+# Local : copier ce fichier en .dev.vars (ignoré par git) pour « npx wrangler dev ».
+DHIS2_URL=https://senegal.dhis2.org/dhis
+DHIS2_USER=
+DHIS2_PASS=
+PIN_SALT=
+PIN_HASH=

@@ -1,0 +1,30 @@
+name = "dhis2-proxy"
+main = "index.js"
+compatibility_date = "2026-11-10"
+workers_dev = true
+
+# Origines autorisées (le site public et le serveur local de développement/tests).
+[vars]
+ALLOWED_ORIGIN = "https://frandrone07-cmyk.github.io,http://127.0.0.1:4173"
+
+# Configuration du tableau de bord (formulaires suivis, indicateurs FARS, cibles).
+# L'identifiant est rempli après `npx wrangler kv namespace create CONFIG`.
+[[kv_namespaces]]
+binding = "CONFIG"
+id = "2cf5fcb0375c42ed9dbe20d09ac96772"
+
+[[ratelimits]]
+name = "PROXY_RATE_LIMIT"
+namespace_id = "2026112301"
+
+[ratelimits.simple]
+limit = 120
+period = 60
+
+# Secrets (jamais dans ce fichier ni dans le dépôt) — à saisir par l'administrateur :
+#   npx wrangler secret put DHIS2_URL     (ex. https://senegal.dhis2.org/dhis)
+#   npx wrangler secret put DHIS2_USER
+#   npx wrangler secret put DHIS2_PASS
+#   npx wrangler secret put PIN_SALT      (voir trigger-worker/generer_secrets.py)
+#   npx wrangler secret put PIN_HASH
+# En local : fichier .dev.vars (même format que .env), ignoré par git.
