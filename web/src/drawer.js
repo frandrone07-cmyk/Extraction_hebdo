@@ -20,7 +20,7 @@ export function ouvrirFicheDistrict(district) {
       const point = form.historiquePeriodes.find((item) => item.periode_code === code);
       const value = point?.valeur ?? null;
       const background = couleurStatut(point?.statut || "inconnu");
-      return `<td class="heatmap-cell" style="background:${background}" title="${escapeHtml(form.nom)} · ${escapeHtml(periods.get(code))}">${value === null ? "—" : Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}</td>`;
+      return `<td class="heatmap-cell statut-${point?.statut || "inconnu"}" style="background:${background}" title="${escapeHtml(form.nom)} · ${escapeHtml(periods.get(code))}">${value === null ? "—" : Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}</td>`;
     }).join("");
     const variation = form.variation === null ? "—" : `${form.variation > 0 ? "+" : ""}${form.variation.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} pt`;
     return `<tr><th scope="row">${escapeHtml(form.nom)}</th>${values}<td>${variation}</td></tr>`;

@@ -230,8 +230,8 @@ export function afficherDistricts(districts, { onClicDistrict, etiquettes = fals
         icon: L.divIcon({
           className: `carte-etiquette${nomsEtiquettes ? " carte-etiquette-nom" : ""}`,
           html: nomsEtiquettes
-            ? `<span data-region="${escapeHtml(district.region)}" style="background:${couleurEtiquette}"><strong>${escapeHtml(district.nom)}</strong><small>${tauxEtiquette}%</small></span>`
-            : `<span data-region="${escapeHtml(district.region)}" style="background:${couleurEtiquette}">${tauxEtiquette}%</span>`,
+            ? `<span class="statut-${statutEtiquette}" data-region="${escapeHtml(district.region)}" style="background:${couleurEtiquette}"><strong>${escapeHtml(district.nom)}</strong><small>${tauxEtiquette}%</small></span>`
+            : `<span class="statut-${statutEtiquette}" data-region="${escapeHtml(district.region)}" style="background:${couleurEtiquette}">${tauxEtiquette}%</span>`,
           iconSize: null,
         }),
       });

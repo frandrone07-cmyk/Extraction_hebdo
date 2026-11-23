@@ -33,7 +33,7 @@ def test_excel_fusionne_les_districts_et_colore_les_taux(tmp_path):
     assert sheet["C2"].value == 69.9
     assert sheet["C2"].number_format == "0.0"
     assert sheet["C2"].fill.fgColor.rgb.endswith("E74C3C")  # critique
-    assert sheet["D2"].fill.fgColor.rgb.endswith("F5B041")  # à surveiller
+    assert sheet["D2"].fill.fgColor.rgb.endswith("F4C20D")  # à surveiller
     assert sheet["D3"].fill.fgColor.rgb.endswith("27AE60")  # conforme
     assert sheet["D4"].value is None  # case non renseignée : grisée, sans valeur
     assert sheet["A4"].border.bottom.style == "medium"  # trait de séparation entre deux districts

@@ -160,7 +160,7 @@ export function apresRenduVue(modele, theme) {
 
 function heatCell(value, seuils) {
   const statut = value === null ? "inconnu" : value < seuils.critique ? "critique" : value < seuils.conforme ? "surveiller" : "conforme";
-  return `<td class="heatmap-cell" style="background:${couleurStatut(statut)}" title="${pct(value)}">${value ?? "—"}</td>`;
+  return `<td class="heatmap-cell statut-${statut}" style="background:${couleurStatut(statut)}" title="${pct(value)}">${value ?? "—"}</td>`;
 }
 function rowDistrict(district, index, withRegion = true) {
   return `<tr><td><button class="row-link" type="button" data-district-index="${index}">${escapeHtml(district.nom)}</button></td>${withRegion ? `<td>${escapeHtml(libelleRegion(district.region))}</td>` : ""}<td class="cell-statut cell-${district.statut}">${puce(district.statut)}${pct(district.tauxMoyen)}</td><td>${delta(district.variation)}</td></tr>`;

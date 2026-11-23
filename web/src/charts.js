@@ -5,6 +5,17 @@ const CSS = {
   inconnu: "--inconnu", primaire: "--primary", secondaire: "--navy-soft",
 };
 
+// Texte lisible sur une couleur de fond : sombre sur les fonds clairs (ex. jaune « à surveiller »), blanc sinon.
+export function texteSur(fond) {
+  const hex = String(fond || "").trim().replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return "#fff";
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#231c00" : "#fff";
+}
+function couleurEtiquette(contexte) {
+  const fond = contexte.dataset?.backgroundColor;
+  return texteSur(Array.isArray(fond) ? fond[contexte.dataIndex] : fond);
+}
 function color(name) {
   const variable = CSS[name] || name;
   return getComputedStyle(document.documentElement).getPropertyValue(variable).trim() || "#087f5b";
@@ -169,7 +180,7 @@ export function grapheBarresEmpilees(id, labels, series, { etiquettes = false } 
   options.plugins.legend.position = "bottom";
   options.plugins.tooltip.callbacks.label = (context) => ` ${context.dataset.label} : ${context.raw}`;
   options.plugins.datalabels = datalabelsOptions(etiquettes, (value) => (value ? String(value) : ""));
-  if (etiquettes) options.plugins.datalabels.color = "#fff";
+  if (etiquettes) options.plugins.datalabels.color = couleurEtiquette;
   options.scales = {
     x: { ...axisOptions(), stacked: true, grid: { display: false } },
     y: { ...axisOptions(), stacked: true, beginAtZero: true },
@@ -191,7 +202,7 @@ export function grapheDoughnut(id, distribution, { etiquettes = false } = {}) {
   options.plugins.legend.position = "bottom";
   options.plugins.tooltip.callbacks.label = (context) => ` ${context.label} : ${context.raw}`;
   options.plugins.datalabels = datalabelsOptions(etiquettes, (value) => (value ? String(value) : ""));
-  if (etiquettes) options.plugins.datalabels.color = "#fff";
+  if (etiquettes) options.plugins.datalabels.color = couleurEtiquette;
   const total = distribution.total ?? distribution.conforme + distribution.surveiller + distribution.critique + (distribution.inconnu || 0);
   const centerLabel = {
     id: `center-label-${id}`,
