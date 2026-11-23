@@ -1035,3 +1035,17 @@ body.tv .sokhnaci-rouvrir { display: none; }
 html, body { max-width: 100%; overflow-x: clip; }
 /* Pendant le chargement, la zone de contenu réserve sa place : le pied de page n'apparaît pas puis ne « saute » pas. */
 main#contenu[aria-busy="true"] { min-height: calc(100vh + 240px); }
+
+/* La ligne aux couleurs du drapeau reste fixée en haut de l'écran pendant le défilement. */
+.tricolore { position: sticky; top: 0; z-index: 60; }
+/* « − » : la carte se range dans la petite icône ronde (petite animation d'apparition). */
+@media (prefers-reduced-motion: no-preference) {
+  .sokhnaci-widget.fermee .sokhnaci-launcher { animation: sokhnaci-rangee .35s cubic-bezier(.2, .8, .2, 1.3) both; }
+  @keyframes sokhnaci-rangee { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+}
+/* Après la question « Avez-vous des questions… ? », le champ de question est mis en valeur. */
+.sokhnaci-widget.invite-question .sokhnaci-ask input { border-color: #8ff0c4; box-shadow: 0 0 0 3px rgba(143, 240, 196, .3); }
+@media (prefers-reduced-motion: no-preference) {
+  .sokhnaci-widget.invite-question .sokhnaci-ask input { animation: sokhnaci-invite 1.6s ease-in-out 3; }
+  @keyframes sokhnaci-invite { 50% { box-shadow: 0 0 0 6px rgba(143, 240, 196, .15); } }
+}

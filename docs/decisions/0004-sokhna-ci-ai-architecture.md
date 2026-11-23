@@ -149,3 +149,9 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
 - La page ne « saute » plus au chargement : la colonne de Sokhna Ci est réservée dès le premier affichage par un court script en tête de `<body>` et la carte est créée directement dans sa forme finale ; la zone de contenu réserve sa hauteur pendant le chargement (le pied de page n'apparaît pas puis ne descend pas). Mesure (Cumulative Layout Shift) : 0,80 → 0,04 en 1920 px, ≤ 0,001 aux autres tailles, aucun débordement horizontal de 360 à 2560 px. Un test vérifie quatre tailles.
 - Portables et écrans peu hauts : en-tête, titre et filtres plus compacts. Écrans de moins de 1100 px : carte compacte de Sokhna Ci plus petite, pour ne plus masquer les onglets.
 - Avatar 3D : la forme des lèvres suit le timbre réel de la voix (centre de gravité du spectre) : sons graves → lèvres arrondies (o, ou), médium → ouvertes (a), aigus → étirées (i, é), en plus de l'ouverture qui suit l'énergie.
+
+## Bande du drapeau fixe, situation automatique après rechargement (23 novembre 2026)
+
+- La ligne aux couleurs du drapeau reste collée en haut de l'écran pendant le défilement, sur toute la largeur.
+- Après un rechargement (F5, Ctrl+F5), Sokhna Ci est toujours ouverte et présente aussitôt la situation : le navigateur interdisant le son sans geste de l'utilisateur, elle commence en sous-titres (avatar animé, « Cliquez n'importe où pour entendre Sokhna Ci ») puis continue à voix haute, à partir de la phrase en cours, au premier clic ou à la première touche. Le point de situation se termine par « Avez-vous des questions, ou des éclaircissements à me demander ? » ; elle prend alors une posture d'écoute et le champ de question est mis en valeur. En mode TV, cette question est remplacée par celle de la diapositive (pas de doublon).
+- Le bouton « − » range Sokhna Ci dans la petite icône ronde (avec une courte animation) ; elle ne reste plus fermée d'un chargement à l'autre.

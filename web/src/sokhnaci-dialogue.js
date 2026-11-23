@@ -199,7 +199,7 @@ export function creerSituation(model) {
     if (actions.length) segments.push({ ...segment(`Ma recommandation : ${liste(actions)}.`, "geste_ouvert"), cible: ".bilan-solutions" });
   }
   if (attendue && Date.now() <= new Date(`${attendue}T06:00:00Z`).getTime()) segments.push(segment(`Prochaine mise à jour : lundi ${D(attendue)}, à minuit.`, "pointer_ecran"));
-  segments.push(segment("Je reste à votre disposition pour le détail d’une région, d’un district ou d’un formulaire.", "mains_jointes"));
+  segments.push(segment("Avez-vous des questions, ou des éclaircissements à me demander ?", "inclinaison_ecoute"));
   return { etat: "attente", emotion, segments, suivi: "Que voulez-vous savoir ?" };
 }
 

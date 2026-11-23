@@ -42,7 +42,7 @@
 </head>
 <body>
   <!-- Réserve dès le premier affichage la colonne de Sokhna Ci (grand écran) : la page ne « saute » pas au chargement. -->
-  <script>try { if (innerWidth >= 1100 && sessionStorage.getItem("completude-sokhnaci-fermee") !== "1" && !/[#&]tv=/.test(location.hash)) document.body.classList.add("avec-presentatrice"); } catch (e) { /* stockage indisponible */ }</script>
+  <script>try { if (innerWidth >= 1100 && !/[#&]tv=/.test(location.hash)) document.body.classList.add("avec-presentatrice"); } catch (e) { /* stockage indisponible */ }</script>
   <a class="skip-link" href="#contenu">Aller au contenu principal</a>
   <div class="tricolore" aria-hidden="true"></div>
 

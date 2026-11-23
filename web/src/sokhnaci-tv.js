@@ -462,7 +462,7 @@ export function creerAssistanteTV() {
       }
       if (navigator.userActivation?.hasBeenActive === false && etat.voix) dire("Cliquez n’importe où pour activer ma voix. Je présente en sous-titres en attendant.");
       const situation = creerSituation(modele);
-      const dialogue = { emotion: situation.emotion, segments: [...situation.segments.filter((x) => !/^Je reste à votre disposition/.test(x.texte)), ...PHRASES_FIN] };
+      const dialogue = { emotion: situation.emotion, segments: [...situation.segments.filter((x) => !/^(Je reste à votre disposition|Avez-vous des questions)/.test(x.texte)), ...PHRASES_FIN] };
       const complet = await narrer(dialogue, jeton);
       if (!complet) return;
       await fenetreQuestions(jeton, 45000);

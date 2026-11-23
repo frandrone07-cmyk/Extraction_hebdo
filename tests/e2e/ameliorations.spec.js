@@ -272,22 +272,23 @@ test("tableau de bord : Sokhna Ci est affichée comme en mode TV (présentatrice
   await page.locator(".sokhnaci-speak").click();
   await expect(widget).toHaveClass(/speaking/);
   // Réduite, elle libère la place ; sur un écran plus petit, la carte compacte revient.
-  // Bouton « − » : Sokhna Ci se ferme complètement (aucune pastille), et le reste après un rechargement.
+  // Bouton « − » : Sokhna Ci se range dans la petite icône ronde.
   await page.locator(".sokhnaci-collapse").click();
   await expect(page.locator(".sokhnaci-card")).toBeHidden();
   await expect(page.locator(".sokhnaci-launcher")).toBeVisible(); // petite icône ronde pour la rouvrir
   await expect(page.locator("body")).not.toHaveClass(/avec-presentatrice/);
   await page.locator(".sokhnaci-launcher").click();
   await expect(widget).toHaveClass(/presentatrice/);
+  // Elle se rouvre aussi avec le bouton « Sokhna Ci » de l'en-tête.
   await page.locator(".sokhnaci-collapse").click();
-  await page.reload();
-  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
-  await expect(page.locator(".sokhnaci-card")).toBeHidden();
-  await expect(page.locator(".sokhnaci-launcher")).toBeVisible();
-  // Elle se rouvre avec le bouton « Sokhna Ci » de l'en-tête.
   await page.locator(".sokhnaci-rouvrir").click();
   await expect(widget).toHaveClass(/presentatrice/);
   await expect(page.locator(".sokhnaci-rouvrir")).toBeHidden();
+  // Après un rechargement (F5, Ctrl+F5), elle revient pour faire le point de situation.
+  await page.locator(".sokhnaci-collapse").click();
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await expect(page.locator(".sokhnaci-card")).toBeVisible();
   await page.setViewportSize({ width: 1000, height: 800 });
   await expect(widget).not.toHaveClass(/presentatrice/);
   // Même carte que le mode TV : champ « Une question ? (touche Q) », touche Q pour poser une question.
@@ -459,4 +460,27 @@ test("l'écran ne bouge pas : aucun décalage au chargement ni défilement horiz
     expect(mesure.decalage, `décalage de mise en page à ${largeur}px`).toBeLessThan(0.1);
     await page.close();
   }
+});
+
+
+test("la ligne aux couleurs du drapeau reste fixée en haut de l'écran pendant le défilement", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.mouse.wheel(0, 2500);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1000);
+  const bande = await page.evaluate(() => { const r = document.querySelector(".tricolore").getBoundingClientRect(); return { haut: r.top, gauche: r.left, droite: r.right, largeur: innerWidth }; });
+  expect(bande.haut).toBe(0);
+  expect(bande.gauche).toBe(0);
+  expect(bande.droite).toBe(bande.largeur); // toute la largeur, y compris au-dessus de la colonne de Sokhna Ci
+});
+
+test("après Ctrl+F5, la situation se déroule seule en sous-titres puis Sokhna Ci demande s'il y a des questions", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.addInitScript(() => { window.__sokhnaciSousTitres = true; window.speechSynthesis.speak = (u) => { u.onstart?.(); setTimeout(() => u.onend?.(), 300); }; });
+  await page.reload();
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  const phraseActive = page.locator(".sokhnaci-bubble .sok-phrase.actif");
+  await expect(phraseActive).toHaveCount(1, { timeout: 10_000 }); // la présentation démarre sans aucun clic
+  // Sans geste préalable : sous-titres + « Cliquez n’importe où… » ; sinon, lecture directe à voix haute.
+  await expect(phraseActive).toContainText("Avez-vous des questions", { timeout: 90_000 });
+  await expect(page.locator(".sokhnaci-widget")).toHaveClass(/invite-question/, { timeout: 15_000 });
 });

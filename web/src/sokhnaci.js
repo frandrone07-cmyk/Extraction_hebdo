@@ -454,7 +454,7 @@ async function jouerVoix(segment) {
   });
 }
 
-async function lire(segments) {
+async function lire(segments, decalage = 0) {
   arreterLecture();
   const id = lectureId;
   segmentsLecture = segments;
@@ -482,7 +482,7 @@ async function lire(segments) {
     definirParole(true, gesteA(planGestes, 0));
     gesteActuel = gesteA(planGestes, 0);
     emettre("etat", { etat: "prepare" });
-    marquerPhrase(index);
+    marquerPhrase(index + decalage);
     let joue = false;
     if (segment.audio) joue = await jouerAudio(segment.audio);
     if (!joue && originale?.[index]) {
@@ -505,7 +505,44 @@ async function lire(segments) {
     }
     if (!joue && id === lectureId) await jouerVoix(segment);
   }
-  if (id === lectureId) { definirParole(false); marquerPhrase(null); emettre("etat", { etat: "attente" }); emettre("fin"); }
+  if (id === lectureId) { definirParole(false); marquerPhrase(null); emettre("etat", { etat: "attente" }); emettre("fin"); inviterQuestion(segments); }
+}
+
+// Après une lecture qui se termine par une question (« Avez-vous des questions… ? »), Sokhna Ci prend une posture
+// d'écoute et le champ de question est mis en valeur quelques secondes.
+function inviterQuestion(segments) {
+  if (!widget || !/\?\s*$/.test(String(segments.at(-1)?.affichage || segments.at(-1)?.oral || ""))) return;
+  widget.classList.add("invite-question");
+  for (const element of avatars()) element.classList.add("listening");
+  setTimeout(() => {
+    widget?.classList.remove("invite-question");
+    for (const element of avatars()) if (!ecouteEnCours) element.classList.remove("listening");
+  }, 12000);
+}
+
+// Sans geste de l'utilisateur, le navigateur interdit le son : la situation se déroule tout de suite en
+// sous-titres (avatar animé), puis, dès le premier clic ou la première touche, elle continue à voix haute.
+let lectureMuette = null;
+async function lireEnSousTitres(segments) {
+  arreterLecture();
+  const id = lectureId;
+  lectureMuette = { id, index: 0 };
+  annoncerVoix("🔊 Cliquez n’importe où pour entendre Sokhna Ci.");
+  for (const [index, segment] of segments.entries()) {
+    if (id !== lectureId) return;
+    lectureMuette.index = index;
+    planGestes = planifierGestes(segment.affichage || segment.oral, segment.geste);
+    definirParole(true, gesteA(planGestes, 0));
+    marquerPhrase(index);
+    const duree = Math.max(1800, (segment.affichage || segment.oral || "").length * 60);
+    const debut = Date.now();
+    while (Date.now() - debut < duree) {
+      if (id !== lectureId) return;
+      suivreGeste((Date.now() - debut) / duree);
+      await delai(120);
+    }
+  }
+  if (id === lectureId) { definirParole(false); marquerPhrase(null); lectureMuette = null; annoncerVoix(""); inviterQuestion(segments); }
 }
 
 async function attendrePuisParler() {
@@ -734,13 +771,12 @@ export function replierSokhnaci() {
 // Bouton « − » : Sokhna Ci se ferme complètement (aucune pastille ne reste à l'écran) ; le choix est mémorisé.
 // Elle se rouvre avec le bouton « Sokhna Ci » de l'en-tête ou la touche Q.
 // La fermeture ne vaut que pour la visite en cours : à la visite suivante, Sokhna Ci présente d'emblée la situation.
-function lireFermee() { try { localStorage.removeItem(CLE_FERMEE); return sessionStorage.getItem(CLE_FERMEE) === "1"; } catch { return false; } }
+function lireFermee() { try { localStorage.removeItem(CLE_FERMEE); sessionStorage.removeItem(CLE_FERMEE); } catch { /* facultatif */ } return false; }
 export function fermerSokhnaci() {
   if (!widget) return;
   arreterLecture();
   widget.classList.add("fermee", "collapsed");
   widget.querySelector(".sokhnaci-launcher").hidden = false; // petite icône ronde pour la rouvrir rapidement
-  try { sessionStorage.setItem(CLE_FERMEE, "1"); } catch { /* stockage facultatif */ }
   document.querySelector(".sokhnaci-rouvrir")?.removeAttribute("hidden");
   majPresentatrice();
 }
@@ -888,8 +924,19 @@ export function initSokhnaci(model) {
   });
   const parlerOuverture = () => { if (voiceEnabled && !widget.classList.contains("collapsed") && !widget.classList.contains("fermee")) attendrePuisParler(); };
   if (navigator.userActivation?.hasBeenActive === false) {
+    // Après un rechargement (F5, Ctrl+F5) : la situation démarre aussitôt en sous-titres…
+    // (désactivé dans les tests automatisés, sauf demande explicite, pour ne pas animer l'avatar pendant les autres tests)
+    if (!widget.classList.contains("collapsed") && !(navigator.webdriver && !window.__sokhnaciSousTitres)) setTimeout(() => { if (!lectureMuette && segmentsCourants.length) lireEnSousTitres(segmentsCourants); }, 900);
     const premierGeste = () => {
       for (const nom of ["pointerdown", "keydown", "touchstart"]) window.removeEventListener(nom, premierGeste, true);
+      // …et continue à voix haute à partir de la phrase en cours, dès le premier geste.
+      if (lectureMuette && voiceEnabled) {
+        const reprise = lectureMuette.index;
+        lectureMuette = null;
+        annoncerVoix("");
+        lire(segmentsCourants.slice(reprise), reprise);
+        return;
+      }
       parlerOuverture();
     };
     for (const nom of ["pointerdown", "keydown", "touchstart"]) window.addEventListener(nom, premierGeste, true);
