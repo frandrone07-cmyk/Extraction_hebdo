@@ -711,7 +711,8 @@ body.sna-actif .sokhnaci-widget { display: none; }
   .publication-status { display: none; }
   .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .filter-form { grid-column: span 1; }
-  .grid2, .grid2e, .grid3, .map-pair { grid-template-columns: 1fr; }
+  .grid2, .grid2e, .grid3 { grid-template-columns: 1fr; }
+  .map-pair { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } /* les deux cartes restent sur la même ligne */
   body.tv .tv-map-layout { grid-template-columns: minmax(0, 2fr) minmax(240px, .8fr); }
   .grid-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .chartbox.tall, .chartbox.xl { height: 290px; }
@@ -1065,10 +1066,14 @@ main#contenu[aria-busy="true"] { min-height: calc(100vh + 240px); }
   body:not(.sans-presentatrice):not(.tv):not(.sna-actif) .masthead-actions { flex-basis: 100%; justify-content: flex-start; }
 }
 
-/* Sokhna Ci réduite : les deux cartes passent l'une sous l'autre, sur toute la largeur et bien plus hautes,
-   pour être lues confortablement. Ouverte, elles restent côte à côte. */
-body.sokhnaci-reduite .map-pair { grid-template-columns: minmax(0, 1fr); }
+/* Sokhna Ci réduite : les deux cartes restent côte à côte (plus larges grâce à la place libérée) et deviennent
+   plus hautes ; chacune se recadre pour que le Sénégal la remplisse. */
 body.sokhnaci-reduite .map-card #carte, body.sokhnaci-reduite .map-card #carte-regions { height: clamp(620px, 82vh, 980px); }
 @media (max-width: 700px) {
   body.sokhnaci-reduite .map-card #carte, body.sokhnaci-reduite .map-card #carte-regions { height: clamp(380px, 70vh, 620px); }
 }
+
+/* Téléphones seulement : trop étroit pour deux cartes, elles passent l'une sous l'autre. */
+@media (max-width: 700px) { .map-pair { grid-template-columns: minmax(0, 1fr); } }
+/* Les deux cartes commencent à la même hauteur, même si un sous-titre passe sur deux lignes. */
+.map-pair .map-card .card-head { min-height: 58px; align-items: flex-start; }

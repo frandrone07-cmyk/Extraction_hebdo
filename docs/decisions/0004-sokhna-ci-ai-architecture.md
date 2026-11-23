@@ -164,5 +164,7 @@ par le projet : **aucun service payant**, aucune clé secrète dans le navigateu
 
 ## Cartes en grand après réduction, onglets qui s'ouvrent au début (23 novembre 2026)
 
-- Sokhna Ci réduite (bouton « − »), quelle que soit la largeur d'écran (classe `sokhnaci-reduite`) : les deux cartes passent l'une sous l'autre, sur toute la largeur, entre 620 px et 82 % de la hauteur d'écran. Chaque carte réapplique son dernier cadrage (Sénégal, région ou district) quand sa taille change, avec un zoom par quarts de palier : le pays remplit la carte agrandie.
+- Sokhna Ci réduite (bouton « − »), quelle que soit la largeur d'écran (classe `sokhnaci-reduite`) : les deux cartes restent côte à côte sur la même ligne, s'élargissent avec la place libérée et deviennent plus hautes (entre 620 px et 82 % de la hauteur d'écran). Chaque carte réapplique son dernier cadrage (Sénégal, région ou district) quand sa taille change, avec un zoom par quarts de palier : le pays remplit la carte agrandie.
 - Changer d'onglet en cliquant ramène au début de l'onglet (barre des onglets en haut de l'écran) au lieu de rester défilé vers le bas ; changer un filtre ne fait pas remonter la page.
+
+- Les deux cartes restent sur la même ligne à toutes les largeurs sauf les téléphones (moins de 700 px), avec des en-têtes de même hauteur pour qu'elles commencent au même niveau.

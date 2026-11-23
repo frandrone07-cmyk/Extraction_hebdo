@@ -519,15 +519,17 @@ test("les cartes grandissent quand Sokhna Ci est réduite", async ({ page }) => 
   await expect.poll(hauteur).toBeGreaterThan(avant + 50);
 });
 
-test("Sokhna Ci réduite : les deux cartes passent en pleine largeur, plus hautes, et le Sénégal remplit la carte", async ({ page }) => {
+test("Sokhna Ci réduite : les deux cartes restent côte à côte, plus grandes", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
-  const taille = (id) => page.evaluate((i) => { const r = document.getElementById(i).getBoundingClientRect(); return { l: r.width, h: r.height }; }, id);
+  const taille = (id) => page.evaluate((i) => { const r = document.getElementById(i).getBoundingClientRect(); return { x: r.left, y: r.top, l: r.width, h: r.height }; }, id);
   const avant = await taille("carte");
   await page.locator(".sokhnaci-collapse").click();
-  await expect.poll(async () => (await taille("carte")).l).toBeGreaterThan(avant.l * 2);
-  const apres = await taille("carte");
-  expect(apres.h).toBeGreaterThanOrEqual(avant.h);
-  expect((await taille("carte-regions")).l).toBeCloseTo(apres.l, 0); // l'une sous l'autre, même largeur
+  await expect.poll(async () => (await taille("carte")).l).toBeGreaterThan(avant.l * 1.2);
+  const districts = await taille("carte");
+  const regions = await taille("carte-regions");
+  expect(districts.h).toBeGreaterThan(avant.h);
+  expect(Math.abs(regions.y - districts.y)).toBeLessThan(5); // côte à côte : même hauteur de départ
+  expect(regions.x).toBeGreaterThan(districts.x + districts.l - 5);
 });
 
 test("changer d'onglet ramène au début de l'onglet, même si la page était défilée vers le bas", async ({ page }) => {
