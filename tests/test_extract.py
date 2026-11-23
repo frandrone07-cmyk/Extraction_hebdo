@@ -128,7 +128,7 @@ def test_extraire_remplit_les_valeurs_et_signale_les_cases_manquantes(tmp_path):
     resultat = extraire(
         client=client,
         chemin_gabarit=str(chemin_gabarit),
-        date_reference=date(2026, 8, 15),
+        date_reference=date(2026, 8, 16),
     )
 
     df = resultat.par_region["Dakar"]
@@ -156,7 +156,7 @@ def test_extraire_garde_les_periodes_identiques_entre_les_regions(tmp_path):
     resultat = extraire(
         client=client,
         chemin_gabarit=str(chemin_gabarit),
-        date_reference=date(2026, 11, 15),
+        date_reference=date(2026, 11, 16),
     )
 
     periodes_attendues = [f"{mois} 2026" for mois in (
@@ -170,19 +170,19 @@ def test_extraire_garde_les_periodes_identiques_entre_les_regions(tmp_path):
     assert client.appels_analytics[0]["dimension"] == client.appels_analytics[1]["dimension"]
 
 
-def test_extraire_de_janvier_a_septembre_puis_ajoute_octobre_le_15_novembre(tmp_path):
+def test_extraire_de_janvier_a_septembre_puis_ajoute_octobre_le_16_novembre(tmp_path):
     chemin_gabarit = tmp_path / "gabarit.xlsx"
     _ecrire_gabarit_periodes(chemin_gabarit, ["Janvier 2026", "Octobre 2026", "Novembre 2026"])
 
     le_14 = extraire(
         client=FakeDhis2Client(),
         chemin_gabarit=str(chemin_gabarit),
-        date_reference=date(2026, 11, 14),
+        date_reference=date(2026, 11, 15),
     )
     le_15 = extraire(
         client=FakeDhis2Client(),
         chemin_gabarit=str(chemin_gabarit),
-        date_reference=date(2026, 11, 15),
+        date_reference=date(2026, 11, 16),
     )
 
     periodes_le_14 = set(le_14.par_region["Dakar"]["Période"])
@@ -205,7 +205,7 @@ def test_extraire_colonne_sans_formulaire_correspondant_est_signalee(tmp_path):
     resultat = extraire(
         client=FakeDhis2Client(),
         chemin_gabarit=str(chemin_gabarit),
-        date_reference=date(2026, 8, 15),
+        date_reference=date(2026, 8, 16),
     )
 
     assert "Tuberculose - Reporting rate" in resultat.formulaires_non_resolus

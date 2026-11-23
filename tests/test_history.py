@@ -127,11 +127,11 @@ def test_limiter_periodes_disponibles_applique_le_seuil_du_15_sans_modifier_l_hi
         {"periode_code": "202611"},
     ])
 
-    avant_le_15 = limiter_periodes_disponibles(hist, date(2026, 11, 14))
-    a_partir_du_15 = limiter_periodes_disponibles(hist, date(2026, 11, 15))
+    avant_le_16 = limiter_periodes_disponibles(hist, date(2026, 11, 15))
+    a_partir_du_16 = limiter_periodes_disponibles(hist, date(2026, 11, 16))
 
-    assert avant_le_15["periode_code"].tolist() == ["202512", "202609"]
-    assert a_partir_du_15["periode_code"].tolist() == ["202512", "202609", "202610"]
+    assert avant_le_16["periode_code"].tolist() == ["202512", "202609"]
+    assert a_partir_du_16["periode_code"].tolist() == ["202512", "202609", "202610"]
     assert hist["periode_code"].tolist() == ["202512", "202609", "202610", "202611"]
 
 

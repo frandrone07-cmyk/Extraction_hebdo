@@ -85,3 +85,27 @@ def test_migrate_history_commande(tmp_path):
 
     migre = pd.read_csv(chemin_sortie)
     assert migre.iloc[0]["semaine_cle"] == "2026-11-09"
+
+
+def test_check_week_relance_le_16_quand_le_mois_ecoule_manque(tmp_path, monkeypatch):
+    """Le 16 décembre, novembre doit être ajouté : la semaine extraite le lundi sans novembre est à refaire."""
+    import completude.cli as cli
+
+    class Jour16Decembre(cli.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 12, 16, 0, 5)
+
+    chemin_historique = tmp_path / "history.csv"
+    chemin_config = _config_minimal(tmp_path, chemin_historique)
+    par_region = {"Dakar": pd.DataFrame([
+        {"Districts": "District de Pikine", "Période": "Octobre 2026", "Paludisme - Reporting rate": 90.0}
+    ])}
+    upsert_week(par_region, {("Dakar", "District de Pikine"): "OUA"}, date(2026, 12, 14), str(chemin_historique))
+    monkeypatch.setattr(cli, "datetime", Jour16Decembre)
+    args = construire_parser().parse_args(["check-week", "--config", chemin_config])
+    assert args.func(args) == 1  # novembre manque : extraction nécessaire
+
+    par_region["Dakar"].loc[0, "Période"] = "Novembre 2026"
+    upsert_week(par_region, {("Dakar", "District de Pikine"): "OUA"}, date(2026, 12, 16), str(chemin_historique))
+    assert args.func(args) == 0  # novembre présent : à jour

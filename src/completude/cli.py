@@ -24,6 +24,7 @@ from .history import (
     semaine_presente,
     upsert_week,
 )
+from .periodes import code_periode, derniere_periode_disponible
 
 logger = logging.getLogger("completude")
 
@@ -72,7 +73,7 @@ def _commande_extract(args: argparse.Namespace) -> int:
     # ici chaque semaine) soient tous reconnaissables par l'import automatique.
     nom_fichier = f"Situation_completude_par_region_{date_reference.strftime('%d_%m_%Y')}.xlsx"
     chemin_sortie = os.path.join(config.chemin_sortie_dir, nom_fichier)
-    ecrire_excel(resultat.par_region, chemin_sortie, config.seuils.critique, config.seuils.conforme)
+    ecrire_excel(resultat.par_region, chemin_sortie, config.seuils.critique, config.seuils.conforme, date_extraction=date_reference)
     logger.info("Excel écrit : %s", chemin_sortie)
 
     chemin_export_json = os.path.join(os.path.dirname(config.chemin_latest_json) or ".", "export.json")
@@ -105,15 +106,29 @@ def _commande_extract(args: argparse.Namespace) -> int:
 
 
 def _commande_check_week(args: argparse.Namespace) -> int:
-    """Code de sortie 0 si la semaine courante est déjà dans l'historique (rien à faire),
-    1 sinon (la Phase 3 l'utilise pour décider si le rattrapage du mardi doit s'exécuter)."""
+    """Code de sortie 0 si les données sont à jour (rien à faire), 1 si une extraction est nécessaire.
+
+    À jour = la semaine courante (lundi) est dans l'historique ET elle contient le dernier mois ouvert
+    (le mois écoulé est ajouté à partir du 16). Si une extraction a déjà eu lieu aujourd'hui sans ce mois
+    (DHIS2 ne le renvoie pas encore), on ne relance pas en boucle : nouvel essai le lendemain ou le lundi suivant.
+    """
     config = charger_config(args.config)
     hist = lire_historique(config.chemin_historique)
-    semaine_courante = iso_monday(datetime.now().date()).isoformat()
-    if semaine_presente(hist, semaine_courante):
-        logger.info("Semaine %s déjà présente dans l'historique : rien à faire.", semaine_courante)
+    aujourd_hui = datetime.now().date()
+    semaine_courante = iso_monday(aujourd_hui).isoformat()
+    if not semaine_presente(hist, semaine_courante):
+        logger.warning("Semaine %s absente de l'historique : extraction nécessaire.", semaine_courante)
+        return 1
+    lignes = hist.loc[hist["semaine_cle"] == semaine_courante]
+    annee, mois = derniere_periode_disponible(aujourd_hui)
+    dernier_mois = code_periode(annee, mois)
+    if (lignes["periode_code"].astype(str) == dernier_mois).any():
+        logger.info("Semaine %s à jour (mois %s présent) : rien à faire.", semaine_courante, dernier_mois)
         return 0
-    logger.warning("Semaine %s absente de l'historique : extraction nécessaire.", semaine_courante)
+    if (lignes["date_extraction"].astype(str).str[:10] >= aujourd_hui.isoformat()).any():
+        logger.info("Extraction déjà faite aujourd'hui ; le mois %s n'est pas encore renvoyé par DHIS2.", dernier_mois)
+        return 0
+    logger.warning("Le mois %s vient d'ouvrir et manque dans la semaine %s : extraction nécessaire.", dernier_mois, semaine_courante)
     return 1
 
 

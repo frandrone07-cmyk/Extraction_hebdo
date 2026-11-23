@@ -188,6 +188,8 @@ def importer_anciennes(
             xl = pd.ExcelFile(chemin_fichier)
             par_region = {}
             for feuille in xl.sheet_names:
+                if feuille == "Synthèse":  # feuille de présentation de l'export, pas des données à reprendre
+                    continue
                 df = pd.read_excel(xl, sheet_name=feuille)
                 df.columns = [str(c).strip() for c in df.columns]
                 col_districts, col_periode = cols_districts_periode(df, repli_positionnel=True)

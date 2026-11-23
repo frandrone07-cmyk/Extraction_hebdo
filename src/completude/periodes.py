@@ -56,9 +56,10 @@ def libelle_periode(code) -> str:
 
 
 def derniere_periode_disponible(date_ref: date) -> tuple[int, int]:
-    """Dernière période disponible : le mois précédent à partir du 15, sinon deux mois avant."""
+    """Dernière période disponible : le mois précédent à partir du 16 (ex. novembre à partir du 16 décembre),
+    sinon deux mois avant. Les structures ont jusqu'au 15 pour saisir le mois écoulé."""
     annee, mois = date_ref.year, date_ref.month
-    decalage = 1 if date_ref.day >= 15 else 2
+    decalage = 1 if date_ref.day >= 16 else 2
     for _ in range(decalage):
         mois -= 1
         if mois == 0:
