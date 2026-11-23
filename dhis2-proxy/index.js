@@ -69,6 +69,45 @@ function origineAutorisee(requete, env) {
   return origine && autorisees.includes(origine) ? origine : null;
 }
 
+// Identifiants DHIS2 synchronisés depuis les secrets GitHub (les mêmes que l'extraction de complétude) par le
+// workflow « Configurer le proxy DHIS2 ». Stockés dans KV (privé au compte Cloudflare) ; ils priment sur les
+// secrets saisis à la main. Mémorisés une minute pour éviter une lecture KV à chaque requête.
+const memoIdentifiants = new WeakMap(); // par espace KV
+async function avecIdentifiants(env) {
+  if (!env.CONFIG) return env;
+  let memo = memoIdentifiants.get(env.CONFIG);
+  if (!memo || Date.now() > memo.jusqua) {
+    let valeur = null;
+    try { valeur = JSON.parse((await env.CONFIG.get("identifiants")) || "null"); } catch { valeur = null; }
+    memo = { valeur, jusqua: Date.now() + 60000 };
+    memoIdentifiants.set(env.CONFIG, memo);
+  }
+  const id = memo.valeur;
+  return id?.user && id?.pass ? { ...env, DHIS2_USER: id.user, DHIS2_PASS: id.pass, ...(id.url ? { DHIS2_URL: id.url } : {}) } : env;
+}
+async function egal(a, b) {
+  const h = async (t) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(t))));
+  const [x, y] = await Promise.all([h(a), h(b)]);
+  let diff = 0;
+  for (let i = 0; i < x.length; i += 1) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+// PUT /identifiants (appel serveur à serveur depuis GitHub Actions, sans origine navigateur) : clé SYNC_KEY exigée.
+export async function recevoirIdentifiants(requete, env) {
+  const repondre = (corps, statut) => new Response(JSON.stringify(corps), { status: statut, headers: { "Content-Type": "application/json" } });
+  const cle = requete.headers.get("X-Cle-Synchro") || "";
+  if (!env.SYNC_KEY || !env.CONFIG || !cle || !(await egal(cle.trim(), String(env.SYNC_KEY).trim()))) return repondre({ erreur: "clé de synchronisation refusée" }, 401);
+  let corps;
+  try { corps = JSON.parse((await requete.text()).slice(0, 2000)); } catch { return repondre({ erreur: "corps invalide" }, 400); }
+  const user = typeof corps?.user === "string" ? corps.user.trim() : "";
+  const pass = typeof corps?.pass === "string" ? corps.pass : "";
+  const url = typeof corps?.url === "string" && /^https:\/\/[^\s]+$/.test(corps.url.trim()) ? corps.url.trim() : null;
+  if (!user || !pass) return repondre({ erreur: "identifiants manquants" }, 400);
+  await env.CONFIG.put("identifiants", JSON.stringify({ user, pass, url, date: new Date().toISOString() }));
+  memoIdentifiants.delete(env.CONFIG);
+  return repondre({ ok: true }, 200);
+}
+
 function configure(env) {
   return Boolean(env.DHIS2_URL && env.DHIS2_USER && env.DHIS2_PASS);
 }
@@ -154,7 +193,9 @@ async function appelerDhis2(requete, env, chemin, recherche, contexte) {
 }
 
 export default {
-  async fetch(requete, env, contexte) {
+  async fetch(requete, envBrut, contexte) {
+    if (new URL(requete.url).pathname === "/identifiants" && requete.method === "PUT") return recevoirIdentifiants(requete, envBrut);
+    const env = await avecIdentifiants(envBrut);
     const origine = origineAutorisee(requete, env);
     if (requete.method === "OPTIONS") return json(null, 204, origine);
     if (!origine) return json({ erreur: "origine non autorisée" }, 403, null);

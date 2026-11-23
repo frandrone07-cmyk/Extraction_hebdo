@@ -92,3 +92,14 @@ test("proxy : la configuration se lit librement mais ne s'écrit qu'avec le code
   expect(lue.fars.cibles).toEqual({ ZyXwVuTsRqP: 80 });
   expect(validerConfig(null)).toBeNull();
 });
+
+test("proxy : identifiants synchronisés depuis GitHub (clé exigée) puis utilisés pour DHIS2", async () => {
+  const env = environnement({ SYNC_KEY: "cle-de-synchro", DHIS2_USER: "ancien", DHIS2_PASS: "ancien" });
+  const envoyer = (cle, corps) => proxy.fetch(new Request("https://dhis2-proxy.test/identifiants", { method: "PUT", body: JSON.stringify(corps), headers: cle ? { "X-Cle-Synchro": cle } : {} }), env, null);
+  expect((await envoyer("mauvaise", { user: "u", pass: "p" })).status).toBe(401);
+  expect((await envoyer(null, { user: "u", pass: "p" })).status).toBe(401);
+  expect((await envoyer("cle-de-synchro", { user: "", pass: "p" })).status).toBe(400);
+  expect((await envoyer("cle-de-synchro", { user: "github", pass: "motdepasse" })).status).toBe(200);
+  await proxy.fetch(requete("api/system/info"), env, null);
+  expect(appels.at(-1).options.headers.Authorization).toBe(`Basic ${Buffer.from("github:motdepasse").toString("base64")}`);
+});
