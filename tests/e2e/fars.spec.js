@@ -59,6 +59,8 @@ async function simulerProxy(page, config) {
     if (url.pathname === "/api/analytics.json") {
       const dims = url.searchParams.getAll("dimension").join("|");
       if (dims.includes("CaTAge00001")) return json({ headers: [{ name: "dx" }, { name: "CaTAge00001" }, { name: "value" }], rows: [["InDiCaTeUr1", "OpT00000001", "40"], ["InDiCaTeUr1", "OpT00000002", "88"]] });
+      if (dims.includes("LEVEL-3")) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "value" }], rows: [] });
+      if (dims.includes("LEVEL-2") && dims.includes("pe:")) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "pe" }, { name: "value" }], rows: [["InDiCaTeUr1", "ReGiOn00001", "202609", "81"], ["InDiCaTeUr1", "ReGiOn00001", "202610", "83"], ["InDiCaTeUr1", "ReGiOn00002", "202609", "50"]] });
       if (dims.includes("LEVEL-2")) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "value" }, { name: "numerator" }, { name: "denominator" }], rows: [["InDiCaTeUr1", "ReGiOn00001", "82", "82", "100"], ["InDiCaTeUr1", "ReGiOn00002", "55", "55", "100"]], metaData: { items: { ReGiOn00001: { name: "Dakar" }, ReGiOn00002: { name: "Kolda" } } } });
       if (dims.includes("pe:")) return json({ headers: [{ name: "dx" }, { name: "pe" }, { name: "value" }, { name: "numerator" }, { name: "denominator" }], rows: [["InDiCaTeUr1", "202609", "70", "70", "100"], ["InDiCaTeUr1", "202610", "75.3", "753", "1000"]] });
       // Réalisation agrégée sur toute la période (périodes en filtre).
@@ -98,7 +100,23 @@ test("FARS : situation des indicateurs (cible, réalisation, écart, statut), co
   const aAssocier = live.locator("#fa-tableau tbody tr").nth(1);
   await expect(aAssocier).toContainText("à associer");
   await expect(aAssocier.getByRole("button", { name: "Associer" })).toBeVisible();
-  await expect(live.locator("#fa-comparaison")).toContainText("Kolda");
+  const comparaison = live.locator("#fa-comparaison");
+  await expect(comparaison).toContainText("Kolda");
+  // Lecture expliquée : régions classées, cible, nombre d'unités qui l'atteignent, plus haute et plus basse.
+  await expect(comparaison.locator(".fa-comp-lecture")).toContainText("1 régions sur 2");
+  await expect(comparaison.locator(".fa-comp-lecture")).toContainText("Plus haute : Dakar (82)");
+  await expect(comparaison.locator(".fa-legende")).toContainText("Cible 80");
+  // Mois par mois : barres groupées (2 mois) et tableau coloré selon la cible ; une case sans donnée reste vide.
+  await live.getByRole("button", { name: "Mois par mois" }).click();
+  await expect(live.getByRole("button", { name: "Mois par mois" })).toHaveAttribute("aria-pressed", "true");
+  const chaud = comparaison.locator("table.fa-table-chaude");
+  await expect(chaud.locator("tbody tr").first()).toContainText("Dakar");
+  await expect(chaud.locator("tbody tr").first().locator("td.conforme")).toHaveCount(3);
+  await expect(chaud.locator("tbody tr").nth(1).locator("td.nd")).toHaveCount(1);
+  await expect(comparaison.locator("canvas#fa-barres")).toBeVisible();
+  // Comparer les districts : nouvelle requête au niveau district (aucun district dans le DHIS2 simulé).
+  await live.locator('[data-fa="comparer-par"]').selectOption("district");
+  await expect(comparaison).toContainText("Donnée non disponible");
   await expect(live.locator("#fa-desagregation")).toContainText("Moins de 15 ans");
   // Retirer un indicateur du suivi (confirmation acceptée) : la ligne disparaît et le choix est gardé.
   page.once("dialog", (d) => d.accept());

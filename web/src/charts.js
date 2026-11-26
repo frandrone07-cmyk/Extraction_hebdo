@@ -80,11 +80,47 @@ function commonOptions() {
         padding: 10,
         cornerRadius: 9,
         displayColors: true,
-        callbacks: { label: (context) => `${context.dataset.label ? `${context.dataset.label} : ` : ""}${context.parsed.y ?? context.parsed.x ?? context.raw}%` },
+        callbacks: { label: (context) => `${context.dataset.label ? `${context.dataset.label} : ` : ""}${valeurSurvolee(context)}%` },
       },
       datalabels: { display: false },
     },
   };
+}
+// Valeur de la barre ou du point survolé : sur un graphique horizontal, la valeur est sur l'axe x (l'axe y ne
+// donne que le rang de la barre, d'où un « 0 % » erroné auparavant).
+function valeurSurvolee(context) {
+  const v = context.chart?.options?.indexAxis === "y" ? context.parsed.x : context.parsed.y;
+  return v ?? context.raw;
+}
+// Ligne de cible en pointillés (verticale sur un graphique horizontal), avec son libellé.
+function pluginCible(id, cible, horizontal, libelle) {
+  return {
+    id: `cible-${id}`,
+    afterDatasetsDraw(chart) {
+      const echelle = chart.scales[horizontal ? "x" : "y"];
+      const zone = chart.chartArea;
+      if (!echelle || !zone) return;
+      const pos = echelle.getPixelForValue(cible);
+      const { ctx } = chart;
+      ctx.save();
+      ctx.strokeStyle = color("--text");
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      if (horizontal) { ctx.moveTo(pos, zone.top); ctx.lineTo(pos, zone.bottom); } else { ctx.moveTo(zone.left, pos); ctx.lineTo(zone.right, pos); }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = color("--text");
+      ctx.font = '700 10px "DM Sans", sans-serif';
+      ctx.textAlign = horizontal ? "center" : "right";
+      ctx.fillText(libelle, horizontal ? pos : zone.right, horizontal ? zone.top - 6 : pos - 5);
+      ctx.restore();
+    },
+  };
+}
+function formaterValeur(v, pourcent, unite = "") {
+  if (v === null || v === undefined) return "Donnée non disponible";
+  return `${pourcent ? v : Number(v).toLocaleString("fr-FR")}${pourcent ? "%" : unite ? ` ${unite}` : ""}`;
 }
 function valueColor(value, thresholds) {
   if (value === null || value === undefined) return color("inconnu");
@@ -93,7 +129,7 @@ function valueColor(value, thresholds) {
   return color("conforme");
 }
 
-export function grapheBarres(id, labels, values, { horizontal = false, couleurParValeur = null, statut = false, seuils = { critique: 70, conforme: 90 }, onSelect = null, etiquettes = false, pourcent = true } = {}) {
+export function grapheBarres(id, labels, values, { horizontal = false, couleurParValeur = null, statut = false, seuils = { critique: 70, conforme: 90 }, onSelect = null, etiquettes = false, pourcent = true, cible = null, libelleCible = "Cible", nomValeur = "" } = {}) {
   if (!disponible()) return;
   detruire(id);
   const canvas = document.getElementById(id);
@@ -109,14 +145,17 @@ export function grapheBarres(id, labels, values, { horizontal = false, couleurPa
   options.plugins.datalabels.anchor = horizontal ? "end" : "end";
   options.plugins.datalabels.align = horizontal ? "end" : "end";
   // Valeurs qui ne sont pas des pourcentages (indicateurs FARS) : échelle libre, sans « % ».
-  if (!pourcent) options.scales = { [horizontal ? "x" : "y"]: { ...axisOptions(), beginAtZero: true }, [horizontal ? "y" : "x"]: { ...axisOptions(), grid: { display: false } } };
+  options.plugins.tooltip.callbacks.label = (context) => ` ${nomValeur ? `${nomValeur} : ` : ""}${formaterValeur(valeurSurvolee(context), pourcent)}`;
+  if (!pourcent) options.scales = { [horizontal ? "x" : "y"]: { ...axisOptions(), beginAtZero: true, ...(cible !== null ? { suggestedMax: cible * 1.08 } : {}) }, [horizontal ? "y" : "x"]: { ...axisOptions(), grid: { display: false } } };
   else options.scales = horizontal
     ? { x: { ...axisOptions(), beginAtZero: true, max: 100, ticks: { ...axisOptions().ticks, callback: (value) => `${value}%` } }, y: { ...axisOptions(), grid: { display: false } } }
     : { x: { ...axisOptions(), grid: { display: false } }, y: { ...axisOptions(), beginAtZero: true, max: 100, ticks: { ...axisOptions().ticks, callback: (value) => `${value}%` } } };
   INSTANCES.set(id, new Chart(canvas, {
     type: "bar",
     data: { labels, datasets: [{ data: values, backgroundColor: barColors, borderRadius: 5, borderSkipped: false, maxBarThickness: horizontal ? 18 : 32 }] },
+    plugins: cible !== null && cible !== undefined ? [pluginCible(id, cible, horizontal, libelleCible)] : [],
     options: {
+      ...(cible !== null && cible !== undefined ? { layout: { padding: { top: 18, right: 28 } } } : {}),
       ...options,
       onClick: onSelect ? (_event, elements) => {
         if (elements.length) onSelect(labels[elements[0].index]);
@@ -170,6 +209,30 @@ export function grapheLigne(id, labels, series, { filled = false, percent = true
         pointBorderWidth: 2,
       })),
     },
+    options,
+  }));
+}
+
+// Barres groupées (une couleur par série, ex. un mois) pour comparer des unités période par période.
+export function grapheBarresGroupees(id, labels, series, { horizontal = true, pourcent = false, cible = null, libelleCible = "Cible" } = {}) {
+  if (!disponible()) return;
+  detruire(id);
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const base = [color("primaire"), color("secondaire"), "#7b71d1", "#e48644", "#4ba7ad", "#c2185b"];
+  const palette = series.length > base.length ? series.map((_, i) => `hsl(${Math.round((i * 360) / series.length)} 62% 45%)`) : base;
+  const options = commonOptions();
+  options.indexAxis = horizontal ? "y" : "x";
+  options.plugins.legend.display = true;
+  options.plugins.legend.position = "top";
+  options.plugins.tooltip.callbacks.label = (context) => ` ${context.dataset.label} : ${formaterValeur(valeurSurvolee(context), pourcent)}`;
+  const axeValeur = { ...axisOptions(), beginAtZero: true, ...(pourcent ? { max: 100 } : {}), ...(cible !== null ? { suggestedMax: cible * 1.08 } : {}) };
+  options.scales = { [horizontal ? "x" : "y"]: axeValeur, [horizontal ? "y" : "x"]: { ...axisOptions(), grid: { display: false } } };
+  if (cible !== null && cible !== undefined) options.layout = { padding: { top: 18, right: 28 } };
+  INSTANCES.set(id, new Chart(canvas, {
+    type: "bar",
+    data: { labels, datasets: series.map((s, i) => ({ label: s.label, data: s.data, backgroundColor: palette[i % palette.length], borderRadius: 3, borderSkipped: false, maxBarThickness: 12, categoryPercentage: 0.82, barPercentage: 0.92 })) },
+    plugins: cible !== null && cible !== undefined ? [pluginCible(id, cible, horizontal, libelleCible)] : [],
     options,
   }));
 }

@@ -1347,3 +1347,27 @@ tr[hidden] { display: none; }
 .ql-detail-lien { margin-left: 6px; color: var(--primary-strong); font-size: .75rem; font-weight: 700; opacity: 0; transition: opacity .15s ease; }
 #ql-synthese tr:hover .ql-detail-lien, #ql-synthese tr:focus-visible .ql-detail-lien { opacity: 1; }
 @media (max-width: 700px) { .ex-parties li { grid-template-columns: 1fr; } }
+
+/* FARS : comparaison géographique (régions / districts, toute la période ou mois par mois) */
+.fa-comp-tete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-top: 18px; }
+.fa-comp-tete .ql-sous-titre { margin: 0; }
+.fa-comp-outils { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.fa-comp-outils .segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+.fa-comp-outils .segmented button { font: inherit; font-size: .85rem; padding: 6px 12px; border: 0; background: var(--surface); color: var(--text); cursor: pointer; }
+.fa-comp-outils .segmented button[aria-pressed="true"] { background: var(--primary); color: var(--primary-contrast); }
+.fa-comp-lecture { background: var(--primary-soft); border-left: 3px solid var(--primary); padding: 8px 12px; border-radius: 6px; line-height: 1.5; }
+.fa-legende { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .82rem; color: var(--muted); margin: 6px 0 4px; }
+.fa-leg { display: inline-flex; align-items: center; gap: 6px; }
+.fa-leg i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.fa-leg i.conforme { background: var(--conforme); }
+.fa-leg i.surveiller { background: var(--surveiller); }
+.fa-leg i.critique { background: var(--critique); }
+.fa-leg i.cible { width: 16px; height: 0; border-top: 2px dashed var(--text); border-radius: 0; }
+.fa-table-chaude td, .fa-table-chaude th { text-align: center; white-space: nowrap; }
+.fa-table-chaude tbody th { text-align: left; }
+.fa-chaud { font-weight: 700; color: var(--text); }
+.fa-chaud.conforme { background: color-mix(in srgb, var(--conforme) 26%, transparent); }
+.fa-chaud.surveiller { background: color-mix(in srgb, var(--surveiller) 34%, transparent); }
+.fa-chaud.critique { background: color-mix(in srgb, var(--critique) 24%, transparent); }
+.fa-chaud.inconnu { background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.fa-chaud.nd { color: var(--muted); font-weight: 400; }

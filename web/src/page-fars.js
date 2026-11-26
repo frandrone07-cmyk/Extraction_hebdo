@@ -3,7 +3,7 @@
 // canevas ; chacun peut ajouter, associer ou retirer des indicateurs (choix gardé dans son navigateur).
 // Toutes les valeurs viennent de /api/analytics (dx / pe / ou) via le serveur intermédiaire ; rien n'est inventé.
 import { lireDhis2 } from "./dhis2-client.js";
-import { grapheBarres, grapheLigne } from "./charts.js";
+import { grapheBarres, grapheBarresGroupees, grapheLigne } from "./charts.js";
 import { dimensionOu, libellePeriode, NIVEAUX, periodePrecedente, periodesDhis2, resumeFiltres } from "./filtres-globaux.js";
 import {
   anneesDisponibles, barreFiltres, boutonsExport, chargementHtml, echapper, enteteMiseAJour, erreurHtml, exporterCsv,
@@ -21,6 +21,8 @@ let programmeChoisi = TOUS;
 let focus = null;
 let generation = 0;
 let dernier = null;
+let comparerPar = null; // « region » ou « district » ; null = selon le niveau des filtres
+let presentation = "total"; // « total » : toute la période ; « mois » : mois par mois
 
 export function dernieresDonneesFars() { return dernier; }
 
@@ -165,7 +167,6 @@ function libelleCible(t) {
 }
 
 function rendu(d, outils) {
-  const niveau = d.etat.niveau === "pays" ? "région" : NIVEAUX[d.etat.niveau].libelle.toLowerCase();
   const associes = d.tableau.filter((t) => t.uid);
   const ind = associes.find((t) => t.uid === focus) || associes[0];
   const periodeTexte = `${libellePeriode(d.periodes[0])}${d.periodes.length > 1 ? ` à ${libellePeriode(d.periodes.at(-1))}` : ""}`;
@@ -201,7 +202,7 @@ function rendu(d, outils) {
       </tbody></table></div></section>
     ${ind ? `<section class="card" id="fa-analyse"><div class="card-head"><div><h2>Analyse détaillée</h2><p class="card-subtitle">Indicateur : <select data-fa="focus" aria-label="Indicateur analysé">${associes.map((t) => `<option value="${t.uid}" ${t.uid === ind.uid ? "selected" : ""}>${echapper(t.programme)} · ${echapper(t.nom)}</option>`).join("")}</select></p></div></div>
       <h3 class="ql-sous-titre">Évolution par période</h3><div class="chartbox"><canvas id="fa-evolution" role="img" aria-label="Évolution de l’indicateur par période"></canvas></div>
-      <h3 class="ql-sous-titre">Comparaison par ${echapper(niveau)} (${echapper(periodeTexte)})</h3><div id="fa-comparaison">${chargementHtml()}</div>
+      <div class="fa-comp-tete"><h3 class="ql-sous-titre">Comparaison géographique (${echapper(periodeTexte)})</h3>${outilsComparaison(d)}</div><div id="fa-comparaison">${chargementHtml()}</div>
       <h3 class="ql-sous-titre">Désagrégation</h3><div id="fa-desagregation">${chargementHtml()}</div></section>` : ""}`;
 }
 
@@ -245,20 +246,90 @@ function dessinerEvolution(d) {
   grapheLigne("fa-evolution", d.periodes.map(libellePeriode), series, { percent: false });
 }
 
+// ---------------------------------------------------------------- comparaison géographique
+// Régions ou districts, sur toute la période (une barre par unité, triées, ligne de cible) ou mois par mois
+// (barres groupées si c'est lisible, sinon tableau coloré unités × mois). Une phrase explique la lecture.
+const NOMS_COMPARAISON = { region: ["région", "régions"], district: ["district", "districts"] };
+function niveauComparaison(d) {
+  if (d.etat.niveau === "district") return "district";
+  return comparerPar || "region";
+}
+function outilsComparaison(d) {
+  const par = niveauComparaison(d);
+  const choix = d.etat.niveau === "district" ? [["district", "Districts"]] : [["region", "Régions"], ["district", "Districts"]];
+  return `<div class="fa-comp-outils">
+    <label class="fg-champ">Comparer <select data-fa="comparer-par">${choix.map(([k, v]) => `<option value="${k}" ${k === par ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <span class="segmented" role="group" aria-label="Présentation de la comparaison">${[["total", "Toute la période"], ["mois", "Mois par mois"]].map(([k, v]) => `<button type="button" data-comp="${k}" aria-pressed="${presentation === k}">${v}</button>`).join("")}</span></div>`;
+}
+function ouComparaison(d) {
+  const { etat } = d;
+  const racine = d.meta.racine.id;
+  if (niveauComparaison(d) === "district") {
+    if (etat.niveau === "district" && etat.unites.length) return `ou:${etat.unites.join(";")}`;
+    if (etat.niveau === "region" && etat.unites.length) return `ou:${etat.unites.join(";")};LEVEL-${NIVEAUX.district.niveau}`;
+    return `ou:${racine};LEVEL-${NIVEAUX.district.niveau}`;
+  }
+  if (etat.niveau === "region" && etat.unites.length) return `ou:${etat.unites.join(";")}`;
+  return `ou:${racine};LEVEL-${NIVEAUX.region.niveau}`;
+}
+const nomUnite = (donnees, id) => (donnees?.metaData?.items?.[id]?.name || id).replace(/^DRS[_ ]/, "");
+const arrondi1 = (v) => (v === null || v === undefined || Number.isNaN(v) ? null : Math.round(v * 10) / 10);
+const majuscule = (t) => `${t[0].toUpperCase()}${t.slice(1)}`;
+const LEGENDE_STATUTS = `<span class="fa-leg"><i class="conforme"></i>Cible atteinte</span><span class="fa-leg"><i class="surveiller"></i>Proche (au moins 80 % de la cible)</span><span class="fa-leg"><i class="critique"></i>Loin de la cible</span>`;
+
+function lectureComparaison(ind, lignes, [nomSingulier, nomPluriel], periodeTexte) {
+  const avec = lignes.filter((l) => l.valeur !== null);
+  if (!avec.length) return "";
+  const meilleur = avec[0];
+  const faible = avec.at(-1);
+  const aCible = ind.cible !== null && ind.cible !== undefined;
+  const atteinte = aCible ? ` <b>${avec.filter((l) => statutCible(l.valeur, ind.cible, ind.sens) === "conforme").length} ${nomPluriel} sur ${avec.length}</b> atteignent la cible (${echapper(libelleCible(ind))}, ligne en pointillés).` : " Aucune cible n’est fixée pour cet indicateur.";
+  return `<p class="note fa-comp-lecture"><b>Comment lire :</b> chaque barre est la réalisation de « ${echapper(ind.nom)} » dans un${nomSingulier === "région" ? "e" : ""} ${nomSingulier}, calculée par DHIS2 (numérateur ÷ dénominateur) sur ${echapper(periodeTexte)}, de la plus forte à la plus faible. La couleur indique la position par rapport à la cible.${atteinte} Plus haute : <b>${echapper(meilleur.nom)}</b> (${nombre(meilleur.valeur)}) ; plus basse : <b>${echapper(faible.nom)}</b> (${nombre(faible.valeur)}), soit un écart de ${nombre(meilleur.valeur - faible.valeur)}.</p>`;
+}
+
 async function dessinerComparaison(d, ma) {
   const zone = document.getElementById("fa-comparaison");
   const ind = indicateurFocus(d);
   if (!zone || !ind) return;
-  const ou = d.etat.niveau === "pays" && !d.etat.unites.length ? `ou:${d.meta.racine.id};LEVEL-${NIVEAUX.region.niveau}` : dimensionOu(d.etat, d.meta.racine.id);
+  const ou = ouComparaison(d);
+  const noms = NOMS_COMPARAISON[niveauComparaison(d)];
+  const [nomSingulier] = noms;
+  const periodeTexte = `${libellePeriode(d.periodes[0])}${d.periodes.length > 1 ? ` à ${libellePeriode(d.periodes.at(-1))}` : ""}`;
+  const aCible = ind.cible !== null && ind.cible !== undefined;
+  const optionsCible = { cible: aCible ? ind.cible : null, libelleCible: `Cible ${libelleCible(ind)}` };
+  const couleur = (v) => { const s = statutCible(v, ind.cible, ind.sens); return getComputedStyle(document.documentElement).getPropertyValue(`--${s === "inconnu" ? "primary" : s}`).trim() || "#087f5b"; };
+  zone.innerHTML = chargementHtml();
   try {
-    const r = await lireDhis2("analytics.json", { dimension: [`dx:${ind.uid}`, ou], filter: `pe:${d.periodes.join(";")}`, includeNumDen: "true" });
+    const total = await lireDhis2("analytics.json", { dimension: [`dx:${ind.uid}`, ou], filter: `pe:${d.periodes.join(";")}`, includeNumDen: "true" });
     if (ma !== generation || !zone.isConnected) return;
-    const lignes = lignesAnalytics(r.donnees).map((l) => ({ ...l, nom: r.donnees?.metaData?.items?.[l.ou]?.name || l.ou })).sort((a, b) => b.valeur - a.valeur);
+    const lignes = lignesAnalytics(total.donnees).map((l) => ({ ...l, valeur: arrondi1(l.valeur), nom: nomUnite(total.donnees, l.ou) })).sort((a, b) => b.valeur - a.valeur);
     if (!lignes.length) { zone.innerHTML = `<p class="live-nd">${NON_DISPONIBLE}</p>`; return; }
-    zone.innerHTML = `<div class="chartbox" style="height:${Math.max(220, lignes.length * 24 + 60)}px"><canvas id="fa-barres" role="img" aria-label="Comparaison géographique de ${echapper(ind.nom)}"></canvas></div>
-      <details><summary>Voir le tableau</summary><div class="table-scroll"><table><thead><tr><th>Unité</th><th>Réalisation</th><th>Numérateur</th><th>Dénominateur</th><th>Statut</th></tr></thead><tbody>${lignes.map((l) => { const s = statutCible(l.valeur, ind.cible, ind.sens); return `<tr><th scope="row">${echapper(l.nom)}</th>${valeurCellule(l.valeur)}${valeurCellule(Number(l.numerator), 0)}${valeurCellule(Number(l.denominator), 0)}<td><span class="status-chip ${s}">${LIBELLE_STATUT[s]}</span></td></tr>`; }).join("")}</tbody></table></div></details>`;
-    const couleur = (v) => { const s = statutCible(v, ind.cible, ind.sens); return getComputedStyle(document.documentElement).getPropertyValue(`--${s === "inconnu" ? "primary" : s}`).trim() || "#087f5b"; };
-    grapheBarres("fa-barres", lignes.map((l) => l.nom), lignes.map((l) => Math.round(l.valeur * 10) / 10), { horizontal: true, pourcent: false, etiquettes: true, couleurParValeur: couleur });
+    const legende = aCible ? `<p class="fa-legende">${LEGENDE_STATUTS}<span class="fa-leg"><i class="cible"></i>Cible ${echapper(libelleCible(ind))}</span></p>` : "";
+    if (presentation === "total") {
+      const tableau = `<div class="table-scroll"><table><thead><tr><th>${majuscule(nomSingulier)}</th><th>Réalisation</th><th>Numérateur</th><th>Dénominateur</th><th>Statut</th></tr></thead><tbody>${lignes.map((l) => { const s = statutCible(l.valeur, ind.cible, ind.sens); return `<tr><th scope="row">${echapper(l.nom)}</th>${valeurCellule(l.valeur)}${valeurCellule(Number(l.numerator), 0)}${valeurCellule(Number(l.denominator), 0)}<td><span class="status-chip ${s}">${LIBELLE_STATUT[s]}</span></td></tr>`; }).join("")}</tbody></table></div>`;
+      zone.innerHTML = `${lectureComparaison(ind, lignes, noms, periodeTexte)}${legende}
+        <div class="chartbox" style="height:${Math.max(220, lignes.length * 26 + 70)}px"><canvas id="fa-barres" role="img" aria-label="Réalisation de ${echapper(ind.nom)} par ${nomSingulier}, ${echapper(periodeTexte)}"></canvas></div>
+        <details><summary>Voir le tableau</summary>${tableau}</details>`;
+      grapheBarres("fa-barres", lignes.map((l) => l.nom), lignes.map((l) => l.valeur), { horizontal: true, pourcent: false, etiquettes: true, couleurParValeur: couleur, nomValeur: "Réalisation", ...optionsCible });
+      return;
+    }
+    // Mois par mois : une valeur par unité et par période.
+    const r = await lireDhis2("analytics.json", { dimension: [`dx:${ind.uid}`, ou, `pe:${d.periodes.join(";")}`], skipMeta: "true" });
+    if (ma !== generation || !zone.isConnected) return;
+    const valeurs = new Map(lignesAnalytics(r.donnees).map((l) => [`${l.ou}|${l.pe}`, arrondi1(l.valeur)]));
+    const v = (u, pe) => valeurs.get(`${u}|${pe}`) ?? null;
+    const lisible = d.periodes.length <= 6 && lignes.length * d.periodes.length <= 150;
+    const cellule = (x) => { if (x === null) return `<td class="fa-chaud nd">—</td>`; const s = statutCible(x, ind.cible, ind.sens); return `<td class="fa-chaud ${s}">${nombre(x)}</td>`; };
+    const tableauMois = `<div class="table-scroll"><table class="fa-table-chaude"><thead><tr><th>${majuscule(nomSingulier)}</th>${d.periodes.map((pe) => `<th>${echapper(libellePeriode(pe))}</th>`).join("")}<th>Toute la période</th></tr></thead>
+      <tbody>${lignes.map((l) => `<tr><th scope="row">${echapper(l.nom)}</th>${d.periodes.map((pe) => cellule(v(l.ou, pe))).join("")}${cellule(l.valeur)}</tr>`).join("")}</tbody></table></div>`;
+    const lecture = `<p class="note fa-comp-lecture"><b>Comment lire :</b> réalisation de « ${echapper(ind.nom)} » pour chaque ${nomSingulier} et chaque mois${aCible ? `, comparée à la cible ${echapper(libelleCible(ind))}` : ""}. ${lisible ? `Chaque couleur de barre est un mois (voir la légende)${aCible ? " ; la ligne en pointillés marque la cible" : ""}.` : `Avec ${d.periodes.length} mois, un graphique serait illisible : le tableau colore chaque case selon la cible (vert : atteinte, jaune : proche, rouge : loin, gris : sans donnée).`} Les ${noms[1]} sont classés selon leur réalisation sur toute la période.</p>`;
+    if (lisible) {
+      zone.innerHTML = `${lecture}<div class="chartbox" style="height:${Math.max(260, lignes.length * (14 * d.periodes.length + 12) + 90)}px"><canvas id="fa-barres" role="img" aria-label="Réalisation de ${echapper(ind.nom)} par ${nomSingulier} et par mois"></canvas></div>
+        <details><summary>Voir le tableau mois par mois</summary>${legende}${tableauMois}</details>`;
+      grapheBarresGroupees("fa-barres", lignes.map((l) => l.nom), d.periodes.map((pe) => ({ label: libellePeriode(pe), data: lignes.map((l) => v(l.ou, pe)) })), { horizontal: true, ...optionsCible });
+    } else {
+      zone.innerHTML = `${lecture}${legende}${tableauMois}`;
+    }
   } catch (erreur) { if (zone.isConnected) zone.innerHTML = erreurHtml(erreur); }
 }
 
@@ -293,6 +364,7 @@ function surChangement(e, racine) {
   if (!champ) return;
   e.stopPropagation();
   if (champ === "programme") { programmeChoisi = e.target.value; focus = null; charger(racine); }
+  else if (champ === "comparer-par" && dernier) { comparerPar = e.target.value; dessinerComparaison(dernier, generation); }
   else if (champ === "focus" && dernier) {
     focus = e.target.value;
     document.querySelectorAll("#fa-tableau tr[data-focus]").forEach((tr) => tr.classList.toggle("fa-ligne-active", tr.dataset.focus === focus));
@@ -302,6 +374,12 @@ function surChangement(e, racine) {
 
 function surClic(e, racine) {
   const b = e.target.closest("button");
+  if (b?.dataset.comp && dernier) {
+    presentation = b.dataset.comp;
+    b.parentElement.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    dessinerComparaison(dernier, generation);
+    return;
+  }
   if (!b) {
     const ligne = e.target.closest("tr[data-focus]");
     if (ligne && !e.target.closest("a")) choisirFocus(ligne.dataset.focus);
