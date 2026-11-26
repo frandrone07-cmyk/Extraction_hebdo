@@ -87,3 +87,25 @@ test("Sokhna Ci : commentaires automatiques variés (jamais la même tournure de
   expect(planifierGestes("Je vous conseille de relancer Kolda.").map((g) => g.geste)).toContain("doigt_leve");
   expect(planifierGestes("Dakar progresse, alors que Kolda recule nettement.").map((g) => g.geste)).toContain("balance_mains");
 });
+
+test("Sokhna Ci : explique les calculs avec les vrais chiffres et parle de l'exhaustivité", async () => {
+  const { estQuestionTempsReel, reponseQualite, sujet } = await import("../../web/src/sokhnaci-direct.js");
+  const lignes = [["DRS_Dakar", 100, 95, 90], ["DRS_Kolda", 100, 50, 20]].map(([unite, attendus, recus, aTemps]) => ({ unite, formulaire: "Paludisme", formulaireUid: "F1", attendus, recus, aTemps }));
+  const donnees = { periodes: ["202610"], lignes, synthese: [{ formulaire: "Paludisme", formulaireUid: "F1", attendus: 200, recus: 145, aTemps: 110 }, { formulaire: "PEV", formulaireUid: "F2", attendus: 10, recus: 10, aTemps: 10 }], exhaustivite: new Map([["F1", { taux: 31.8 }], ["F2", { taux: 60 }]]) };
+  expect(estQuestionTempsReel("comment est calculée la promptitude ?")).toBe(true);
+  expect(estQuestionTempsReel("comment est calculé le taux moyen ?")).toBe(true);
+  expect(sujet("comment est calculé le taux moyen ?")).toBe("qualite");
+  const p = texte(reponseQualite("comment est calculée la promptitude ?", donnees));
+  expect(p).toContain("reçus à temps divisé par le nombre de rapports attendus");
+  expect(p).toContain("120 à temps pour 210 attendus");
+  expect(p).toContain("promptitude 77,5 %"); // (55 + 100) / 2 : moyenne simple des formulaires
+  const e = reponseQualite("exhaustivité des formulaires", donnees);
+  expect(texte(e)).toContain("45,9 %");
+  expect(texte(e)).toContain("« Paludisme » (31,8 %)");
+  expect(e.visuel.type).toBe("bar");
+  const g = texte(reponseQualite("analyse la qualité des données", donnees));
+  expect(g).toContain("complétude 86,3 %");
+  expect(g).toContain("La plus faible : Kolda");
+  expect(g).not.toMatch(/La meilleure : Kolda/);
+  expect(texte(reponseQualite("exhaustivité", { ...donnees, exhaustivite: null }))).toContain("se calcule automatiquement");
+});

@@ -12,7 +12,7 @@ import {
 import { appliquerRealisation, categoriesDisponibles, elementsDeLExpression, statutCible, tableauIndicateurs } from "./fars-calculs.js";
 import { ouvrirAjoutIndicateur } from "./fars-config.js";
 import { PROGRAMMES_ORDRE } from "./fars-defaut.js";
-import { barreCellule, brancherTableaux, carteChiffre, carteLecture, faireCommenter, miniCourbe, pucesStatut, rechercheTableau } from "./live-ui.js";
+import { barreCellule, brancherTableaux, carteChiffre, faireCommenter, miniCourbe, pucesStatut, rechercheTableau } from "./live-ui.js";
 import { commentaireFars } from "./sokhnaci-direct.js";
 import { enregistrerIndicateurs, indicateursPersonnalises, indicateursSuivis, reinitialiserIndicateurs } from "./suivi-local.js";
 
@@ -194,7 +194,6 @@ function rendu(d, outils) {
   return `${enteteMiseAJour(d.misAJour)}${outils}
     <p class="note">Sélection : ${echapper(resumeFiltres(d.etat))}. Réalisation calculée par DHIS2 sur toute la période choisie (${echapper(periodeTexte)}). Statut : vert si la cible est atteinte, jaune si proche (au moins 80 % de la cible, ou au plus 125 % pour une cible maximale « ≤ »), rouge sinon.</p>
     ${chiffres}
-    <div id="fa-lecture"></div>
     <section class="card"><div class="card-head"><div><h2>Situation des indicateurs de performance${d.programme === TOUS ? "" : ` — ${echapper(d.programme)}`}</h2><p class="card-subtitle">${echapper(periodeTexte)} · cliquez sur une ligne pour l’analyser.</p></div><div class="ql-outils">${rechercheTableau("fars", "Rechercher un indicateur…")}${boutonsExport("fars")}</div></div>
       ${puces}
       <div class="table-scroll"><table id="fa-tableau" class="fa-tableau" data-table="fars"><thead><tr><th>Programme</th><th>Indicateur</th><th>Cible</th><th>Réalisation</th><th>Écart</th><th>Numérateur</th><th>Dénominateur</th><th>Tendance</th><th>Statut</th><th><span class="fa-actions-titre">Suivi</span></th></tr></thead><tbody>
@@ -220,12 +219,9 @@ function progresCible(t) {
 }
 
 function cleCommentaire(d) { return `fars|${d.periodes.join(",")}|${d.etat.niveau}|${d.etat.unites.join(",")}|${d.programme}|${d.tableau.map((t) => t.id).join(",")}`; }
+// Commentaire vocal automatique de Sokhna Ci (une fois par sélection ; pas de carte affichée sur la page).
 function majLecture(d) {
-  const zone = document.getElementById("fa-lecture");
-  if (!zone) return;
-  d.commentaire = commentaireFars(d);
-  zone.innerHTML = carteLecture("fars", d.commentaire);
-  if (document.getElementById("fars-live")?.offsetParent !== null) faireCommenter(cleCommentaire(d), d.commentaire);
+  if (document.getElementById("fars-live")?.offsetParent !== null) faireCommenter(cleCommentaire(d), commentaireFars(d));
 }
 
 function choisirFocus(uid) {
@@ -311,7 +307,6 @@ function surClic(e, racine) {
     if (ligne && !e.target.closest("a")) choisirFocus(ligne.dataset.focus);
     return;
   }
-  if (b.dataset.commenter && dernier) { faireCommenter(cleCommentaire(dernier), commentaireFars(dernier), { force: true }); return; }
   const liste = indicateursSuivis();
   const programmes = programmesOrdonnes(liste);
   if (b.dataset.action === "actualiser") charger(racine, { actualiser: true });

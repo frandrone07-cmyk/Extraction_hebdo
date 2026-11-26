@@ -162,3 +162,49 @@ export function tableauDistrictsMensuel(lignes, formulairesUids, districts, mois
     return { district: d.nom, districtUid: d.id, region: d.region || "", parMois, annuel: taux(totalRecus, totalAttendus), manquants: totalAttendus - totalRecus };
   }).sort((a, b) => (a.annuel ?? Infinity) - (b.annuel ?? Infinity) || a.district.localeCompare(b.district, "fr"));
 }
+
+// ---------------------------------------------------------------- taux moyens et exhaustivité
+// Taux moyen = moyenne simple des taux des formulaires (chaque formulaire compte pour un), comme le taux moyen de
+// l'extraction hebdomadaire. Complétude = reçus ÷ attendus ; promptitude = reçus à temps ÷ attendus (définition
+// DHIS2 « Reporting rate on time ») ; exhaustivité = cases remplies ÷ cases des rapports reçus.
+export function tauxMoyens(synthese, exhaustivite = null) {
+  const moyenne = (valeurs) => { const v = valeurs.filter((x) => x !== null && x !== undefined && !Number.isNaN(x)); return v.length ? arrondi(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+  const exh = exhaustivite ? synthese.map((s) => exhaustivite.get(s.formulaireUid)?.taux ?? null) : [];
+  return {
+    completude: moyenne(synthese.map((s) => s.completude)),
+    promptitude: moyenne(synthese.map((s) => s.promptitude)),
+    exhaustivite: exhaustivite ? moyenne(exh) : null,
+    formulaires: synthese.filter((s) => s.completude !== null && s.completude !== undefined).length,
+    formulairesExhaustivite: exh.filter((x) => x !== null).length,
+  };
+}
+
+// Types de valeurs comptés comme des cases à remplir (les cases texte ou date ne sont pas lues par analytics).
+export const TYPES_NUMERIQUES = /^(INTEGER|INTEGER_POSITIVE|INTEGER_NEGATIVE|INTEGER_ZERO_OR_POSITIVE|NUMBER|PERCENTAGE|UNIT_INTERVAL)$/;
+
+// Nombre de cases numériques d'un rapport : chaque élément compte autant de cases que de combinaisons de catégories
+// (celle du formulaire si elle remplace celle de l'élément). Renvoie aussi la liste des éléments.
+export function casesDuFormulaire(dataSetElements) {
+  const elements = (dataSetElements || []).filter((x) => TYPES_NUMERIQUES.test(x.dataElement?.valueType || ""));
+  const cases = elements.reduce((s, x) => s + (x.categoryCombo?.categoryOptionCombos || x.dataElement.categoryCombo?.categoryOptionCombos || 1), 0);
+  return { elements: elements.map((x) => x.dataElement.id), cases };
+}
+
+// Exhaustivité d'un formulaire : seules comptent les structures qui ont envoyé ce formulaire (des éléments de
+// données servent aussi dans d'autres formulaires) ; une structure ne peut pas dépasser 100 %.
+export function exhaustiviteFormulaire(rapportsParStructure, valeursParStructure, cases) {
+  let valeurs = 0;
+  let attendues = 0;
+  for (const [structure, rapports] of rapportsParStructure) {
+    if (!(rapports > 0) || !cases) continue;
+    attendues += rapports * cases;
+    valeurs += Math.min(valeursParStructure.get(structure) || 0, rapports * cases);
+  }
+  return { valeurs, casesAttendues: attendues, taux: attendues ? arrondi((valeurs / attendues) * 100) : null };
+}
+
+// Niveau des structures de santé (« Formation sanitaire ») ; à défaut, le niveau le plus fin.
+export function niveauStructures(niveaux) {
+  const nomme = (niveaux || []).find((n) => /formation sanitaire|structure|etablissement|établissement|facility/i.test(n.displayName || n.name || ""));
+  return nomme ? nomme.level : Math.max(...(niveaux || []).map((n) => n.level));
+}

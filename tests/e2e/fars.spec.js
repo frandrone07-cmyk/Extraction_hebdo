@@ -143,9 +143,8 @@ test("FARS : chiffres clés, lecture de Sokhna Ci, filtre par statut et clic sur
   const live = page.locator("#fars-live");
   await expect(live.locator(".lv-kpis")).toContainText("Proches de la cible", { timeout: 20_000 });
   await expect(live.locator(".lv-kpis")).toContainText("Sans donnée");
-  // Lecture automatique : points clés affichés et commentaire envoyé à Sokhna Ci une seule fois.
-  await expect(live.locator(".lv-lecture")).toContainText("Lecture de Sokhna Ci");
-  await expect(live.locator(".lv-points li").first()).toContainText("à la cible");
+  // Commentaire vocal envoyé à Sokhna Ci une seule fois ; plus de carte « Lecture de Sokhna Ci » sur la page.
+  await expect(live.locator(".lv-lecture")).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => window.__commentaires.length)).toBe(1);
   // Filtre « Sans donnée » : seule la ligne à associer reste visible, la cellule Programme suit.
   await live.locator('[data-filtre-statut="nd"]').click();
@@ -162,7 +161,4 @@ test("FARS : chiffres clés, lecture de Sokhna Ci, filtre par statut et clic sur
   await expect(live.locator("#fa-tableau .lv-spark")).toHaveCount(1);
   await live.locator("#fa-tableau tr[data-focus]").first().click();
   await expect(live.locator("#fa-tableau tr.fa-ligne-active")).toHaveCount(1);
-  // Bouton « Écouter » : nouveau commentaire forcé.
-  await live.getByRole("button", { name: /Écouter Sokhna Ci/ }).click();
-  await expect.poll(() => page.evaluate(() => window.__commentaires.at(-1)?.force)).toBe(true);
 });

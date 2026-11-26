@@ -29,7 +29,12 @@ async function simulerProxy(page, { configure = true } = {}) {
     if (url.pathname === "/config") return json({ formulaires: [{ uid: FORM, nom: "Paludisme", ordre: 0 }], fars: { indicateurs: [], cibles: {} } });
     if (url.pathname === "/api/organisationUnits.json") return json({ organisationUnits: UNITES[url.searchParams.get("level")] });
     if (url.pathname === "/api/dataSets.json") return json({ dataSets: [{ id: FORM, displayName: "Paludisme", periodType: "Monthly" }] });
+    if (url.pathname === "/api/organisationUnitLevels.json") return json({ organisationUnitLevels: [{ level: 1, displayName: "National" }, { level: 4, displayName: "Formation sanitaire" }, { level: 5, displayName: "Niveau communautaire" }] });
+    if (url.pathname === `/api/dataSets/${FORM}.json`) return json({ dataSetElements: [{ dataElement: { id: "DeElement01", valueType: "INTEGER", categoryCombo: { categoryOptionCombos: 4 } } }, { dataElement: { id: "DeElement02", valueType: "NUMBER", categoryCombo: { categoryOptionCombos: 1 } } }, { dataElement: { id: "DeTexte0001", valueType: "TEXT", categoryCombo: { categoryOptionCombos: 1 } } }] });
     if (url.pathname === "/api/analytics.json") {
+      // Exhaustivité : rapports reçus par structure (niveau 4), puis nombre de valeurs saisies (COUNT).
+      if (url.searchParams.get("aggregationType") === "COUNT") return json({ headers: [{ name: "ou" }, { name: "value" }], rows: [["StRuCtUrE01", "8"], ["StRuCtUrE02", "2"], ["AuTrEsTrUc1", "50"]] });
+      if (url.searchParams.getAll("dimension").some((d) => d.includes("LEVEL-4"))) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "value" }], rows: [[`${FORM}.ACTUAL_REPORTS`, "StRuCtUrE01", "2"], [`${FORM}.ACTUAL_REPORTS`, "StRuCtUrE02", "1"]] });
       if (url.searchParams.getAll("dimension").some((d) => d.includes("LAST_10_YEARS"))) return json({ rows: [[`${FORM}.ACTUAL_REPORTS`, "2025", "10"], [`${FORM}.ACTUAL_REPORTS`, "2026", "12"]] });
       // Qualité par district, mois par mois (dx × pe × ou).
       if (url.searchParams.getAll("dimension").some((d) => d.startsWith("pe:")) && url.searchParams.getAll("dimension").some((d) => d.includes("LEVEL-3"))) {
@@ -116,11 +121,16 @@ test("qualité des données : chiffres clés avec jauges, lecture de Sokhna Ci, 
   const kpis = live.locator(".lv-kpis");
   await expect(kpis).toContainText("Complétude", { timeout: 20_000 });
   await expect(kpis).toContainText("73,1 %"); // 95 reçus sur 130 attendus
-  await expect(kpis.locator(".lv-jauge")).toHaveCount(2);
+  await expect(kpis.locator(".lv-jauge")).toHaveCount(3);
+  // Exhaustivité : 5 cases numériques par rapport ; structure 1 : 8 valeurs pour 2 rapports (10 cases),
+  // structure 2 : 2 pour 1 rapport (5 cases) ; la structure qui n'a pas envoyé ce formulaire est ignorée → 10 / 15.
+  await expect(live.locator("#ql-kpi-exh")).toHaveText("66,7 %", { timeout: 20_000 });
+  await expect(live.locator(`#ql-synthese [data-exh]`)).toContainText("66,7 %");
+  await expect(live.locator("#ql-synthese tfoot")).toContainText("Taux moyen");
+  await expect(live.locator(".ql-methode")).toContainText("Reporting rate on time");
   // Le contrôle de validation, une fois terminé, met à jour la carte « Règles de validation ».
   await expect(live.locator("#ql-kpi-violations")).toHaveText("2", { timeout: 20_000 });
-  await expect(live.locator(".lv-lecture")).toContainText("Complétude 73,1 %");
-  await expect(live.locator(".lv-lecture")).toContainText("violations");
+  await expect(live.locator(".lv-lecture")).toHaveCount(0); // plus de carte « Lecture de Sokhna Ci » sur la page
   await expect.poll(() => page.evaluate(() => window.__commentaires.length)).toBe(1);
   const texte = await page.evaluate(() => window.__commentaires[0].dialogue.segments.map((s) => s.texte).join(" "));
   expect(texte).toContain("73,1 %");

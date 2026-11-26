@@ -101,3 +101,23 @@ test("qualité : complétude par district mois par mois et annuelle (reçus / at
   expect(t[1]).toMatchObject({ district: "Kolda", parMois: [100, null], annuel: 100, manquants: 0 });
   expect(t[2]).toMatchObject({ district: "Vide", parMois: [null, null], annuel: null }); // rien d'attendu : non disponible, pas 0
 });
+
+test("qualité : taux moyens (moyenne simple des formulaires), cases d'un formulaire, exhaustivité, niveau des structures", async () => {
+  const { casesDuFormulaire, exhaustiviteFormulaire, niveauStructures, tauxMoyens } = await import("../../web/src/qualite-calculs.js");
+  // Chaque formulaire compte pour un : (50 + 100) / 2 = 75, et non (50 + 10) / (100 + 10).
+  const synthese = [{ formulaireUid: "A", completude: 50, promptitude: 20 }, { formulaireUid: "B", completude: 100, promptitude: 90 }, { formulaireUid: "C", completude: null, promptitude: null }];
+  expect(tauxMoyens(synthese)).toMatchObject({ completude: 75, promptitude: 55, exhaustivite: null, formulaires: 2 });
+  expect(tauxMoyens(synthese, new Map([["A", { taux: 30 }], ["B", { taux: 61 }]])).exhaustivite).toBe(45.5);
+  // Les cases texte ne comptent pas ; la combinaison de catégories du formulaire l'emporte sur celle de l'élément.
+  expect(casesDuFormulaire([
+    { dataElement: { id: "d1", valueType: "INTEGER_ZERO_OR_POSITIVE", categoryCombo: { categoryOptionCombos: 4 } } },
+    { categoryCombo: { categoryOptionCombos: 2 }, dataElement: { id: "d2", valueType: "NUMBER", categoryCombo: { categoryOptionCombos: 6 } } },
+    { dataElement: { id: "d3", valueType: "TEXT", categoryCombo: { categoryOptionCombos: 1 } } },
+  ])).toEqual({ elements: ["d1", "d2"], cases: 6 });
+  // Seules les structures qui ont envoyé le formulaire comptent ; plafond de 100 % par structure.
+  const r = exhaustiviteFormulaire(new Map([["s1", 2], ["s2", 1], ["s3", 0]]), new Map([["s1", 30], ["s2", 3], ["autre", 99]]), 10);
+  expect(r).toEqual({ valeurs: 23, casesAttendues: 30, taux: 76.7 });
+  expect(exhaustiviteFormulaire(new Map(), new Map(), 10).taux).toBeNull();
+  expect(niveauStructures([{ level: 1, displayName: "National" }, { level: 4, displayName: "Formation sanitaire" }, { level: 6, displayName: "Level 6" }])).toBe(4);
+  expect(niveauStructures([{ level: 1, displayName: "A" }, { level: 3, displayName: "B" }])).toBe(3);
+});

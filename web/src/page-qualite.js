@@ -9,13 +9,14 @@ import {
   exporterXlsx, filtresCourants, lignesAnalytics, metadonnees, NON_DISPONIBLE, nombre, pourcent, statutTaux,
 } from "./pages-live.js";
 import {
-  bornesPeriodes, compterViolations, dimensionMetriques, lienSaisieDhis2, plusEnRetard, syntheseParFormulaire,
-  tableauCompletude, unitesSansRapport, valeursNegatives, versionAuMoins,
+  bornesPeriodes, casesDuFormulaire, compterViolations, dimensionMetriques, exhaustiviteFormulaire, lienSaisieDhis2,
+  niveauStructures, plusEnRetard, syntheseParFormulaire, tableauCompletude, tauxMoyens, unitesSansRapport,
+  valeursNegatives, versionAuMoins,
 } from "./qualite-calculs.js";
 import { ouvrirGestionFormulaires } from "./formulaires-config.js";
 import { formulairesSuivis } from "./suivi-local.js";
 import { tableauDistrictsMensuel } from "./qualite-calculs.js";
-import { barreCellule, brancherTableaux, carteChiffre, carteLecture, enteteTriable, faireCommenter, miniCourbe, pucesStatut, rechercheTableau } from "./live-ui.js";
+import { barreCellule, brancherTableaux, carteChiffre, enteteTriable, faireCommenter, miniCourbe, pucesStatut, rechercheTableau } from "./live-ui.js";
 import { commentaireQualite } from "./sokhnaci-direct.js";
 
 let vue = "tableau"; // tableau | barres | courbes
@@ -25,6 +26,7 @@ let formulaireDistricts = "tous"; // tableau mensuel/annuel par district : un fo
 let anneeDistricts = null;
 let validationPeriode = "dernier"; // règles de validation : dernier mois de la sélection, ou toute la sélection
 let formulaireAberrantes = null;
+let exhaustivitePeriode = "dernier"; // exhaustivité : dernier mois de la sélection, ou toute la sélection
 
 const cellule = (v, rendu = nombre) => (v === null || v === undefined ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td>${rendu(v)}</td>`);
 const celluleTaux = (v) => (v === null || v === undefined ? `<td class="live-nd" data-v="">${NON_DISPONIBLE}</td>` : `<td data-v="${v}">${barreCellule(v, statutTaux(v), { libelle: pourcent(v) })}</td>`);
@@ -49,6 +51,7 @@ export function monterQualite(racine) {
     if (e.target.dataset.ql === "annee") anneeDistricts = Number(e.target.value);
     if (e.target.dataset.ql === "validation-periode") { validationPeriode = e.target.value; lancerValidation(dernier, generation); return; }
     if (e.target.dataset.ql === "aberrantes-formulaire") { formulaireAberrantes = e.target.value; return; }
+    if (e.target.dataset.ql === "exhaustivite-periode") { exhaustivitePeriode = e.target.value; lancerExhaustivite(dernier, generation); return; }
     dessinerDistricts(dernier, generation);
   });
   charger(racine);
@@ -93,8 +96,9 @@ async function charger(racine, { actualiser = false } = {}) {
     corps.innerHTML = rendu(dernier, enteteFormulaires);
     dessinerVue(dernier);
     dessinerDistricts(dernier, ma);
-    majLecture(dernier);
-    lancerValidation(dernier, ma); // automatique, comme les autres sections
+    commenter(dernier);
+    lancerExhaustivite(dernier, ma); // automatiques, l'un après l'autre (DHIS2 est lent)
+    lancerValidation(dernier, ma);
   } catch (erreur) {
     if (ma !== generation) return;
     corps.innerHTML = `${enteteFormulaires}${erreurHtml(erreur)}<p><button type="button" class="live-actualiser" data-action="actualiser">↻ Réessayer</button></p>`;
@@ -103,14 +107,15 @@ async function charger(racine, { actualiser = false } = {}) {
 }
 
 function chiffresCles(d) {
-  const total = d.synthese.reduce((s, f) => ({ a: s.a + (f.attendus ?? 0), r: s.r + (f.recus ?? 0), t: s.t + (f.aTemps ?? 0) }), { a: 0, r: 0, t: 0 });
-  const completude = total.a ? (total.r / total.a) * 100 : null;
-  const promptitude = total.a ? (total.t / total.a) * 100 : null;
+  const total = d.synthese.reduce((x, f) => ({ a: x.a + (f.attendus ?? 0), r: x.r + (f.recus ?? 0), t: x.t + (f.aTemps ?? 0) }), { a: 0, r: 0, t: 0 });
+  const m = tauxMoyens(d.synthese);
   const sansRapport = unitesSansRapport(d.lignes).length;
-  return `<section class="grid grid-kpi lv-kpis" aria-label="Chiffres clés de la qualité des données">
-    ${carteChiffre({ titre: "Complétude", valeur: pourcent(completude), note: `${nombre(total.r, 0)} reçus sur ${nombre(total.a, 0)} attendus`, statut: statutTaux(completude), pourJauge: completude })}
-    ${carteChiffre({ titre: "Promptitude", valeur: pourcent(promptitude), note: `${nombre(total.t, 0)} rapports reçus à temps`, statut: statutTaux(promptitude), pourJauge: promptitude })}
-    ${carteChiffre({ titre: "Rapports manquants", valeur: total.a ? nombre(total.a - total.r, 0) : NON_DISPONIBLE, note: `${sansRapport} unité${sansRapport > 1 ? "s" : ""} sans aucun rapport`, statut: total.a - total.r > 0 ? (completude < 70 ? "critique" : "surveiller") : "conforme", icone: "⌛" })}
+  const sur = `moyenne des ${m.formulaires} formulaire${m.formulaires > 1 ? "s" : ""}`;
+  return `<section class="grid lv-kpis lv-kpis5" aria-label="Chiffres clés de la qualité des données">
+    ${carteChiffre({ titre: "Complétude (taux moyen)", valeur: pourcent(m.completude), note: `${sur} · reçus ÷ attendus`, statut: statutTaux(m.completude), pourJauge: m.completude })}
+    ${carteChiffre({ titre: "Promptitude (taux moyen)", valeur: pourcent(m.promptitude), note: `${sur} · à temps ÷ attendus`, statut: statutTaux(m.promptitude), pourJauge: m.promptitude })}
+    ${carteChiffre({ titre: "Exhaustivité (taux moyen)", valeur: `<span id="ql-kpi-exh">…</span>`, note: `<span id="ql-kpi-exh-note">Calcul en cours : cases remplies ÷ cases des rapports reçus</span>`, statut: "inconnu", pourJauge: 0, id: "ql-kpi-exhaustivite" })}
+    ${carteChiffre({ titre: "Rapports manquants", valeur: total.a ? nombre(total.a - total.r, 0) : NON_DISPONIBLE, note: `${sansRapport} unité${sansRapport > 1 ? "s" : ""} sans aucun rapport`, statut: total.a - total.r > 0 ? (m.completude < 70 ? "critique" : "surveiller") : "conforme", icone: "⌛" })}
     ${carteChiffre({ titre: "Règles de validation", valeur: `<span id="ql-kpi-violations">…</span>`, note: `<span id="ql-kpi-violations-note">Contrôle en cours</span>`, statut: "inconnu", icone: "✓", id: "ql-kpi-validation" })}
   </section>`;
 }
@@ -128,10 +133,16 @@ function rendu(d, enteteFormulaires) {
     ${enteteFormulaires}
     <p class="note">Sélection : ${echapper(resumeFiltres(etat))} · ${d.periodes.length} période${d.periodes.length > 1 ? "s" : ""} (${echapper(libellePeriode(d.periodes[0]))}${d.periodes.length > 1 ? ` à ${echapper(libellePeriode(d.periodes.at(-1)))}` : ""}). DHIS2 ${echapper(meta.sante.version || "")}.</p>
     ${chiffresCles(d)}
-    <div id="ql-lecture"></div>
-    <section class="card"><div class="card-head"><div><h2>Complétude et promptitude par formulaire</h2><p class="card-subtitle">Rapports attendus, reçus, reçus à temps et manquants (unités affichées : ${echapper(niveau)}, périodes cumulées). Cliquez sur un en-tête pour trier.</p></div></div>
-      <div class="table-scroll"><table id="ql-synthese" data-table="synthese"><thead><tr>${["Formulaire", "Attendus", "Reçus", "À temps", "Complétude", "Promptitude", "Manquants"].map(enteteTriable).join("")}</tr></thead>
-      <tbody>${synthese.map((s) => `<tr><th scope="row">${echapper(s.formulaire)}</th>${celluleNombre(s.attendus)}${celluleNombre(s.recus)}${celluleNombre(s.aTemps)}${celluleTaux(s.completude)}${celluleTaux(s.promptitude)}${celluleNombre(s.manquants)}</tr>`).join("")}</tbody></table></div></section>
+    <section class="card"><div class="card-head"><div><h2>Complétude, promptitude et exhaustivité par formulaire</h2><p class="card-subtitle">Rapports attendus, reçus, reçus à temps et manquants (unités affichées : ${echapper(niveau)}, périodes cumulées). Cliquez sur un en-tête pour trier.</p></div>
+      <div class="ql-outils"><label class="fg-champ">Exhaustivité sur <select data-ql="exhaustivite-periode"><option value="dernier" ${exhaustivitePeriode === "dernier" ? "selected" : ""}>Dernier mois de la sélection</option><option value="tout" ${exhaustivitePeriode === "tout" ? "selected" : ""}>Toute la sélection (plus long)</option></select></label></div></div>
+      <div class="table-scroll"><table id="ql-synthese" data-table="synthese"><thead><tr>${["Formulaire", "Attendus", "Reçus", "À temps", "Complétude", "Promptitude", "Exhaustivité", "Manquants"].map(enteteTriable).join("")}</tr></thead>
+      <tbody>${synthese.map((s) => `<tr><th scope="row">${echapper(s.formulaire)}</th>${celluleNombre(s.attendus)}${celluleNombre(s.recus)}${celluleNombre(s.aTemps)}${celluleTaux(s.completude)}${celluleTaux(s.promptitude)}<td data-exh="${s.formulaireUid}" data-v=""><span class="live-chargement">calcul…</span></td>${celluleNombre(s.manquants)}</tr>`).join("")}</tbody>
+      <tfoot><tr><th scope="row">Taux moyen (${synthese.length} formulaire${synthese.length > 1 ? "s" : ""})</th><td></td><td></td><td></td>${celluleTaux(tauxMoyens(synthese).completude)}${celluleTaux(tauxMoyens(synthese).promptitude)}<td id="ql-exh-moyenne"><span class="live-chargement">calcul…</span></td><td></td></tr></tfoot></table></div>
+      <details class="ql-methode"><summary>Comment ces taux sont-ils calculés ?</summary><ul>
+        <li><b>Complétude</b> = rapports reçus ÷ rapports attendus × 100 (DHIS2 « Reporting rate »).</li>
+        <li><b>Promptitude</b> = rapports reçus à temps ÷ rapports attendus × 100 (DHIS2 « Reporting rate on time »).</li>
+        <li><b>Exhaustivité</b> = cases numériques remplies ÷ cases des rapports reçus × 100, uniquement dans les structures qui ont envoyé le formulaire. DHIS2 n’enregistre pas les zéros (sauf éléments réglés pour les garder) : une case laissée vide parce que la valeur est 0 compte comme non remplie.</li>
+        <li><b>Taux moyen</b> = moyenne simple des taux des formulaires : chaque formulaire compte pour un, comme le taux moyen de l’extraction hebdomadaire.</li></ul></details></section>
     <section class="card" id="ql-districts"><div class="card-head"><div><h2>Qualité par district — mensuelle et annuelle</h2><p class="card-subtitle">Complétude (rapports reçus / attendus) de chaque district, mois par mois et sur l’année ; districts les plus faibles en premier.</p></div>
       <div class="ql-outils">${rechercheTableau("districts", "Rechercher un district…")}<label class="fg-champ">Formulaire <select data-ql="formulaire"><option value="tous">Tous les formulaires suivis</option>${d.formulaires.map((f) => `<option value="${f.uid}" ${formulaireDistricts === f.uid ? "selected" : ""}>${echapper(f.nom)}</option>`).join("")}</select></label>
       ${d.etat.annees.length > 1 ? `<label class="fg-champ">Année <select data-ql="annee">${[...d.etat.annees].sort().reverse().map((a) => `<option ${a === anneeDistricts ? "selected" : ""}>${a}</option>`).join("")}</select></label>` : ""}${boutonsExport("districts")}</div></div>
@@ -154,14 +165,82 @@ function rendu(d, enteteFormulaires) {
       <div id="ql-anomalies-corps"><p class="note">Doublons : DHIS2 n’enregistre qu’une seule valeur par élément, période, structure et combinaison de catégories ; un doublon ne peut donc pas exister dans la base. Les valeurs manquantes correspondent aux rapports manquants ci-dessus.</p></div></section>`;
 }
 
-// Carte « Lecture de Sokhna Ci » et commentaire vocal automatique (une fois par sélection).
+// Commentaire vocal automatique de Sokhna Ci (une fois par sélection ; pas de carte affichée sur la page).
 function cleCommentaire(d) { return `qualite|${d.periodes.join(",")}|${d.etat.niveau}|${d.etat.unites.join(",")}|${d.formulaires.map((f) => f.uid).join(",")}`; }
-function majLecture(d, { parler = true } = {}) {
-  const zone = document.getElementById("ql-lecture");
-  if (!zone) return;
-  d.commentaire = commentaireQualite(d);
-  zone.innerHTML = carteLecture("qualite", d.commentaire);
-  if (parler && document.getElementById("qualite-live")?.offsetParent !== null) faireCommenter(cleCommentaire(d), d.commentaire);
+function commenter(d) {
+  if (document.getElementById("qualite-live")?.offsetParent !== null) faireCommenter(cleCommentaire(d), commentaireQualite(d));
+}
+
+// Exhaustivité : pour chaque formulaire, nombre de valeurs saisies (analytics, agrégation COUNT) dans les
+// structures qui ont envoyé ce formulaire, rapporté au nombre de cases de leurs rapports reçus.
+function niveauFormations(actualiser) {
+  return lireDhis2("organisationUnitLevels.json", { fields: "level,displayName", paging: "false" }, { actualiser }).then((r) => niveauStructures(r.donnees?.organisationUnitLevels || []));
+}
+async function exhaustiviteDe(f, periodes, ouSelection, niveau, actualiser) {
+  const ds = await lireDhis2(`dataSets/${f.uid}.json`, { fields: "dataSetElements[categoryCombo[categoryOptionCombos~size],dataElement[id,valueType,categoryCombo[categoryOptionCombos~size]]]" }, { actualiser });
+  const { elements, cases } = casesDuFormulaire(ds.donnees?.dataSetElements);
+  if (!elements.length) return { taux: null, valeurs: 0, casesAttendues: 0, cases: 0 };
+  const ou = `ou:${ouSelection};LEVEL-${niveau}`;
+  const rec = await lireDhis2("analytics.json", { dimension: [`dx:${f.uid}.ACTUAL_REPORTS`, ou], filter: `pe:${periodes.join(";")}`, skipMeta: "true" }, { actualiser });
+  const rapports = new Map(lignesAnalytics(rec.donnees).map((l) => [l.ou, l.valeur]));
+  const valeurs = new Map();
+  for (let i = 0; i < elements.length; i += 100) {
+    const r = await lireDhis2("analytics.json", { dimension: ou, filter: [`dx:${elements.slice(i, i + 100).join(";")}`, `pe:${periodes.join(";")}`], aggregationType: "COUNT", skipMeta: "true" }, { actualiser });
+    for (const l of lignesAnalytics(r.donnees)) valeurs.set(l.ou, (valeurs.get(l.ou) || 0) + l.valeur);
+  }
+  return { ...exhaustiviteFormulaire(rapports, valeurs, cases), cases };
+}
+
+async function lancerExhaustivite(d, ma = generation, { actualiser = false } = {}) {
+  const periodes = exhaustivitePeriode === "tout" ? d.periodes : d.periodes.slice(-1);
+  const ouSelection = d.etat.unites.length ? d.etat.unites.join(";") : d.meta.racine.id;
+  const resultats = new Map();
+  d.exhaustivite = resultats;
+  d.exhaustivitePeriodes = periodes;
+  const cellule = (uid) => document.querySelector(`#ql-synthese [data-exh="${uid}"]`);
+  for (const f of d.formulaires) { const c = cellule(f.uid); if (c) { c.dataset.v = ""; c.innerHTML = `<span class="live-chargement">calcul…</span>`; } }
+  const majTotaux = (fini) => {
+    if (ma !== generation) return;
+    const m = tauxMoyens(d.synthese, resultats);
+    const valeur = document.getElementById("ql-kpi-exh");
+    const note = document.getElementById("ql-kpi-exh-note");
+    const pied = document.getElementById("ql-exh-moyenne");
+    const periodeTexte = `${libellePeriode(periodes[0])}${periodes.length > 1 ? ` à ${libellePeriode(periodes.at(-1))}` : ""}`;
+    if (valeur) valeur.textContent = m.exhaustivite === null ? (fini ? NON_DISPONIBLE : "…") : pourcent(m.exhaustivite);
+    if (note) note.textContent = fini ? `moyenne des ${m.formulairesExhaustivite} formulaires · ${periodeTexte}` : `Calcul : ${resultats.size} / ${d.formulaires.length} formulaires (${periodeTexte})…`;
+    if (pied) pied.innerHTML = m.exhaustivite === null ? `<span class="live-nd">${fini ? NON_DISPONIBLE : "calcul…"}</span>` : barreCellule(m.exhaustivite, statutTaux(m.exhaustivite), { libelle: pourcent(m.exhaustivite) });
+    const carte = document.getElementById("ql-kpi-exhaustivite");
+    if (carte && m.exhaustivite !== null) {
+      const statut = statutTaux(m.exhaustivite);
+      carte.classList.remove("kpi-critical", "kpi-warn", "kpi-accent");
+      carte.classList.add({ critique: "kpi-critical", surveiller: "kpi-warn", conforme: "kpi-accent" }[statut]);
+      const jauge = carte.querySelector(".lv-jauge");
+      if (jauge) { jauge.setAttribute("class", `lv-jauge lv-${statut}`); const arc = jauge.querySelector(".lv-jauge-arc"); const c = 2 * Math.PI * 22; arc.setAttribute("stroke-dasharray", `${((c * Math.min(100, m.exhaustivite)) / 100).toFixed(1)} ${c.toFixed(1)}`); }
+    }
+  };
+  majTotaux(false);
+  let niveau;
+  try { niveau = await niveauFormations(actualiser); } catch { niveau = 4; }
+  const file = [...d.formulaires];
+  const travailleur = async () => {
+    while (file.length) {
+      const f = file.shift();
+      let r;
+      try { r = await exhaustiviteDe(f, periodes, ouSelection, niveau, actualiser); } catch (erreur) { r = { taux: null, erreur: erreur.message }; }
+      if (ma !== generation) return;
+      resultats.set(f.uid, r);
+      const c = cellule(f.uid);
+      if (c) {
+        c.dataset.v = r.taux ?? "";
+        c.className = r.taux === null ? "live-nd" : "";
+        c.title = r.taux === null ? (r.erreur || NON_DISPONIBLE) : `${nombre(r.valeurs, 0)} cases remplies sur ${nombre(r.casesAttendues, 0)} (${r.cases} cases par rapport)`;
+        c.innerHTML = r.taux === null ? NON_DISPONIBLE : barreCellule(r.taux, statutTaux(r.taux), { libelle: pourcent(r.taux) });
+      }
+      majTotaux(false);
+    }
+  };
+  await Promise.all([travailleur(), travailleur(), travailleur()]);
+  majTotaux(true);
 }
 
 // Districts concernés par la sélection : districts choisis, districts des régions choisies, ou tous.
@@ -281,7 +360,6 @@ async function lancerValidation(d, ma = generation, { actualiser = false } = {})
   d.violations = c.total;
   d.violationsDetail = c;
   majKpiValidation(c.total, unites.length - echecs.length, echecs.length);
-  majLecture(d, { parler: false });
   const liste = (titre, items) => `<div><h3 class="ql-sous-titre">${titre}</h3>${items.length ? `<ul class="ql-compteurs">${items.slice(0, 15).map((i) => `<li><span>${echapper(i.nom)}</span><b>${i.nombre}</b></li>`).join("")}</ul>` : `<p class="note">Aucune.</p>`}</div>`;
   const lien = (v) => lienSaisieDhis2(d.meta.sante.lienDhis2, d.meta.sante.version, { ou: v.organisationUnitId, pe: v.periodId });
   const periodeTexte = `${libellePeriode(periodes[0])}${periodes.length > 1 ? ` à ${libellePeriode(periodes.at(-1))}` : ""}`;
@@ -340,15 +418,15 @@ async function lancerNegatives(d) {
   zone.innerHTML = chargementHtml("Recherche des valeurs négatives…");
   try {
     const [niveaux, ...formulaires] = await Promise.all([
-      lireDhis2("organisationUnitLevels.json", { fields: "level", paging: "false" }),
+      lireDhis2("organisationUnitLevels.json", { fields: "level,displayName", paging: "false" }),
       ...d.formulaires.map((f) => lireDhis2(`dataSets/${f.uid}.json`, { fields: "dataSetElements[dataElement[id,valueType]]" })),
     ]);
-    const niveauStructures = Math.max(...(niveaux.donnees?.organisationUnitLevels || []).map((n) => n.level));
+    const niveauFormations = niveauStructures(niveaux.donnees?.organisationUnitLevels || []);
     const elements = [...new Set(formulaires.flatMap((r) => (r.donnees?.dataSetElements || []).filter((e) => /INTEGER|NUMBER/.test(e.dataElement?.valueType || "NUMBER")).map((e) => e.dataElement.id)))];
     const negatives = [];
     let misAJour = null;
     for (let i = 0; i < elements.length; i += 40) {
-      const r = await lireDhis2("analytics.json", { dimension: [`dx:${elements.slice(i, i + 40).join(";")}`, `pe:${d.periodes.join(";")}`, `ou:${d.etat.unites[0]};LEVEL-${niveauStructures}`] });
+      const r = await lireDhis2("analytics.json", { dimension: [`dx:${elements.slice(i, i + 40).join(";")}`, `pe:${d.periodes.join(";")}`, `ou:${d.etat.unites[0]};LEVEL-${niveauFormations}`] });
       misAJour = r.misAJour;
       for (const l of valeursNegatives(lignesAnalytics(r.donnees))) negatives.push({ ...l, element: r.donnees?.metaData?.items?.[l.dx]?.name || l.dx, structure: r.donnees?.metaData?.items?.[l.ou]?.name || l.ou });
     }
@@ -364,7 +442,6 @@ function surClic(e, racine) {
   const bouton = e.target.closest("button");
   if (!bouton) return;
   if (bouton.dataset.action === "actualiser") { charger(racine, { actualiser: true }); return; }
-  if (bouton.dataset.commenter && dernier?.commentaire) { faireCommenter(cleCommentaire(dernier), commentaireQualite(dernier), { force: true }); return; }
   if (bouton.dataset.action === "formulaires") { ouvrirGestionFormulaires(() => charger(racine, { actualiser: true })); return; }
   if (!dernier) return;
   if (bouton.dataset.vue) {

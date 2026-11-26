@@ -1280,3 +1280,13 @@ tr[hidden] { display: none; }
   .lv-kpis, .lv-lecture, .lv-point, .lv-jauge-arc, .lv-barre-piste > span, .lv-lecture-avatar { animation: none; }
 }
 @media (max-width: 700px) { .lv-recherche input { width: 100%; } .lv-lecture-tete { flex-wrap: wrap; } }
+
+/* Qualité : cinq chiffres clés (complétude, promptitude, exhaustivité, manquants, validation) et méthode de calcul */
+.lv-kpis5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1200px) { .lv-kpis5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .lv-kpis5 { grid-template-columns: 1fr 1fr; } }
+#ql-synthese tfoot th, #ql-synthese tfoot td { border-top: 2px solid var(--border-strong); font-weight: 800; background: var(--surface-soft); }
+.ql-methode { margin-top: 10px; font-size: .88rem; }
+.ql-methode summary { cursor: pointer; font-weight: 700; color: var(--primary-strong); }
+.ql-methode ul { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 4px; color: var(--muted); }
+.ql-methode b { color: var(--text); }

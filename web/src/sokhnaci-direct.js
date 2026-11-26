@@ -8,19 +8,21 @@ export const normaliser = (t) => String(t ?? "").normalize("NFD").replace(/[̀-�
 const VIDES = new Set(["les", "des", "de", "du", "la", "le", "et", "en", "un", "une", "par", "pour", "avec", "dans", "sur", "aux", "au", "taux", "pourcentage", "proportion", "nombre", "cas", "quel", "quelle", "quels", "est", "sont", "comment", "combien", "situation", "valeur", "donne", "moi", "indicateur", "indicateurs", "fars", "mis", "place", "ayant", "qui", "que", "fait"]);
 const mots = (t) => normaliser(t).split(" ").filter((m) => m.length >= 2 && !VIDES.has(m));
 
-const QUALITE = /\b(qualite|validation|violations?|regles?|promptitude|a temps|aberrant\w*|valeurs? negatives?|rapports? manquants?)\b/;
+const QUALITE = /\b(qualite|validation|violations?|regles?|promptitude|exhaustivite|a temps|aberrant\w*|valeurs? negatives?|rapports? manquants?|cases? remplies?)\b/;
+const METHODE = /\b(comment|calcul\w*|definition|signifie|c est quoi|qu est ce|methode|formule|veut dire)\b/;
 const FARS = /\b(fars|indicateurs?|cibles?|performance|programmes?|srmnia|pev|mnt|mtn|sante com\w*|tuberculose|realisation|ecarts?)\b/;
 
 // Vrai si la question porte sur la qualité des données ou les indicateurs FARS (données DHIS2 en direct).
 // Les questions habituelles sur la complétude hebdomadaire (« districts en retard »…) restent aux autres compétences.
 export function estQuestionTempsReel(question) {
   const q = normaliser(question);
-  if (/\bcompletude\b/.test(q) && !/\b(fars|validation|violations?|promptitude|qualite)\b/.test(q)) return false;
+  if (METHODE.test(q) && /\b(taux moyen|moyenne des formulaires|exhaustivite|promptitude)\b/.test(q)) return true;
+  if (/\bcompletude\b/.test(q) && !/\b(fars|validation|violations?|promptitude|exhaustivite|qualite)\b/.test(q)) return false;
   return QUALITE.test(q) || FARS.test(q);
 }
 export const sujet = (question) => {
   const q = normaliser(question);
-  if (QUALITE.test(q) && !/\b(fars|indicateurs?|cibles?|performance)\b/.test(q)) return "qualite";
+  if ((QUALITE.test(q) || /\b(taux moyen|moyenne des formulaires)\b/.test(q)) && !/\b(fars|indicateurs?|cibles?|performance)\b/.test(q)) return "qualite";
   return "fars";
 };
 
@@ -100,18 +102,10 @@ export function reponseQualite(question, donnees) {
   const q = normaliser(question);
   const periode = periodeTexte(donnees.periodes);
   const sources = [`DHIS2 en temps réel, ${periode}`, libelleMiseAJour(donnees.misAJour)].filter(Boolean);
-  const total = donnees.synthese.reduce((s, f) => ({ a: s.a + (f.attendus ?? 0), r: s.r + (f.recus ?? 0), t: s.t + (f.aTemps ?? 0) }), { a: 0, r: 0, t: 0 });
-  const completude = total.a ? Math.round((total.r / total.a) * 1000) / 10 : null;
-  const promptitude = total.a ? Math.round((total.t / total.a) * 1000) / 10 : null;
-  const parUnite = new Map();
-  for (const l of donnees.lignes) {
-    if (l.attendus === null || l.recus === null) continue;
-    const u = parUnite.get(l.unite) || { a: 0, r: 0, t: 0 };
-    u.a += l.attendus; u.r += l.recus; u.t += l.aTemps ?? 0;
-    parUnite.set(l.unite, u);
-  }
-  const unites = [...parUnite].filter(([, u]) => u.a > 0).map(([nom, u]) => ({ nom: regionCourte(nom), completude: Math.round((u.r / u.a) * 1000) / 10, promptitude: Math.round((u.t / u.a) * 1000) / 10 })).sort((a, b) => a.completude - b.completude);
-  const formulaires = donnees.synthese.filter((f) => f.promptitude !== null).sort((a, b) => a.promptitude - b.promptitude);
+  const k = indicateursQualite(donnees);
+  const { completude, promptitude, unites } = k;
+  const formulaires = k.formulaires;
+  if (METHODE.test(q) && /\b(promptitude|exhaustivite|completude|taux moyen|moyenne|taux)\b/.test(q)) return explicationCalculs(q, donnees, k, periode, sources);
   if (/\b(validation|violations?|regles?)\b/.test(q)) {
     const v = donnees.violationsDetail;
     if (!v) return { emotion: "neutre", segments: [seg(`Le contrôle des règles de validation se lance automatiquement dans l’onglet « Qualité des données » (une région après l’autre, environ une minute). Ouvrez cet onglet, puis reposez-moi la question : je vous donnerai le nombre de violations par règle, par région et par district.`)], sources, suggestions: ["qualité des données", "unités en retard"] };
@@ -121,12 +115,17 @@ export function reponseQualite(question, donnees) {
     if (v.parDistrict.length) phrases.push(`Districts les plus concernés : ${v.parDistrict.slice(0, 3).map((d) => `${d.nom} (${d.nombre})`).join(", ")}.`);
     return { emotion: v.total ? "preoccupee" : "felicitations", segments: phrases.map((p) => seg(p)), visuel: v.parRegion.length ? { type: "table", titre: `Violations des règles de validation par région (${periode})`, colonnes: ["Région", "Violations"], lignes: v.parRegion.map((r) => [regionCourte(r.nom), String(r.nombre)]) } : undefined, sources, suggestions: ["qualité des données", "indicateurs FARS loin de la cible"] };
   }
-  const phrases = [`Sur ${periode}, pour les ${donnees.synthese.length} formulaires suivis : complétude ${pc(completude)}, promptitude ${pc(promptitude)}${total.a ? `, soit ${nb(total.a - total.r, 0)} rapports manquants sur ${nb(total.a, 0)} attendus` : ""}.`];
+  const phrases = [`Sur ${periode}, pour les ${donnees.synthese.length} formulaires suivis (taux moyens, chaque formulaire compte pour un) : complétude ${pc(completude)}, promptitude ${pc(promptitude)}${k.exhaustivite !== null ? `, exhaustivité ${pc(k.exhaustivite)}` : ""}${k.attendus ? `, soit ${nb(k.manquants, 0)} rapports manquants sur ${nb(k.attendus, 0)} attendus` : ""}.`];
+  if (/\bexhaustivite\b/.test(q)) return reponseExhaustivite(donnees, k, periode, sources);
   if (unites.length >= 2) {
-    phrases.push(`Les plus faibles : ${unites.slice(0, 3).map((u) => `${u.nom} (${pc(u.completude)})`).join(", ")}.`);
-    phrases.push(`Les meilleures : ${unites.slice(-2).reverse().map((u) => `${u.nom} (${pc(u.completude)})`).join(" et ")}.`);
+    // Jamais la même unité dans les deux listes : 3 plus faibles et 2 meilleures à partir de 5 unités, sinon moins.
+    const nbFaibles = Math.min(3, Math.ceil(unites.length / 2));
+    const nbMeilleures = Math.min(2, unites.length - nbFaibles);
+    phrases.push(`${nbFaibles > 1 ? "Les plus faibles" : "La plus faible"} : ${unites.slice(0, nbFaibles).map((u) => `${u.nom} (${pc(u.completude)})`).join(", ")}.`);
+    if (nbMeilleures) phrases.push(`${nbMeilleures > 1 ? "Les meilleures" : "La meilleure"} : ${unites.slice(-nbMeilleures).reverse().map((u) => `${u.nom} (${pc(u.completude)})`).join(" et ")}.`);
   }
   if (formulaires[0]) phrases.push(`Le formulaire le plus en retard est « ${formulaires[0].formulaire} », avec ${pc(formulaires[0].promptitude)} de rapports reçus à temps.`);
+  if (k.moinsExhaustif) phrases.push(`Le formulaire le moins bien rempli est « ${k.moinsExhaustif.formulaire} » : ${pc(k.moinsExhaustif.taux)} des cases renseignées.`);
   if (donnees.violations !== null && donnees.violations !== undefined) phrases.push(`Le contrôle des règles de validation relève ${nb(donnees.violations, 0)} violation${donnees.violations > 1 ? "s" : ""}.`);
   return {
     emotion: completude !== null && completude < 70 ? "preoccupee" : "encourageante",
@@ -170,23 +169,67 @@ export function varier(cle, options, alea = Math.random) {
 const remplir = (modele, valeurs) => modele.replace(/\{(\w+)\}/g, (_, k) => valeurs[k] ?? "");
 const point = (ton, texte) => ({ ton, texte });
 
+const moyenneSimple = (valeurs) => { const v = valeurs.filter((x) => x !== null && x !== undefined && !Number.isNaN(x)); return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : null; };
+const taux = (n, d) => (d ? (n / d) * 100 : null);
+
+// Taux moyens = moyenne simple des taux des formulaires (chaque formulaire compte pour un), comme la page et
+// l'extraction hebdomadaire. Complétude = reçus ÷ attendus ; promptitude = à temps ÷ attendus.
 export function indicateursQualite(donnees) {
   const total = donnees.synthese.reduce((s, f) => ({ a: s.a + (f.attendus ?? 0), r: s.r + (f.recus ?? 0), t: s.t + (f.aTemps ?? 0) }), { a: 0, r: 0, t: 0 });
+  const parFormulaire = donnees.synthese.map((f) => ({ ...f, completude: taux(f.recus, f.attendus), promptitude: f.attendus ? taux(f.aTemps ?? 0, f.attendus) : null }));
   const parUnite = new Map();
   for (const l of donnees.lignes) {
-    if (l.attendus === null || l.recus === null || l.attendus === undefined) continue;
-    const u = parUnite.get(l.unite) || { a: 0, r: 0, t: 0 };
-    u.a += l.attendus; u.r += l.recus; u.t += l.aTemps ?? 0;
+    if (l.attendus === null || l.recus === null || l.attendus === undefined || !l.attendus) continue;
+    const u = parUnite.get(l.unite) || { c: [], p: [] };
+    u.c.push(taux(l.recus, l.attendus)); u.p.push(taux(l.aTemps ?? 0, l.attendus));
     parUnite.set(l.unite, u);
   }
+  const exh = donnees.exhaustivite instanceof Map ? donnees.synthese.map((f) => ({ formulaire: f.formulaire, taux: donnees.exhaustivite.get(f.formulaireUid)?.taux ?? null })).filter((x) => x.taux !== null) : [];
   return {
     attendus: total.a,
+    recus: total.r,
+    aTemps: total.t,
     manquants: total.a - total.r,
-    completude: total.a ? Math.round((total.r / total.a) * 1000) / 10 : null,
-    promptitude: total.a ? Math.round((total.t / total.a) * 1000) / 10 : null,
-    unites: [...parUnite].filter(([, u]) => u.a > 0).map(([nom, u]) => ({ nom: regionCourte(nom), completude: Math.round((u.r / u.a) * 1000) / 10, promptitude: Math.round((u.t / u.a) * 1000) / 10 })).sort((a, b) => a.completude - b.completude),
-    formulaires: donnees.synthese.filter((f) => f.promptitude !== null && f.promptitude !== undefined).sort((a, b) => a.promptitude - b.promptitude),
+    completude: moyenneSimple(parFormulaire.map((f) => f.completude)),
+    promptitude: moyenneSimple(parFormulaire.map((f) => f.promptitude)),
+    exhaustivite: exh.length ? moyenneSimple(exh.map((x) => x.taux)) : null,
+    exhaustiviteParFormulaire: exh.sort((a, b) => a.taux - b.taux),
+    moinsExhaustif: exh.length >= 2 ? exh[0] : null,
+    nbFormulaires: parFormulaire.filter((f) => f.completude !== null).length,
+    unites: [...parUnite].map(([nom, u]) => ({ nom: regionCourte(nom), completude: moyenneSimple(u.c), promptitude: moyenneSimple(u.p) })).sort((a, b) => a.completude - b.completude),
+    formulaires: parFormulaire.filter((f) => f.promptitude !== null).map((f) => ({ ...f, promptitude: Math.round(f.promptitude * 10) / 10 })).sort((a, b) => a.promptitude - b.promptitude),
   };
+}
+
+// Exhaustivité (cases remplies ÷ cases des rapports reçus), calculée dans l'onglet Qualité des données.
+function reponseExhaustivite(donnees, k, periode, sources) {
+  if (k.exhaustivite === null) {
+    return { emotion: "neutre", segments: [seg("L’exhaustivité se calcule automatiquement dans l’onglet « Qualité des données », formulaire par formulaire (quelques secondes chacun). Ouvrez cet onglet, attendez la fin du calcul, puis reposez-moi la question.")], sources, suggestions: ["comment est calculée l’exhaustivité ?", "qualité des données"] };
+  }
+  const l = k.exhaustiviteParFormulaire;
+  const phrases = [`L’exhaustivité moyenne des ${l.length} formulaires est de ${pc(k.exhaustivite)} : c’est la part des cases numériques remplies dans les rapports reçus.`];
+  if (l.length >= 2) {
+    phrases.push(`Le moins bien rempli : « ${l[0].formulaire} » (${pc(l[0].taux)}), alors que le mieux rempli est « ${l.at(-1).formulaire} » (${pc(l.at(-1).taux)}).`);
+  }
+  phrases.push("Attention : DHIS2 n’enregistre pas les zéros, donc une case laissée vide parce que la valeur vaut 0 compte comme non remplie ; ce taux est un minimum.");
+  return {
+    emotion: k.exhaustivite < 70 ? "preoccupee" : "encourageante",
+    segments: phrases.map((p) => seg(p)),
+    visuel: { type: "bar", titre: `Exhaustivité par formulaire (${periodeTexte(donnees.exhaustivitePeriodes || donnees.periodes)})`, labels: l.map((x) => x.formulaire), valeurs: l.map((x) => x.taux), horizontal: true },
+    sources,
+    suggestions: ["comment est calculée l’exhaustivité ?", "qualité des données", "règles de validation"],
+  };
+}
+
+// Explication des calculs, illustrée avec les vrais chiffres de la sélection.
+function explicationCalculs(q, donnees, k, periode, sources) {
+  const phrases = [];
+  const tous = !/\b(promptitude|exhaustivite|completude)\b/.test(q);
+  if (tous || /\bcompletude\b/.test(q)) phrases.push(`La complétude d’un formulaire, c’est le nombre de rapports reçus divisé par le nombre de rapports attendus. Sur ${periode}, tous formulaires confondus : ${nb(k.recus, 0)} reçus pour ${nb(k.attendus, 0)} attendus.`);
+  if (tous || /\bpromptitude\b/.test(q)) phrases.push(`La promptitude, c’est le nombre de rapports reçus à temps divisé par le nombre de rapports attendus, comme le « Reporting rate on time » de DHIS2 : ici ${nb(k.aTemps, 0)} à temps pour ${nb(k.attendus, 0)} attendus.`);
+  if (tous || /\bexhaustivite\b/.test(q)) phrases.push(`L’exhaustivité, c’est le nombre de cases numériques remplies divisé par le nombre de cases des rapports reçus, en ne comptant que les structures qui ont envoyé le formulaire${k.exhaustivite !== null ? ` : ${pc(k.exhaustivite)} en moyenne` : ""}. DHIS2 n’enregistrant pas les zéros, c’est un minimum.`);
+  phrases.push(`Les taux moyens affichés sont des moyennes simples des ${k.nbFormulaires} formulaires : chaque formulaire compte pour un, comme le taux moyen de l’extraction du lundi. Résultat : complétude ${pc(k.completude)}, promptitude ${pc(k.promptitude)}${k.exhaustivite !== null ? `, exhaustivité ${pc(k.exhaustivite)}` : ""}.`);
+  return { emotion: "souriante", segments: phrases.map((p) => seg(p, "geste_ouvert")), sources, suggestions: ["analyse la qualité des données", "exhaustivité par formulaire", "règles de validation"] };
 }
 
 export function commentaireQualite(donnees, alea = Math.random) {
@@ -231,6 +274,10 @@ export function commentaireQualite(donnees, alea = Math.random) {
     segments.push(seg(remplir(varier("q-meilleure", ["À saluer : {n}, en tête avec {c}.", "Mention spéciale pour {n}, à {c}.", "{n} montre l’exemple, avec {c}."], alea), { n: meilleure.nom, c: pc(meilleure.completude) }), "pouce_leve"));
     points.push(point("alerte", `Plus faibles : ${faibles.map((u) => `${u.nom} (${pc(u.completude)})`).join(", ")}.`));
     points.push(point("bien", `Meilleure : ${meilleure.nom} (${pc(meilleure.completude)}).`));
+  }
+  if (k.exhaustivite !== null) {
+    segments.push(seg(`L’exhaustivité moyenne, c’est-à-dire la part des cases remplies, est de ${pc(k.exhaustivite)}${k.moinsExhaustif ? ` ; « ${k.moinsExhaustif.formulaire} » est le moins bien rempli` : ""}.`, k.exhaustivite < 70 ? "geste_rassurant" : "pointer_ecran"));
+    points.push(point(k.exhaustivite >= 90 ? "bien" : k.exhaustivite < 70 ? "alerte" : "info", `Exhaustivité ${pc(k.exhaustivite)}.`));
   }
   if (k.formulaires.length >= 2) {
     const f = k.formulaires[0];
