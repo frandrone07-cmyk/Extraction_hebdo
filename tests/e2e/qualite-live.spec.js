@@ -33,6 +33,8 @@ async function simulerProxy(page, { configure = true } = {}) {
     if (url.pathname === `/api/dataSets/${FORM}.json`) return json({ dataSetElements: [{ dataElement: { id: "DeElement01", valueType: "INTEGER", categoryCombo: { categoryOptionCombos: 4 } } }, { dataElement: { id: "DeElement02", valueType: "NUMBER", categoryCombo: { categoryOptionCombos: 1 } } }, { dataElement: { id: "DeTexte0001", valueType: "TEXT", categoryCombo: { categoryOptionCombos: 1 } } }] });
     if (url.pathname === "/api/analytics.json") {
       // Exhaustivité : rapports reçus par structure (niveau 4), puis nombre de valeurs saisies (COUNT).
+      // Détail par champ (dx × structure) : DeElement01 rempli 8 fois sur 12 cases, DeElement02 jamais.
+      if (url.searchParams.get("aggregationType") === "COUNT" && url.searchParams.getAll("dimension").some((d) => d.startsWith("dx:"))) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "value" }], rows: [["DeElement01", "StRuCtUrE01", "6"], ["DeElement01", "StRuCtUrE02", "2"], ["DeElement01", "AuTrEsTrUc1", "40"]] });
       if (url.searchParams.get("aggregationType") === "COUNT") return json({ headers: [{ name: "ou" }, { name: "value" }], rows: [["StRuCtUrE01", "8"], ["StRuCtUrE02", "2"], ["AuTrEsTrUc1", "50"]] });
       if (url.searchParams.getAll("dimension").some((d) => d.includes("LEVEL-4"))) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "value" }], rows: [[`${FORM}.ACTUAL_REPORTS`, "StRuCtUrE01", "2"], [`${FORM}.ACTUAL_REPORTS`, "StRuCtUrE02", "1"]] });
       if (url.searchParams.getAll("dimension").some((d) => d.includes("LAST_10_YEARS"))) return json({ rows: [[`${FORM}.ACTUAL_REPORTS`, "2025", "10"], [`${FORM}.ACTUAL_REPORTS`, "2026", "12"]] });
@@ -93,16 +95,34 @@ test("qualité des données : les filtres globaux sont enregistrés dans l'adres
   await simulerProxy(page);
   await page.goto("/#tab=qualite");
   const live = page.locator("#qualite-live");
-  await expect(live.locator(".filtres-globaux")).toBeVisible({ timeout: 20_000 });
-  await live.getByRole("button", { name: "Tout désélectionner" }).click();
-  await expect(live.locator("#ql-corps")).toContainText("Aucune période sélectionnée");
-  await live.locator('input[name="fg-mois"][value="3"]').check();
+  // Bandeau résumé ; les filtres s'ouvrent dans un tiroir latéral.
+  await expect(live.locator(".fg-bandeau")).toContainText("Mois", { timeout: 20_000 });
+  await expect(live.locator(".filtres-globaux")).toHaveCount(0);
+  await live.getByRole("button", { name: /Filtres/ }).click();
+  const tiroir = page.getByRole("dialog", { name: "Filtres" });
+  await expect(tiroir).toBeVisible();
+  // Rien n'est rechargé tant qu'on n'a pas cliqué « Appliquer » ; sans mois, « Appliquer » est désactivé.
+  await tiroir.getByRole("button", { name: "Tout désélectionner" }).click();
+  await expect(tiroir.getByRole("button", { name: "Appliquer" })).toBeDisabled();
+  await expect(tiroir).toContainText("Aucune période");
+  await tiroir.locator('input[name="fg-mois"][value="3"]').check();
+  expect(await page.evaluate(() => location.hash)).not.toContain("fm=3");
+  await tiroir.getByRole("button", { name: "Appliquer" }).click();
+  await expect(tiroir).toBeHidden();
   await expect.poll(() => page.evaluate(() => location.hash)).toContain("fm=3");
+  await expect(live.locator(".fg-bandeau")).toContainText("Mars");
+  // « Annuler » ne change rien.
+  await live.getByRole("button", { name: /Filtres/ }).click();
+  await tiroir.locator('input[name="fg-mois"][value="5"]').check();
+  await tiroir.getByRole("button", { name: "Annuler" }).click();
+  await expect(tiroir).toBeHidden();
+  expect(await page.evaluate(() => location.hash)).not.toMatch(/fm=3,5|fm=5/);
   await page.getByRole("tab", { name: /Évolution/ }).click();
   await expect.poll(() => page.evaluate(() => location.hash)).toContain("fm=3");
   await page.getByRole("tab", { name: /Qualité des données/ }).click();
-  await expect(page.locator('#qualite-live input[name="fg-mois"][value="3"]')).toBeChecked({ timeout: 20_000 });
-  await expect(page.locator('#qualite-live input[name="fg-mois"][value="4"]')).not.toBeChecked();
+  await page.locator("#qualite-live").getByRole("button", { name: /Filtres/ }).click();
+  await expect(tiroir.locator('input[name="fg-mois"][value="3"]')).toBeChecked({ timeout: 20_000 });
+  await expect(tiroir.locator('input[name="fg-mois"][value="4"]')).not.toBeChecked();
 });
 
 test("qualité des données : connexion non configurée → message clair, aucun chiffre affiché", async ({ page }) => {
@@ -146,4 +166,24 @@ test("qualité des données : chiffres clés avec jauges, lecture de Sokhna Ci, 
   await expect(live.locator("#ql-detail tbody tr").first()).toContainText("Kolda");
   await entete.click();
   await expect(live.locator("#ql-detail tbody tr").first()).toContainText("Dakar");
+});
+
+test("qualité des données : clic sur un formulaire → tiroir d'exhaustivité par partie et par champ", async ({ page }) => {
+  await simulerProxy(page);
+  await page.goto("/#tab=qualite");
+  const live = page.locator("#qualite-live");
+  await expect(live.locator("#ql-kpi-exh")).toHaveText("66,7 %", { timeout: 20_000 });
+  await live.locator("#ql-synthese tbody tr").first().click();
+  const tiroir = page.locator("#drawer");
+  await expect(tiroir).toBeVisible();
+  await expect(tiroir).toContainText("EXHAUSTIVITÉ DU FORMULAIRE");
+  await expect(tiroir).toContainText("Formulaire entier", { timeout: 20_000 });
+  // 3 rapports reçus : DeElement01 (4 cases) → 8 / 12 ; DeElement02 (1 case) → 0 / 3, jamais rempli.
+  await expect(tiroir.locator(".drawer-kpis")).toContainText("1 / 2");
+  await expect(tiroir.locator("tbody tr").first()).toContainText("DeElement02");
+  await expect(tiroir.locator("tbody tr").first()).toContainText("0 / 3");
+  await expect(tiroir.locator("tbody tr").nth(1)).toContainText("66,7 %");
+  await expect(tiroir).toContainText("1 champ non mesurable");
+  await page.keyboard.press("Escape");
+  await expect(tiroir).toBeHidden();
 });

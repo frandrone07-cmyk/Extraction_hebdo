@@ -179,15 +179,58 @@ export function tauxMoyens(synthese, exhaustivite = null) {
   };
 }
 
-// Types de valeurs comptés comme des cases à remplir (les cases texte ou date ne sont pas lues par analytics).
+// Champs mesurables : nombres et « Oui / Non » (DHIS2 analytics sait les compter). Ne sont pas mesurables :
+// les dates et textes (analytics ne les compte pas) et les cases « Oui seulement » (non cochée = « non », réponse
+// valable, donc jamais « vide »).
 export const TYPES_NUMERIQUES = /^(INTEGER|INTEGER_POSITIVE|INTEGER_NEGATIVE|INTEGER_ZERO_OR_POSITIVE|NUMBER|PERCENTAGE|UNIT_INTERVAL)$/;
+export const TYPES_MESURABLES = /^(INTEGER|INTEGER_POSITIVE|INTEGER_NEGATIVE|INTEGER_ZERO_OR_POSITIVE|NUMBER|PERCENTAGE|UNIT_INTERVAL|BOOLEAN)$/;
+const RAISON_NON_MESURABLE = { TRUE_ONLY: "case « Oui seulement » : non cochée veut dire « non »", TEXT: "texte : non compté par DHIS2 analytics", LONG_TEXT: "texte : non compté par DHIS2 analytics", DATE: "date : non comptée par DHIS2 analytics", DATETIME: "date : non comptée par DHIS2 analytics" };
 
-// Nombre de cases numériques d'un rapport : chaque élément compte autant de cases que de combinaisons de catégories
-// (celle du formulaire si elle remplace celle de l'élément). Renvoie aussi la liste des éléments.
+// Champs d'un formulaire : chaque élément compte autant de cases que de combinaisons de catégories (celle du
+// formulaire si elle remplace celle de l'élément). Renvoie les éléments mesurables, le total de cases et les
+// champs écartés avec la raison.
 export function casesDuFormulaire(dataSetElements) {
-  const elements = (dataSetElements || []).filter((x) => TYPES_NUMERIQUES.test(x.dataElement?.valueType || ""));
-  const cases = elements.reduce((s, x) => s + (x.categoryCombo?.categoryOptionCombos || x.dataElement.categoryCombo?.categoryOptionCombos || 1), 0);
-  return { elements: elements.map((x) => x.dataElement.id), cases };
+  const tous = dataSetElements || [];
+  const mesurables = tous.filter((x) => TYPES_MESURABLES.test(x.dataElement?.valueType || ""));
+  const champs = mesurables.map((x) => ({ id: x.dataElement.id, nom: x.dataElement.formName || x.dataElement.displayName || x.dataElement.id, type: x.dataElement.valueType, cases: x.categoryCombo?.categoryOptionCombos || x.dataElement.categoryCombo?.categoryOptionCombos || 1 }));
+  return {
+    elements: champs.map((c) => c.id),
+    cases: champs.reduce((s, c) => s + c.cases, 0),
+    champs,
+    nonMesurables: tous.filter((x) => !TYPES_MESURABLES.test(x.dataElement?.valueType || "")).map((x) => ({ id: x.dataElement?.id, nom: x.dataElement?.formName || x.dataElement?.displayName || x.dataElement?.id, raison: RAISON_NON_MESURABLE[x.dataElement?.valueType] || `type ${x.dataElement?.valueType} non compté` })),
+  };
+}
+
+// Exhaustivité champ par champ : `comptes` = Map(élément → Map(structure → valeurs saisies)). Seules comptent les
+// structures qui ont envoyé le formulaire, avec un plafond (rapports × cases) par structure et par champ.
+export function exhaustiviteParChamp(rapportsParStructure, comptes, champs) {
+  const rapportsTotal = [...rapportsParStructure.values()].filter((n) => n > 0).reduce((a, b) => a + b, 0);
+  return champs.map((c) => {
+    const parStructure = comptes.get(c.id) || new Map();
+    let valeurs = 0;
+    for (const [structure, rapports] of rapportsParStructure) if (rapports > 0) valeurs += Math.min(parStructure.get(structure) || 0, rapports * c.cases);
+    const attendues = rapportsTotal * c.cases;
+    return { ...c, valeurs, attendues, taux: attendues ? arrondi((valeurs / attendues) * 100) : null };
+  }).sort((a, b) => (a.taux ?? -1) - (b.taux ?? -1) || a.nom.localeCompare(b.nom, "fr"));
+}
+
+// Regroupe les champs par section du formulaire (DHIS2 « sections ») ; les champs hors section vont dans « Autres
+// champs ». Formulaire sans section : une seule partie, « Formulaire entier ».
+export function exhaustiviteParSection(sections, parChamp) {
+  const parId = new Map(parChamp.map((c) => [c.id, c]));
+  const vus = new Set();
+  const parties = (sections || []).map((s) => {
+    const champs = (s.dataElements || []).map((d) => parId.get(d.id)).filter(Boolean);
+    champs.forEach((c) => vus.add(c.id));
+    return { nom: s.displayName || s.name, champs };
+  }).filter((p) => p.champs.length);
+  const reste = parChamp.filter((c) => !vus.has(c.id));
+  if (reste.length) parties.push({ nom: parties.length ? "Autres champs" : "Formulaire entier", champs: reste });
+  return parties.map((p) => {
+    const valeurs = p.champs.reduce((s, c) => s + c.valeurs, 0);
+    const attendues = p.champs.reduce((s, c) => s + c.attendues, 0);
+    return { nom: p.nom, champs: p.champs.length, jamais: p.champs.filter((c) => c.valeurs === 0).length, valeurs, attendues, taux: attendues ? arrondi((valeurs / attendues) * 100) : null };
+  });
 }
 
 // Exhaustivité d'un formulaire : seules comptent les structures qui ont envoyé ce formulaire (des éléments de

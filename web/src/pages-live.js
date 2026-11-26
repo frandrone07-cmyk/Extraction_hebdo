@@ -2,7 +2,7 @@
 // globaux, en-tête « Mis à jour le … » avec Actualiser, messages d'erreur, exports CSV et Excel.
 // Aucune valeur n'est inventée : une donnée absente s'affiche « Donnée non disponible ».
 import { ErreurDhis2, etatService, libelleMiseAJour, lireConfiguration, lireDhis2 } from "./dhis2-client.js";
-import { barreFiltresHtml, brancherBarre, ecrireFiltresUrl, lireBarre, lireFiltresUrl } from "./filtres-globaux.js";
+import { barreFiltresHtml, brancherBarre, ecrireFiltresUrl, etatParDefaut, lireBarre, lireFiltresUrl, MOIS_COURTS, NIVEAUX, periodesDhis2, PERIODICITES } from "./filtres-globaux.js";
 
 export const NON_DISPONIBLE = "Donnée non disponible";
 export const echapper = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -64,17 +64,94 @@ export function enregistrerFiltres(etat) {
   const hash = ecrireFiltresUrl(etat, location.hash);
   history.replaceState(null, "", `#${hash}`);
 }
-// Affiche la barre une fois ; elle ne se redessine que si nécessaire (niveau changé, boutons « Tout… »,
-// Réinitialiser) afin de ne pas faire perdre le focus clavier à chaque case cochée.
+// Filtres en tiroir : un bandeau résume la sélection (puces) ; le bouton « Filtres » ouvre un panneau latéral
+// où l'on coche à loisir, puis « Appliquer » recharge la page une seule fois (« Annuler » ou Échap : rien ne change).
+// Le bandeau n'est redessiné que si nécessaire, pour ne pas faire perdre le focus clavier.
+export function resumeFiltresPuces(etat, options) {
+  const unites = options.unites?.[etat.niveau] || [];
+  const mois = etat.mois.length === 12 ? "Tous les mois" : etat.mois.length ? etat.mois.map((m) => MOIS_COURTS[m - 1]).join(", ") : "Aucun mois";
+  const nomsUnites = etat.unites.map((id) => unites.find((u) => u.id === id)?.nom || id).map((n) => n.replace(/^DRS[_ ]/, ""));
+  const lieu = etat.niveau === "pays" ? "Sénégal (national)" : etat.unites.length ? (nomsUnites.length > 3 ? `${nomsUnites.slice(0, 3).join(", ")} +${nomsUnites.length - 3}` : nomsUnites.join(", ")) : `${etat.niveau === "district" ? "Tous les districts" : "Toutes les régions"}`;
+  const nbCaracteristiques = Object.values(etat.desagregations || {}).reduce((n, l) => n + l.length, 0);
+  const puce = (icone, libelle, valeur) => `<span class="fg-chip"><span aria-hidden="true">${icone}</span><span class="fg-chip-lib">${libelle}</span> ${echapper(valeur)}</span>`;
+  return [
+    puce("📅", "Année", etat.annees.length ? [...etat.annees].sort().join(", ") : "Aucune"),
+    puce("🗓", "Mois", mois),
+    puce("⏱", "Périodicité", PERIODICITES[etat.periodicite] || etat.periodicite),
+    puce("📍", NIVEAUX[etat.niveau]?.libelle || "Niveau", lieu),
+    nbCaracteristiques ? puce("⚲", "Caractéristiques", `${nbCaracteristiques} option${nbCaracteristiques > 1 ? "s" : ""}`) : "",
+  ].join("");
+}
+
 export function barreFiltres(conteneur, etat, options, surChangement, { forcer = false } = {}) {
   if (conteneur.firstElementChild && !forcer) return;
-  conteneur.innerHTML = barreFiltresHtml(etat, options);
-  const section = conteneur.firstElementChild;
-  brancherBarre(section, etat, options, (nouvel) => {
+  const id = `fg-tiroir-${conteneur.id || Math.random().toString(36).slice(2)}`;
+  conteneur.innerHTML = `<section class="fg-bandeau card" aria-label="Filtres appliqués">
+      <div class="fg-chips">${resumeFiltresPuces(etat, options)}</div>
+      <button type="button" class="fg-ouvrir" aria-haspopup="dialog" aria-controls="${id}" aria-expanded="false"><span aria-hidden="true">⚙</span> Filtres</button>
+    </section>
+    <div class="fg-tiroir-fond" hidden></div>
+    <aside class="fg-tiroir" id="${id}" role="dialog" aria-modal="true" aria-labelledby="${id}-titre" hidden>
+      <header class="fg-tiroir-tete"><div><p class="eyebrow">EXPLORER LES DONNÉES</p><h2 id="${id}-titre">Filtres</h2></div><button type="button" class="icon-button close-button fg-fermer" aria-label="Fermer les filtres">×</button></header>
+      <div class="fg-tiroir-corps"></div>
+      <footer class="fg-tiroir-pied"><button type="button" class="fg-pied-reinit">Réinitialiser</button><span class="fg-pied-info" aria-live="polite"></span><button type="button" class="fg-annuler">Annuler</button><button type="button" class="fg-appliquer">Appliquer</button></footer>
+    </aside>`;
+  const bouton = conteneur.querySelector(".fg-ouvrir");
+  const tiroir = conteneur.querySelector(".fg-tiroir");
+  const fond = conteneur.querySelector(".fg-tiroir-fond");
+  // Le tiroir est rattaché au <body> : une animation (transform) d'un parent fausserait sa position fixe.
+  for (const ancien of document.querySelectorAll(`body > [data-tiroir-de="${id}"]`)) ancien.remove();
+  fond.dataset.tiroirDe = id;
+  tiroir.dataset.tiroirDe = id;
+  document.body.append(fond, tiroir);
+  const corps = tiroir.querySelector(".fg-tiroir-corps");
+  const info = tiroir.querySelector(".fg-pied-info");
+  let brouillon = etat;
+  const majInfo = () => {
+    const n = periodesDhis2(brouillon).length;
+    info.textContent = n ? `${n} période${n > 1 ? "s" : ""} DHIS2` : "Aucune période : cochez une année et un mois";
+    tiroir.querySelector(".fg-appliquer").disabled = !n;
+  };
+  const dessinerCorps = (e) => {
+    corps.innerHTML = barreFiltresHtml(e, options);
+    const section = corps.firstElementChild;
+    brancherBarre(section, e, options, (nouvel) => {
+      const redessiner = nouvel.niveau !== e.niveau || JSON.stringify(lireBarre(section, e)) !== JSON.stringify(nouvel);
+      brouillon = nouvel;
+      if (redessiner) dessinerCorps(nouvel);
+      majInfo();
+    });
+  };
+  const fermer = () => {
+    tiroir.classList.remove("ouvert");
+    fond.classList.remove("ouvert");
+    bouton.setAttribute("aria-expanded", "false");
+    document.removeEventListener("keydown", clavier, true);
+    setTimeout(() => { tiroir.hidden = true; fond.hidden = true; }, 250);
+    bouton.focus();
+  };
+  const clavier = (ev) => { if (ev.key === "Escape") { ev.stopPropagation(); fermer(); } };
+  const ouvrir = () => {
+    brouillon = filtresCourants();
+    dessinerCorps(brouillon);
+    majInfo();
+    tiroir.hidden = false;
+    fond.hidden = false;
+    bouton.setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => { tiroir.classList.add("ouvert"); fond.classList.add("ouvert"); });
+    document.addEventListener("keydown", clavier, true);
+    setTimeout(() => corps.querySelector("input, select")?.focus(), 60);
+  };
+  bouton.addEventListener("click", ouvrir);
+  fond.addEventListener("click", fermer);
+  tiroir.querySelector(".fg-fermer").addEventListener("click", fermer);
+  tiroir.querySelector(".fg-annuler").addEventListener("click", fermer);
+  tiroir.querySelector(".fg-pied-reinit").addEventListener("click", () => { brouillon = etatParDefaut(); dessinerCorps(brouillon); majInfo(); });
+  tiroir.querySelector(".fg-appliquer").addEventListener("click", () => {
+    const nouvel = brouillon;
     enregistrerFiltres(nouvel);
-    if (nouvel.niveau !== etat.niveau || JSON.stringify(lireBarre(section, etat)) !== JSON.stringify(nouvel)) {
-      barreFiltres(conteneur, nouvel, options, surChangement, { forcer: true });
-    }
+    fermer();
+    conteneur.querySelector(".fg-chips").innerHTML = resumeFiltresPuces(nouvel, options);
     surChangement(nouvel);
   });
 }

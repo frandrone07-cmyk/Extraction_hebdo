@@ -3,7 +3,7 @@
 // l'adresse (lien partageable). Les fonctions de transformation sont pures et testées.
 
 export const MOIS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
-const MOIS_COURTS = ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."];
+export const MOIS_COURTS = ["Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."];
 export const PERIODICITES = { M: "Mensuelle", T: "Trimestrielle", A: "Annuelle" };
 // Niveaux de la pyramide sanitaire dans DHIS2 Sénégal. DÉPEND DE VOTRE DHIS2 : niveau 1 = pays, 2 = région (DRS),
 // 3 = district ; à vérifier dans /api/organisationUnitLevels si la hiérarchie change.

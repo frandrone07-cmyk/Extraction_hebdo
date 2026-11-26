@@ -9,7 +9,8 @@ import {
   exporterXlsx, filtresCourants, lignesAnalytics, metadonnees, NON_DISPONIBLE, nombre, pourcent, statutTaux,
 } from "./pages-live.js";
 import {
-  bornesPeriodes, casesDuFormulaire, compterViolations, dimensionMetriques, exhaustiviteFormulaire, lienSaisieDhis2,
+  bornesPeriodes, casesDuFormulaire, compterViolations, dimensionMetriques, exhaustiviteFormulaire, exhaustiviteParChamp,
+  exhaustiviteParSection, lienSaisieDhis2,
   niveauStructures, plusEnRetard, syntheseParFormulaire, tableauCompletude, tauxMoyens, unitesSansRapport,
   valeursNegatives, versionAuMoins,
 } from "./qualite-calculs.js";
@@ -18,6 +19,7 @@ import { formulairesSuivis } from "./suivi-local.js";
 import { tableauDistrictsMensuel } from "./qualite-calculs.js";
 import { barreCellule, brancherTableaux, carteChiffre, enteteTriable, faireCommenter, miniCourbe, pucesStatut, rechercheTableau } from "./live-ui.js";
 import { commentaireQualite } from "./sokhnaci-direct.js";
+import { ouvrirTiroir } from "./drawer.js";
 
 let vue = "tableau"; // tableau | barres | courbes
 let dernier = null; // dernières données calculées (exports, résumé pour Sokhna Ci)
@@ -45,6 +47,10 @@ export function monterQualite(racine) {
   racine.innerHTML = `<div id="ql-filtres"></div><div id="ql-corps">${chargementHtml()}</div>`;
   racine.addEventListener("click", (e) => surClic(e, racine));
   brancherTableaux(racine);
+  racine.addEventListener("keydown", (e) => {
+    const ligne = e.target.closest?.("tr[data-detail-exh]");
+    if (ligne && e.target === ligne && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); ligne.click(); }
+  });
   racine.addEventListener("change", (e) => {
     if (!dernier || !e.target.dataset?.ql) return;
     if (e.target.dataset.ql === "formulaire") formulaireDistricts = e.target.value;
@@ -133,15 +139,15 @@ function rendu(d, enteteFormulaires) {
     ${enteteFormulaires}
     <p class="note">Sélection : ${echapper(resumeFiltres(etat))} · ${d.periodes.length} période${d.periodes.length > 1 ? "s" : ""} (${echapper(libellePeriode(d.periodes[0]))}${d.periodes.length > 1 ? ` à ${echapper(libellePeriode(d.periodes.at(-1)))}` : ""}). DHIS2 ${echapper(meta.sante.version || "")}.</p>
     ${chiffresCles(d)}
-    <section class="card"><div class="card-head"><div><h2>Complétude, promptitude et exhaustivité par formulaire</h2><p class="card-subtitle">Rapports attendus, reçus, reçus à temps et manquants (unités affichées : ${echapper(niveau)}, périodes cumulées). Cliquez sur un en-tête pour trier.</p></div>
+    <section class="card"><div class="card-head"><div><h2>Complétude, promptitude et exhaustivité par formulaire</h2><p class="card-subtitle">Rapports attendus, reçus, reçus à temps et manquants (unités affichées : ${echapper(niveau)}, périodes cumulées). Cliquez sur un en-tête pour trier, sur une ligne pour le détail de l’exhaustivité (parties et champs du formulaire).</p></div>
       <div class="ql-outils"><label class="fg-champ">Exhaustivité sur <select data-ql="exhaustivite-periode"><option value="dernier" ${exhaustivitePeriode === "dernier" ? "selected" : ""}>Dernier mois de la sélection</option><option value="tout" ${exhaustivitePeriode === "tout" ? "selected" : ""}>Toute la sélection (plus long)</option></select></label></div></div>
       <div class="table-scroll"><table id="ql-synthese" data-table="synthese"><thead><tr>${["Formulaire", "Attendus", "Reçus", "À temps", "Complétude", "Promptitude", "Exhaustivité", "Manquants"].map(enteteTriable).join("")}</tr></thead>
-      <tbody>${synthese.map((s) => `<tr><th scope="row">${echapper(s.formulaire)}</th>${celluleNombre(s.attendus)}${celluleNombre(s.recus)}${celluleNombre(s.aTemps)}${celluleTaux(s.completude)}${celluleTaux(s.promptitude)}<td data-exh="${s.formulaireUid}" data-v=""><span class="live-chargement">calcul…</span></td>${celluleNombre(s.manquants)}</tr>`).join("")}</tbody>
+      <tbody>${synthese.map((s) => `<tr data-detail-exh="${s.formulaireUid}" tabindex="0" title="Voir l’exhaustivité par partie et par champ"><th scope="row">${echapper(s.formulaire)} <span class="ql-detail-lien" aria-hidden="true">Détail ›</span></th>${celluleNombre(s.attendus)}${celluleNombre(s.recus)}${celluleNombre(s.aTemps)}${celluleTaux(s.completude)}${celluleTaux(s.promptitude)}<td data-exh="${s.formulaireUid}" data-v=""><span class="live-chargement">calcul…</span></td>${celluleNombre(s.manquants)}</tr>`).join("")}</tbody>
       <tfoot><tr><th scope="row">Taux moyen (${synthese.length} formulaire${synthese.length > 1 ? "s" : ""})</th><td></td><td></td><td></td>${celluleTaux(tauxMoyens(synthese).completude)}${celluleTaux(tauxMoyens(synthese).promptitude)}<td id="ql-exh-moyenne"><span class="live-chargement">calcul…</span></td><td></td></tr></tfoot></table></div>
       <details class="ql-methode"><summary>Comment ces taux sont-ils calculés ?</summary><ul>
         <li><b>Complétude</b> = rapports reçus ÷ rapports attendus × 100 (DHIS2 « Reporting rate »).</li>
         <li><b>Promptitude</b> = rapports reçus à temps ÷ rapports attendus × 100 (DHIS2 « Reporting rate on time »).</li>
-        <li><b>Exhaustivité</b> = cases numériques remplies ÷ cases des rapports reçus × 100, uniquement dans les structures qui ont envoyé le formulaire. DHIS2 n’enregistre pas les zéros (sauf éléments réglés pour les garder) : une case laissée vide parce que la valeur est 0 compte comme non remplie.</li>
+        <li><b>Exhaustivité</b> = cases remplies ÷ cases des rapports reçus × 100, sur tous les champs du formulaire que DHIS2 sait compter (nombres et « Oui / Non »), uniquement dans les structures qui ont envoyé le formulaire. Le détail par partie (section) et par champ s’ouvre en cliquant sur la ligne du formulaire. DHIS2 n’enregistre pas les zéros (sauf éléments réglés pour les garder) : une case laissée vide parce que la valeur est 0 compte comme non remplie.</li>
         <li><b>Taux moyen</b> = moyenne simple des taux des formulaires : chaque formulaire compte pour un, comme le taux moyen de l’extraction hebdomadaire.</li></ul></details></section>
     <section class="card" id="ql-districts"><div class="card-head"><div><h2>Qualité par district — mensuelle et annuelle</h2><p class="card-subtitle">Complétude (rapports reçus / attendus) de chaque district, mois par mois et sur l’année ; districts les plus faibles en premier.</p></div>
       <div class="ql-outils">${rechercheTableau("districts", "Rechercher un district…")}<label class="fg-champ">Formulaire <select data-ql="formulaire"><option value="tous">Tous les formulaires suivis</option>${d.formulaires.map((f) => `<option value="${f.uid}" ${formulaireDistricts === f.uid ? "selected" : ""}>${echapper(f.nom)}</option>`).join("")}</select></label>
@@ -189,6 +195,75 @@ async function exhaustiviteDe(f, periodes, ouSelection, niveau, actualiser) {
     for (const l of lignesAnalytics(r.donnees)) valeurs.set(l.ou, (valeurs.get(l.ou) || 0) + l.valeur);
   }
   return { ...exhaustiviteFormulaire(rapports, valeurs, cases), cases };
+}
+
+// Détail de l'exhaustivité d'un formulaire, dans le tiroir latéral : par partie (section DHIS2) et par champ.
+const LIBELLE_TYPE = { BOOLEAN: "Oui / Non", NUMBER: "Nombre", PERCENTAGE: "Pourcentage", UNIT_INTERVAL: "Fraction" };
+let jetonDetail = 0;
+async function ouvrirDetailExhaustivite(d, f) {
+  const jeton = ++jetonDetail;
+  const periodes = d.exhaustivitePeriodes || d.periodes.slice(-1);
+  const periodeTexte = `${libellePeriode(periodes[0])}${periodes.length > 1 ? ` à ${libellePeriode(periodes.at(-1))}` : ""}`;
+  const contenu = ouvrirTiroir(`<h2 id="drawer-titre">${echapper(f.nom)}</h2><p class="drawer-subtitle">Exhaustivité · ${echapper(periodeTexte)} · ${echapper(resumeFiltres(d.etat))}</p><div id="ex-corps">${chargementHtml("Lecture des parties et des champs du formulaire…")}</div>`, "EXHAUSTIVITÉ DU FORMULAIRE");
+  if (!contenu) return;
+  brancherTableaux(contenu);
+  const zone = () => (jeton === jetonDetail ? document.getElementById("ex-corps") : null);
+  try {
+    const niveau = await niveauFormations();
+    const ds = await lireDhis2(`dataSets/${f.uid}.json`, { fields: "sections[displayName,sortOrder,dataElements[id]],dataSetElements[categoryCombo[categoryOptionCombos~size],dataElement[id,displayName,formName,valueType,categoryCombo[categoryOptionCombos~size]]]" });
+    const { champs, nonMesurables } = casesDuFormulaire(ds.donnees?.dataSetElements);
+    const ou = `ou:${d.etat.unites.length ? d.etat.unites.join(";") : d.meta.racine.id};LEVEL-${niveau}`;
+    const rec = await lireDhis2("analytics.json", { dimension: [`dx:${f.uid}.ACTUAL_REPORTS`, ou], filter: `pe:${periodes.join(";")}`, skipMeta: "true" });
+    const rapports = new Map(lignesAnalytics(rec.donnees).map((l) => [l.ou, l.valeur]));
+    const comptes = new Map();
+    const lots = [];
+    for (let i = 0; i < champs.length; i += 25) lots.push(champs.slice(i, i + 25).map((c) => c.id));
+    let faits = 0;
+    const file = [...lots];
+    const travailleur = async () => {
+      while (file.length) {
+        const ids = file.shift();
+        const r = await lireDhis2("analytics.json", { dimension: [`dx:${ids.join(";")}`, ou], filter: `pe:${periodes.join(";")}`, aggregationType: "COUNT", skipMeta: "true" });
+        for (const l of lignesAnalytics(r.donnees)) {
+          if (!comptes.has(l.dx)) comptes.set(l.dx, new Map());
+          comptes.get(l.dx).set(l.ou, (comptes.get(l.dx).get(l.ou) || 0) + l.valeur);
+        }
+        faits += 1;
+        const z = zone();
+        if (!z) return;
+        z.innerHTML = chargementHtml(`Comptage des champs remplis : ${Math.min(faits * 25, champs.length)} / ${champs.length} champs…`);
+      }
+    };
+    await Promise.all([travailleur(), travailleur(), travailleur()]);
+    const z = zone();
+    if (!z) return;
+    const parChamp = exhaustiviteParChamp(rapports, comptes, champs);
+    const sections = [...(ds.donnees?.sections || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const parties = exhaustiviteParSection(sections, parChamp);
+    const valeurs = parChamp.reduce((x, c) => x + c.valeurs, 0);
+    const attendues = parChamp.reduce((x, c) => x + c.attendues, 0);
+    const global = attendues ? Math.round((valeurs / attendues) * 1000) / 10 : null;
+    const jamais = parChamp.filter((c) => c.valeurs === 0).length;
+    const recus = [...rapports.values()].reduce((a, b) => a + (b > 0 ? b : 0), 0);
+    const tauxHtml = (t) => (t === null ? `<span class="live-nd">${NON_DISPONIBLE}</span>` : barreCellule(t, statutTaux(t), { libelle: pourcent(t) }));
+    z.innerHTML = `<div class="drawer-kpis">
+        <div class="drawer-kpi"><span>Exhaustivité</span><strong>${pourcent(global)}</strong></div>
+        <div class="drawer-kpi"><span>Champs jamais remplis</span><strong>${jamais} / ${parChamp.length}</strong></div>
+        <div class="drawer-kpi"><span>Rapports reçus</span><strong>${nombre(recus, 0)}</strong></div></div>
+      <p class="note">${nombre(valeurs, 0)} cases remplies sur ${nombre(attendues, 0)} attendues (${parChamp.length} champs mesurables × combinaisons de catégories × rapports reçus).</p>
+      <h3 class="mt-titre">Par partie du formulaire${sections.length ? ` (${sections.length} section${sections.length > 1 ? "s" : ""} DHIS2)` : ""}</h3>
+      <ul class="ex-parties">${parties.map((p) => `<li><div><b>${echapper(p.nom)}</b><small>${p.champs} champ${p.champs > 1 ? "s" : ""}${p.jamais ? ` · ${p.jamais} jamais rempli${p.jamais > 1 ? "s" : ""}` : ""}</small></div>${tauxHtml(p.taux)}</li>`).join("")}</ul>
+      <section class="ex-champs"><h3 class="mt-titre">Par champ (variable) — les moins remplis en premier</h3>
+      ${rechercheTableau("ex-champs", "Rechercher un champ…")}
+      <div class="table-scroll ex-table"><table data-table="ex-champs"><thead><tr>${enteteTriable("Champ")}${enteteTriable("Type")}${enteteTriable("Cases remplies")}${enteteTriable("Exhaustivité")}</tr></thead>
+      <tbody>${parChamp.map((c) => `<tr data-statut="${statutTaux(c.taux)}"><td>${echapper(c.nom)}</td><td>${echapper(LIBELLE_TYPE[c.type] || "Nombre entier")}${c.cases > 1 ? ` · ${c.cases} cases` : ""}</td><td data-v="${c.valeurs}">${nombre(c.valeurs, 0)} / ${nombre(c.attendues, 0)}</td><td data-v="${c.taux ?? ""}">${tauxHtml(c.taux)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note" data-compteur="ex-champs" aria-live="polite"></p></section>
+      ${nonMesurables.length ? `<details class="ql-methode"><summary>${nonMesurables.length} champ${nonMesurables.length > 1 ? "s" : ""} non mesurable${nonMesurables.length > 1 ? "s" : ""}</summary><ul>${nonMesurables.map((c) => `<li><b>${echapper(c.nom)}</b> — ${echapper(c.raison)}</li>`).join("")}</ul></details>` : ""}
+      <p class="note">Une case vide peut aussi être un zéro : DHIS2 n’enregistre pas les zéros (sauf éléments réglés pour les garder). Seules les structures qui ont envoyé ce formulaire sont comptées.</p>`;
+  } catch (erreur) {
+    const z = zone();
+    if (z) z.innerHTML = erreurHtml(erreur);
+  }
 }
 
 async function lancerExhaustivite(d, ma = generation, { actualiser = false } = {}) {
@@ -440,6 +515,8 @@ async function lancerNegatives(d) {
 
 function surClic(e, racine) {
   const bouton = e.target.closest("button");
+  const ligneExh = !bouton && e.target.closest("tr[data-detail-exh]");
+  if (ligneExh && dernier) { const f = dernier.formulaires.find((x) => x.uid === ligneExh.dataset.detailExh); if (f) ouvrirDetailExhaustivite(dernier, f); return; }
   if (!bouton) return;
   if (bouton.dataset.action === "actualiser") { charger(racine, { actualiser: true }); return; }
   if (bouton.dataset.action === "formulaires") { ouvrirGestionFormulaires(() => charger(racine, { actualiser: true })); return; }

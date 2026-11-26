@@ -75,6 +75,30 @@ function genererSynthese(modele) {
   return lignes.join(" ");
 }
 
+// Méthode du taux moyen de la vue d'ensemble, illustrée avec les chiffres affichés (aucun chiffre ajouté).
+function methodeTauxMoyen(modele, tauxGlobal) {
+  const avecValeur = modele.districts.filter((district) => district.tauxMoyen !== null && district.tauxMoyen !== undefined);
+  const exemple = [...avecValeur].sort((a, b) => a.nom.localeCompare(b.nom, "fr"))[0];
+  const formulaires = exemple ? exemple.formulaires.filter((formulaire) => formulaire.valeur !== null && formulaire.valeur !== undefined) : [];
+  const somme = avecValeur.reduce((total, district) => total + district.tauxMoyen, 0);
+  const nombreFr = (v, d = 1) => Number(v).toLocaleString("fr-FR", { maximumFractionDigits: d });
+  const etape = (n, titre, texte) => `<li><span class="mt-num">${n}</span><div><b>${titre}</b><p>${texte}</p></div></li>`;
+  return `<h2 id="drawer-titre">Comment le taux moyen est calculé</h2>
+    <p class="drawer-subtitle">Extraction DHIS2 du ${escapeHtml(formaterDate(modele.semaineCle || modele.extraction || ""))} · ${escapeHtml(modele.selection.region)} · ${escapeHtml(modele.selection.periode)}</p>
+    <div class="drawer-kpis"><div class="drawer-kpi"><span>Taux moyen affiché</span><strong>${pct(tauxGlobal)}</strong></div><div class="drawer-kpi"><span>Districts pris en compte</span><strong>${avecValeur.length}</strong></div><div class="drawer-kpi"><span>Pondération</span><strong>Aucune</strong></div></div>
+    <ol class="mt-etapes">
+      ${etape(1, "Taux d’un formulaire, pour un mois", "Pour chaque district, chaque formulaire et chaque mois, DHIS2 donne le taux de complétude : rapports reçus ÷ rapports attendus × 100 (« Reporting rate »), lu lors de l’extraction du lundi.")}
+      ${etape(2, "Taux d’un formulaire sur la sélection", "Moyenne simple des mois sélectionnés pour ce formulaire dans ce district (un mois sans valeur est ignoré, il ne compte pas pour zéro).")}
+      ${etape(3, "Taux moyen d’un district", "Moyenne simple de ses formulaires : chaque formulaire compte pour un, quel que soit le nombre de rapports attendus.")}
+      ${etape(4, "Taux moyen affiché", `Moyenne simple des districts de la sélection : ${nombreFr(somme)} ÷ ${avecValeur.length} = <b>${pct(tauxGlobal)}</b>. Le taux d’une région est, de même, la moyenne de ses districts.`)}
+    </ol>
+    ${exemple ? `<h3 class="mt-titre">Exemple : district de ${escapeHtml(exemple.nom)}</h3>
+    <div class="table-scroll"><table class="mt-table"><thead><tr><th>Formulaire</th><th>Taux sur la sélection</th></tr></thead><tbody>
+      ${formulaires.map((formulaire) => `<tr><td>${escapeHtml(formulaire.nom)}</td><td>${pct(formulaire.valeur)}</td></tr>`).join("")}
+    </tbody><tfoot><tr><th>Moyenne des ${formulaires.length} formulaires</th><th>${pct(exemple.tauxMoyen)}</th></tr></tfoot></table></div>` : ""}
+    <p class="note">Pourquoi une moyenne simple ? Chaque district et chaque formulaire pèsent autant : un grand district ou un formulaire très attendu ne masque pas les difficultés des autres. Les seuils de couleur s’appliquent ensuite : rouge sous ${modele.seuils.critique} %, orange jusqu’à ${modele.seuils.conforme} %, vert au-delà.</p>`;
+}
+
 export function renderVue(modele) {
   const { regions, districts, seuils, evolution } = modele;
   const tauxGlobal = moyenne(districts.map((district) => district.tauxMoyen));
@@ -99,9 +123,10 @@ export function renderVue(modele) {
   const optionsMeilleurs = listeDistricts(meilleurs, "Aucun taux disponible pour cette sélection.", true);
 
   return `<div class="page-stack">
+    <template id="methode-taux-moyen">${methodeTauxMoyen(modele, tauxGlobal)}</template>
     ${enteteSection("Vue d’ensemble", "Un aperçu national des rapports transmis et des zones à accompagner.", contexte)}
     <section class="grid grid-kpi" aria-label="Indicateurs clés">
-      ${kpi("Taux moyen", pct(tauxGlobal), "◌", modele.comparaisonCle ? `vs ${formaterDate(modele.comparaisonCle)}` : "complétude moyenne", "kpi-accent", variation)}
+      ${kpi("Taux moyen", pct(tauxGlobal), "◌", `${modele.comparaisonCle ? `vs ${formaterDate(modele.comparaisonCle)}` : "complétude moyenne"} <button type="button" class="kpi-methode" data-methode="taux-moyen" title="Comment le taux moyen est-il calculé ?"><span aria-hidden="true">ⓘ</span> Méthode de calcul</button>`, "kpi-accent", variation)}
       ${kpi("Régions couvertes", regions.length, "⌖", "dans la sélection")}
       ${kpi("Districts analysés", districts.length, "▤", `${districts.filter((district) => district.statut !== "inconnu").length} avec une valeur disponible`)}
       ${kpi("Districts critiques", nbCritiques, "!", variationCritiques === null ? `seuil < ${seuils.critique}%` : `${variationCritiques > 0 ? "+" : ""}${variationCritiques} vs comparaison`, "kpi-critical", null)}

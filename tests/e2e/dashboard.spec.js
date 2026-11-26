@@ -620,3 +620,19 @@ test("compare plusieurs régions et plusieurs mois cochés, conservés dans le l
   await expect(page).toHaveURL(new RegExp(`periode=${mois[0]}`));
   await expect(page.locator("#sel-periode .mc-bouton")).not.toHaveText("Toutes les périodes");
 });
+
+test("vue d'ensemble : « Calcul » explique le taux moyen dans un tiroir, avec les chiffres affichés", async ({ page }) => {
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  const kpi = page.locator(".kpi-card", { hasText: "Taux moyen" }).first();
+  const valeur = (await kpi.locator(".kpi-value").innerText()).trim();
+  await kpi.getByRole("button", { name: /Méthode de calcul/ }).click();
+  const tiroir = page.locator("#drawer");
+  await expect(tiroir).toBeVisible();
+  await expect(tiroir).toContainText("MÉTHODE DE CALCUL");
+  await expect(tiroir).toContainText("Comment le taux moyen est calculé");
+  await expect(tiroir).toContainText("Moyenne simple des districts");
+  await expect(tiroir.locator(".drawer-kpi").first()).toContainText(valeur.replace(/\s/g, "").replace("%", ""));
+  await expect(tiroir.locator(".mt-table tfoot")).toContainText("Moyenne des");
+  await page.keyboard.press("Escape");
+  await expect(tiroir).toBeHidden();
+});

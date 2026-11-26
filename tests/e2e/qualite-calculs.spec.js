@@ -113,11 +113,30 @@ test("qualité : taux moyens (moyenne simple des formulaires), cases d'un formul
     { dataElement: { id: "d1", valueType: "INTEGER_ZERO_OR_POSITIVE", categoryCombo: { categoryOptionCombos: 4 } } },
     { categoryCombo: { categoryOptionCombos: 2 }, dataElement: { id: "d2", valueType: "NUMBER", categoryCombo: { categoryOptionCombos: 6 } } },
     { dataElement: { id: "d3", valueType: "TEXT", categoryCombo: { categoryOptionCombos: 1 } } },
-  ])).toEqual({ elements: ["d1", "d2"], cases: 6 });
+  ])).toMatchObject({ elements: ["d1", "d2"], cases: 6, nonMesurables: [{ id: "d3" }] });
+  // Les champs « Oui / Non » comptent ; les cases « Oui seulement » et les dates sont écartées avec la raison.
+  const oui = casesDuFormulaire([{ dataElement: { id: "b1", valueType: "BOOLEAN" } }, { dataElement: { id: "t1", valueType: "TRUE_ONLY" } }, { dataElement: { id: "dt", valueType: "DATE" } }]);
+  expect(oui.elements).toEqual(["b1"]);
+  expect(oui.nonMesurables.map((c) => c.raison).join(" ")).toMatch(/Oui seulement.*date/);
   // Seules les structures qui ont envoyé le formulaire comptent ; plafond de 100 % par structure.
   const r = exhaustiviteFormulaire(new Map([["s1", 2], ["s2", 1], ["s3", 0]]), new Map([["s1", 30], ["s2", 3], ["autre", 99]]), 10);
   expect(r).toEqual({ valeurs: 23, casesAttendues: 30, taux: 76.7 });
   expect(exhaustiviteFormulaire(new Map(), new Map(), 10).taux).toBeNull();
   expect(niveauStructures([{ level: 1, displayName: "National" }, { level: 4, displayName: "Formation sanitaire" }, { level: 6, displayName: "Level 6" }])).toBe(4);
   expect(niveauStructures([{ level: 1, displayName: "A" }, { level: 3, displayName: "B" }])).toBe(3);
+});
+
+test("qualité : exhaustivité par champ et par partie du formulaire", async () => {
+  const { exhaustiviteParChamp, exhaustiviteParSection } = await import("../../web/src/qualite-calculs.js");
+  const rapports = new Map([["s1", 2], ["s2", 1], ["s3", 0]]);
+  const comptes = new Map([["a", new Map([["s1", 4], ["s2", 9], ["autre", 50]])], ["b", new Map([["s1", 1]])]]);
+  const champs = exhaustiviteParChamp(rapports, comptes, [{ id: "a", nom: "Consultations", cases: 2 }, { id: "b", nom: "Décès", cases: 1 }, { id: "c", nom: "Ruptures", cases: 1 }]);
+  // a : s1 4 (plafond 4) + s2 9 → plafonné à 2 = 6 / 6 ; b : 1 / 3 ; c : 0 / 3 (jamais rempli) en premier.
+  expect(champs.map((c) => [c.id, c.valeurs, c.attendues, c.taux])).toEqual([["c", 0, 3, 0], ["b", 1, 3, 33.3], ["a", 6, 6, 100]]);
+  const parties = exhaustiviteParSection([{ displayName: "Consultation", dataElements: [{ id: "a" }, { id: "b" }] }], champs);
+  expect(parties).toEqual([
+    { nom: "Consultation", champs: 2, jamais: 0, valeurs: 7, attendues: 9, taux: 77.8 },
+    { nom: "Autres champs", champs: 1, jamais: 1, valeurs: 0, attendues: 3, taux: 0 },
+  ]);
+  expect(exhaustiviteParSection([], champs)[0].nom).toBe("Formulaire entier");
 });

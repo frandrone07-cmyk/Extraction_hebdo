@@ -1290,3 +1290,60 @@ tr[hidden] { display: none; }
 .ql-methode summary { cursor: pointer; font-weight: 700; color: var(--primary-strong); }
 .ql-methode ul { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 4px; color: var(--muted); }
 .ql-methode b { color: var(--text); }
+
+/* ------------------------------------------------------------------ Filtres en tiroir (pages Qualité et FARS) */
+.drawer-overlay { z-index: 2000; }
+.drawer { z-index: 2001; }
+.fg-bandeau { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 14px; margin-bottom: 14px; }
+.fg-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.fg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-soft); font-size: .82rem; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fg-chip-lib { color: var(--muted); font-weight: 600; }
+.fg-ouvrir { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 16px; border: 0; border-radius: 10px; background: var(--primary); color: var(--primary-contrast); font: inherit; font-weight: 750; cursor: pointer; box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 30%, transparent); transition: transform .15s ease, box-shadow .15s ease; }
+.fg-ouvrir:hover { transform: translateY(-1px); box-shadow: 0 10px 22px color-mix(in srgb, var(--primary) 34%, transparent); }
+.fg-ouvrir:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.fg-tiroir-fond { position: fixed; inset: 0; z-index: 2000; background: rgba(7, 20, 17, .48); backdrop-filter: blur(3px); opacity: 0; transition: opacity .24s ease; }
+.fg-tiroir-fond.ouvert { opacity: 1; }
+.fg-tiroir { position: fixed; top: 0; right: 0; bottom: 0; z-index: 2001; width: min(560px, 100vw); display: grid; grid-template-rows: auto 1fr auto; background: var(--surface); color: var(--text); border-left: 1px solid var(--border); box-shadow: -18px 0 40px rgba(7, 20, 17, .18); transform: translateX(100%); transition: transform .26s cubic-bezier(.2, .8, .2, 1); }
+.fg-tiroir.ouvert { transform: translateX(0); }
+.fg-tiroir[hidden], .fg-tiroir-fond[hidden] { display: none; }
+.fg-tiroir-tete { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px 12px; border-bottom: 1px solid var(--border); }
+.fg-tiroir-tete h2 { margin: 2px 0 0; font-family: Manrope, sans-serif; font-size: 22px; letter-spacing: -.04em; }
+.fg-tiroir-corps { overflow: auto; padding: 14px 20px; }
+.fg-tiroir-corps .filtres-globaux { border: 0; box-shadow: none; padding: 0; margin: 0; background: none; }
+.fg-tiroir-corps .filtres-globaux:hover { box-shadow: none; }
+.fg-tiroir-corps .fg-ligne { display: grid; gap: 14px; }
+.fg-tiroir-corps .fg-reinitialiser { display: none; }
+.fg-tiroir-corps .fg-unites { min-width: 0; width: 100%; }
+.fg-tiroir-corps .fg-liste { max-height: 260px; }
+.fg-tiroir-pied { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-top: 1px solid var(--border); background: var(--surface-soft); }
+.fg-pied-info { flex: 1; color: var(--muted); font-size: .82rem; }
+.fg-tiroir-pied button { font: inherit; font-size: .88rem; min-height: 38px; padding: 0 14px; border-radius: 9px; cursor: pointer; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
+.fg-tiroir-pied .fg-pied-reinit { border: 0; background: none; color: var(--primary-strong); text-decoration: underline; padding: 0 4px; }
+.fg-tiroir-pied .fg-appliquer { border-color: var(--primary); background: var(--primary); color: var(--primary-contrast); font-weight: 750; }
+.fg-tiroir-pied .fg-appliquer:disabled { opacity: .5; cursor: not-allowed; }
+.fg-tiroir-pied button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 700px) { .fg-bandeau { flex-direction: column; align-items: stretch; } .fg-tiroir-pied { flex-wrap: wrap; } .fg-pied-info { flex-basis: 100%; } }
+@media (prefers-reduced-motion: reduce) { .fg-tiroir, .fg-tiroir-fond { transition: none; } }
+
+/* Méthode de calcul (Vue d'ensemble) et détail de l'exhaustivité (tiroir) */
+.kpi-methode { margin-left: 6px; padding: 2px 8px; border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); border-radius: 999px; background: var(--primary-soft); color: var(--primary-strong); font: inherit; font-size: 10px; font-weight: 750; cursor: pointer; }
+.kpi-methode:hover { background: var(--primary); color: var(--primary-contrast); }
+.kpi-methode:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.mt-etapes { list-style: none; margin: 14px 0; padding: 0; display: grid; gap: 10px; }
+.mt-etapes li { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-soft); }
+.mt-etapes p { margin: 3px 0 0; color: var(--muted); font-size: .88rem; line-height: 1.45; }
+.mt-num { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--primary); color: var(--primary-contrast); font-weight: 800; font-size: .85rem; }
+.mt-titre { margin: 18px 0 8px; font-family: Manrope, sans-serif; font-size: 15px; }
+.mt-table tfoot th { border-top: 2px solid var(--border-strong); }
+.ex-parties { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ex-parties li { display: grid; grid-template-columns: minmax(0, 1fr) 170px; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.ex-parties small { display: block; color: var(--muted); font-size: .78rem; margin-top: 2px; }
+.ex-champs .lv-recherche input { width: 100%; margin-bottom: 8px; }
+.ex-table { max-height: 46vh; overflow: auto; }
+.ex-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+#ql-synthese tbody tr[data-detail-exh] { cursor: pointer; }
+#ql-synthese tbody tr[data-detail-exh]:hover td, #ql-synthese tbody tr[data-detail-exh]:hover th { background: color-mix(in srgb, var(--primary-soft) 60%, transparent); }
+#ql-synthese tbody tr[data-detail-exh]:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.ql-detail-lien { margin-left: 6px; color: var(--primary-strong); font-size: .75rem; font-weight: 700; opacity: 0; transition: opacity .15s ease; }
+#ql-synthese tr:hover .ql-detail-lien, #ql-synthese tr:focus-visible .ql-detail-lien { opacity: 1; }
+@media (max-width: 700px) { .ex-parties li { grid-template-columns: 1fr; } }

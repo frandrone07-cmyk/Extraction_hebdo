@@ -37,10 +37,30 @@ export function ouvrirFicheDistrict(district) {
     <p class="note">Détail par formulaire et période DHIS2. Les cellules sans valeur sont affichées par un tiret.</p>
     <div class="table-scroll"><table class="heatmap"><thead><tr><th>Formulaire</th>${periodCodes.map((code) => `<th>${escapeHtml(periods.get(code))}</th>`).join("")}<th>Écart formulaire</th></tr></thead><tbody>${rows}</tbody></table></div>
   `;
+  montrer(panel, overlay, "FICHE DISTRICT");
+}
+
+function montrer(panel, overlay, etiquette) {
+  const marque = panel.querySelector(".drawer-top .eyebrow");
+  if (marque) marque.textContent = etiquette;
+  panel.setAttribute("aria-label", etiquette.charAt(0) + etiquette.slice(1).toLowerCase());
   panel.hidden = false;
   overlay.hidden = false;
+  panel.scrollTop = 0;
   requestAnimationFrame(() => { panel.classList.add("ouvert"); overlay.classList.add("ouvert"); });
   document.getElementById("btn-fermer-drawer").focus();
+}
+
+// Tiroir générique (méthode de calcul, détail d'un formulaire…) : même panneau latéral que la fiche district.
+export function ouvrirTiroir(html, etiquette = "DÉTAIL") {
+  const panel = document.getElementById("drawer");
+  const content = document.getElementById("drawer-contenu");
+  const overlay = document.getElementById("drawer-overlay");
+  if (!panel || !content || !overlay) return null;
+  if (panel.hidden) previousFocus = document.activeElement;
+  content.innerHTML = html;
+  montrer(panel, overlay, etiquette);
+  return content;
 }
 
 export function fermerFicheDistrict() {
@@ -53,6 +73,13 @@ export function fermerFicheDistrict() {
 }
 
 export function initDrawer() {
+  // Boutons « Comment est-il calculé ? » : le contenu est préparé dans un <template id="methode-…"> par la page.
+  document.addEventListener("click", (event) => {
+    const bouton = event.target.closest("[data-methode]");
+    if (!bouton) return;
+    const modele = document.getElementById(`methode-${bouton.dataset.methode}`);
+    if (modele) ouvrirTiroir(modele.innerHTML, "MÉTHODE DE CALCUL");
+  });
   document.getElementById("btn-fermer-drawer").addEventListener("click", fermerFicheDistrict);
   document.getElementById("drawer-overlay").addEventListener("click", fermerFicheDistrict);
   document.addEventListener("keydown", (event) => {
