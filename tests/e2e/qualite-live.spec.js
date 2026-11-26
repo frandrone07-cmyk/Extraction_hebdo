@@ -76,10 +76,12 @@ test("qualité des données : complétude DHIS2 affichée avec date de mise à j
   const sansRapport = live.locator(".card", { hasText: "Unités sans aucun rapport" });
   await expect(sansRapport).toContainText("Kolda");
   await expect(sansRapport.locator('a[target="_blank"]').first()).toHaveAttribute("href", /dhis-web-aggregate-data-entry.*orgUnitId=ReGiOn00002/);
-  // Contrôle des règles de validation (analyse en lecture seule).
-  await live.getByRole("button", { name: "Lancer le contrôle" }).click();
-  await expect(live.locator("#ql-validation-corps")).toContainText("1 violation");
+  // Contrôle des règles de validation lancé automatiquement, région par région (le DHIS2 simulé renvoie une
+  // violation par appel : 2 régions → 2 violations).
+  await expect(live.locator("#ql-validation-corps")).toContainText("2 violations sur 2 unités contrôlées", { timeout: 20_000 });
   await expect(live.locator("#ql-validation-corps")).toContainText("Pikine");
+  await live.getByRole("button", { name: /Relancer le contrôle/ }).click();
+  await expect(live.locator("#ql-validation-corps")).toContainText("2 violations", { timeout: 20_000 });
 });
 
 test("qualité des données : les filtres globaux sont enregistrés dans l'adresse et conservés d'un onglet à l'autre", async ({ page }) => {

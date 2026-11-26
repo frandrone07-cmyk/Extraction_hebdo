@@ -194,15 +194,11 @@ async function appelerDhis2(requete, env, chemin, recherche, contexte) {
   // Adresse tolérante : espaces ou guillemets saisis par erreur autour de DHIS2_URL sont retirés.
   const base = String(env.DHIS2_URL).trim().replace(/^["']|["']$/g, "").replace(/\/+$/, "");
   const url = `${base}/api/${chemin}${recherche}`;
-  const duree = /^analytics/.test(chemin) ? 600 : 300;
+  // Analyses (règles de validation…) : longues pour DHIS2, gardées 10 minutes comme analytics.
+  const duree = /^(analytics|dataAnalysis)/.test(chemin) ? 600 : 300;
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const cleCache = new Request(`https://cache.dhis2-proxy/${chemin}${recherche}`);
-  const actualiser = new URL(requete.url).searchParams.get("actualiser") === "1";
-  if (cache && !actualiser) {
-    const enCache = await cache.match(cleCache);
-    if (enCache) return { corps: await enCache.text(), statut: 200, date: enCache.headers.get("X-Mis-A-Jour"), cache: "HIT" };
-  }
   const options = { redirect: "manual", headers: { Authorization: enteteAuth(env), Accept: "application/json" } };
+  let empreinte = "";
   if (requete.method === "POST") {
     let corps = {};
     try { corps = JSON.parse((await requete.text()).slice(0, MAX_CORPS) || "{}"); } catch { corps = {}; }
@@ -211,11 +207,20 @@ async function appelerDhis2(requete, env, chemin, recherche, contexte) {
     options.method = "POST";
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(corps);
+    // Clé de cache d'une analyse : son contenu (unité, dates, groupe de règles).
+    const hachage = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(options.body));
+    empreinte = `#${[...new Uint8Array(hachage)].map((o) => o.toString(16).padStart(2, "0")).join("")}`;
+  }
+  const cleCache = new Request(`https://cache.dhis2-proxy/${chemin}${recherche}${empreinte ? `?corps=${empreinte.slice(1)}` : ""}`);
+  const actualiser = new URL(requete.url).searchParams.get("actualiser") === "1";
+  if (cache && !actualiser) {
+    const enCache = await cache.match(cleCache);
+    if (enCache) return { corps: await enCache.text(), statut: 200, date: enCache.headers.get("X-Mis-A-Jour"), cache: "HIT" };
   }
   const reponse = await fetch(url, options);
   const corps = await reponse.text();
   const date = new Date().toISOString();
-  if (cache && reponse.ok && requete.method === "GET") {
+  if (cache && reponse.ok) {
     const aMettre = new Response(corps, { headers: { "Content-Type": "application/json", "Cache-Control": `s-maxage=${duree}`, "X-Mis-A-Jour": date } });
     const mise = cache.put(cleCache, aMettre);
     if (contexte?.waitUntil) contexte.waitUntil(mise); else await mise;

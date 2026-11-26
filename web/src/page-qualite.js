@@ -21,6 +21,8 @@ let dernier = null; // dernières données calculées (exports, résumé pour So
 let generation = 0;
 let formulaireDistricts = "tous"; // tableau mensuel/annuel par district : un formulaire ou tous
 let anneeDistricts = null;
+let validationPeriode = "dernier"; // règles de validation : dernier mois de la sélection, ou toute la sélection
+let formulaireAberrantes = null;
 
 const cellule = (v, rendu = nombre) => (v === null || v === undefined ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td>${rendu(v)}</td>`);
 const celluleTaux = (v) => (v === null || v === undefined ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td><span class="status-chip ${statutTaux(v)}">${pourcent(v)}</span></td>`);
@@ -41,6 +43,8 @@ export function monterQualite(racine) {
     if (!dernier || !e.target.dataset?.ql) return;
     if (e.target.dataset.ql === "formulaire") formulaireDistricts = e.target.value;
     if (e.target.dataset.ql === "annee") anneeDistricts = Number(e.target.value);
+    if (e.target.dataset.ql === "validation-periode") { validationPeriode = e.target.value; lancerValidation(dernier, generation); return; }
+    if (e.target.dataset.ql === "aberrantes-formulaire") { formulaireAberrantes = e.target.value; return; }
     dessinerDistricts(dernier, generation);
   });
   charger(racine);
@@ -85,6 +89,7 @@ async function charger(racine, { actualiser = false } = {}) {
     corps.innerHTML = rendu(dernier, enteteFormulaires);
     dessinerVue(dernier);
     dessinerDistricts(dernier, ma);
+    lancerValidation(dernier, ma); // automatique, comme les autres sections
   } catch (erreur) {
     if (ma !== generation) return;
     corps.innerHTML = `${enteteFormulaires}${erreurHtml(erreur)}<p><button type="button" class="live-actualiser" data-action="actualiser">↻ Réessayer</button></p>`;
@@ -118,10 +123,11 @@ function rendu(d, enteteFormulaires) {
       <article class="card"><div class="card-head"><div><h2>Unités sans aucun rapport</h2><p class="card-subtitle">Rapports attendus mais aucun reçu sur la sélection.</p></div></div>
         ${zero.length ? `<ul class="ql-classement">${zero.map((l) => `<li><span><b>${echapper(l.unite)}</b> · ${echapper(l.formulaire)}</span><span>${nombre(l.attendus, 0)} attendu${l.attendus > 1 ? "s" : ""} ${lienHtml(l)}</span></li>`).join("")}</ul>` : `<p><span class="status-chip conforme">Aucune</span> Toutes les unités affichées ont transmis au moins un rapport.</p>`}</article>
     </section>
-    <section class="card" id="ql-validation"><div class="card-head"><div><h2>Règles de validation</h2><p class="card-subtitle">Analyse DHIS2 en lecture seule : rien n’est enregistré dans DHIS2.</p></div>
-      <button type="button" class="live-actualiser" data-action="validation">Lancer le contrôle</button></div><div id="ql-validation-corps"><p class="note">Le contrôle porte sur ${etat.unites.length === 1 ? "l’unité choisie" : "tout le pays"} et les périodes sélectionnées.</p></div></section>
+    <section class="card" id="ql-validation"><div class="card-head"><div><h2>Règles de validation</h2><p class="card-subtitle">Contrôle automatique, unité par unité (analyse DHIS2 en lecture seule : rien n’est enregistré dans DHIS2).</p></div>
+      <div class="ql-outils"><label class="fg-champ">Période contrôlée <select data-ql="validation-periode"><option value="dernier" ${validationPeriode === "dernier" ? "selected" : ""}>Dernier mois de la sélection</option><option value="tout" ${validationPeriode === "tout" ? "selected" : ""}>Toute la sélection (plus long)</option></select></label>
+      <button type="button" class="live-actualiser" data-action="validation">↻ Relancer le contrôle</button></div></div><div id="ql-validation-corps">${chargementHtml("Contrôle des règles de validation…")}</div></section>
     <section class="card" id="ql-anomalies"><div class="card-head"><div><h2>Valeurs aberrantes, négatives et doublons</h2><p class="card-subtitle">Formulaires suivis, périodes sélectionnées.</p></div>
-      <span class="ql-outils"><button type="button" class="live-actualiser" data-action="aberrantes">Valeurs aberrantes</button><button type="button" class="live-actualiser" data-action="negatives">Valeurs négatives</button></span></div>
+      <span class="ql-outils"><label class="fg-champ">Formulaire <select data-ql="aberrantes-formulaire">${d.formulaires.map((f) => `<option value="${f.uid}" ${formulaireAberrantes === f.uid ? "selected" : ""}>${echapper(f.nom)}</option>`).join("")}</select></label><button type="button" class="live-actualiser" data-action="aberrantes">Valeurs aberrantes</button><button type="button" class="live-actualiser" data-action="negatives">Valeurs négatives</button></span></div>
       <div id="ql-anomalies-corps"><p class="note">Doublons : DHIS2 n’enregistre qu’une seule valeur par élément, période, structure et combinaison de catégories ; un doublon ne peut donc pas exister dans la base. Les valeurs manquantes correspondent aux rapports manquants ci-dessus.</p></div></section>`;
 }
 
@@ -198,26 +204,59 @@ async function dessinerVue(d) {
   }
 }
 
-async function lancerValidation(d) {
-  const zone = document.getElementById("ql-validation-corps");
-  zone.innerHTML = chargementHtml("Contrôle des règles de validation en cours… (cela peut prendre une minute)");
-  const bornes = bornesPeriodes(d.periodes);
-  const cible = d.etat.unites.length === 1 ? d.etat.unites[0] : d.meta.racine.id;
-  try {
-    const r = await analyserDhis2("dataAnalysis/validationRules", { ou: cible, startDate: bornes.debut, endDate: bornes.fin, persist: false, notification: false });
-    const resultats = Array.isArray(r.donnees) ? r.donnees : [];
-    const c = compterViolations(resultats, d.meta.regions, d.meta.districts);
-    d.violations = c.total;
-    const liste = (titre, items) => `<div><h3 class="ql-sous-titre">${titre}</h3>${items.length ? `<ul class="ql-compteurs">${items.slice(0, 15).map((i) => `<li><span>${echapper(i.nom)}</span><b>${i.nombre}</b></li>`).join("")}</ul>` : `<p class="note">Aucune.</p>`}</div>`;
-    const lien = (v) => lienSaisieDhis2(d.meta.sante.lienDhis2, d.meta.sante.version, { ou: v.organisationUnitId, pe: v.periodId });
-    zone.innerHTML = `${enteteMiseAJour(r.misAJour)}<p><span class="status-chip ${c.total ? "critique" : "conforme"}">${c.total} violation${c.total > 1 ? "s" : ""}</span> ${c.total >= 500 ? "(DHIS2 limite le nombre de résultats renvoyés ; affinez la sélection.)" : ""}</p>
-      ${c.total ? `<div class="grid grid3">${liste("Par règle", c.parRegle)}${liste("Par région", c.parRegion)}${liste("Par district", c.parDistrict)}</div>
-      <details><summary>Voir le détail des violations (${Math.min(c.total, 300)} premières)</summary><div class="table-scroll"><table><thead><tr><th>Règle</th><th>Unité</th><th>Période</th><th>Gauche</th><th>Opérateur</th><th>Droite</th><th>Importance</th><th>Corriger</th></tr></thead><tbody>
-      ${resultats.slice(0, 300).map((v) => { const u = lien(v); return `<tr><td>${echapper(v.validationRuleDescription || v.validationRuleId)}</td><td>${echapper(v.organisationUnitDisplayName || v.organisationUnitId)}</td><td>${echapper(v.periodDisplayName || v.periodId)}</td>${cellule(v.leftSideValue)}<td>${echapper(v.operator || "")}</td>${cellule(v.rightSideValue)}<td>${echapper(v.importance || "")}</td><td>${u ? `<a href="${echapper(u)}" target="_blank" rel="noopener">Ouvrir dans DHIS2 ↗</a>` : ""}</td></tr>`; }).join("")}
-      </tbody></table></div></details>` : `<p>Aucune règle de validation n’est violée sur la sélection.</p>`}`;
-  } catch (erreur) {
-    zone.innerHTML = erreurHtml(erreur);
+// Unités contrôlées : celles cochées dans les filtres, sinon les régions (DHIS2 met 10 à 15 s par région et par
+// mois ; tout le pays d'un coup dépasse son délai de réponse).
+function unitesAControler(d) {
+  if (d.etat.unites.length) {
+    const liste = d.etat.niveau === "district" ? d.meta.districts : d.meta.regions;
+    return liste.filter((u) => d.etat.unites.includes(u.id));
   }
+  return d.meta.regions.length ? d.meta.regions : [d.meta.racine];
+}
+
+async function lancerValidation(d, ma = generation, { actualiser = false } = {}) {
+  const zone = document.getElementById("ql-validation-corps");
+  if (!zone) return;
+  const periodes = validationPeriode === "tout" ? d.periodes : d.periodes.slice(-1);
+  const bornes = bornesPeriodes(periodes);
+  const unites = unitesAControler(d);
+  const resultats = [];
+  const echecs = [];
+  let faites = 0;
+  let misAJour = null;
+  const progression = () => {
+    if (zone.isConnected && faites < unites.length) zone.innerHTML = chargementHtml(`Contrôle des règles de validation : ${faites} / ${unites.length} unités contrôlées (${libellePeriode(periodes[0])}${periodes.length > 1 ? ` à ${libellePeriode(periodes.at(-1))}` : ""})…`);
+  };
+  progression();
+  const file = [...unites];
+  const travailleur = async () => {
+    while (file.length) {
+      const u = file.shift();
+      try {
+        const r = await analyserDhis2("dataAnalysis/validationRules", { ou: u.id, startDate: bornes.debut, endDate: bornes.fin, persist: false, notification: false }, { actualiser });
+        if (Array.isArray(r.donnees)) resultats.push(...r.donnees);
+        misAJour = r.misAJour;
+      } catch (erreur) { echecs.push({ unite: u.nom, message: erreur.message }); }
+      faites += 1;
+      if (ma !== generation) return;
+      progression();
+    }
+  };
+  await Promise.all([travailleur(), travailleur(), travailleur()]);
+  if (ma !== generation || !zone.isConnected) return;
+  const c = compterViolations(resultats, d.meta.regions, d.meta.districts);
+  d.violations = c.total;
+  d.violationsDetail = c;
+  const liste = (titre, items) => `<div><h3 class="ql-sous-titre">${titre}</h3>${items.length ? `<ul class="ql-compteurs">${items.slice(0, 15).map((i) => `<li><span>${echapper(i.nom)}</span><b>${i.nombre}</b></li>`).join("")}</ul>` : `<p class="note">Aucune.</p>`}</div>`;
+  const lien = (v) => lienSaisieDhis2(d.meta.sante.lienDhis2, d.meta.sante.version, { ou: v.organisationUnitId, pe: v.periodId });
+  const periodeTexte = `${libellePeriode(periodes[0])}${periodes.length > 1 ? ` à ${libellePeriode(periodes.at(-1))}` : ""}`;
+  zone.innerHTML = `${misAJour ? enteteMiseAJour(misAJour) : ""}
+    <p><span class="status-chip ${c.total ? "critique" : "conforme"}">${nombre(c.total, 0)} violation${c.total > 1 ? "s" : ""}</span> sur ${unites.length - echecs.length} unité${unites.length - echecs.length > 1 ? "s" : ""} contrôlée${unites.length - echecs.length > 1 ? "s" : ""} · ${echapper(periodeTexte)}</p>
+    ${echecs.length ? `<p class="live-erreur" role="status">${echecs.length} unité${echecs.length > 1 ? "s n’ont" : " n’a"} pas pu être contrôlée${echecs.length > 1 ? "s" : ""} (${echecs.map((e) => echapper(e.unite)).join(", ")}) : ${echapper(echecs[0].message)} Leurs violations ne sont pas comptées.</p>` : ""}
+    ${c.total ? `<div class="grid grid3">${liste("Par règle", c.parRegle)}${liste("Par région", c.parRegion)}${liste("Par district", c.parDistrict)}</div>
+    <details><summary>Voir le détail des violations (${Math.min(c.total, 300)} premières)</summary><div class="table-scroll ql-districts-table"><table><thead><tr><th>Règle</th><th>Unité</th><th>Période</th><th>Gauche</th><th>Opérateur</th><th>Droite</th><th>Importance</th><th>Corriger</th></tr></thead><tbody>
+    ${resultats.slice(0, 300).map((v) => { const u = lien(v); return `<tr><td>${echapper(v.validationRuleDescription || v.validationRuleId)}</td><td>${echapper(v.organisationUnitDisplayName || v.organisationUnitId)}</td><td>${echapper(v.periodDisplayName || v.periodId)}</td>${cellule(v.leftSideValue)}<td>${echapper(v.operator || "")}</td>${cellule(v.rightSideValue)}<td>${echapper(v.importance || "")}</td><td>${u ? `<a href="${echapper(u)}" target="_blank" rel="noopener">Ouvrir dans DHIS2 ↗</a>` : ""}</td></tr>`; }).join("")}
+    </tbody></table></div></details>` : echecs.length === unites.length ? "" : `<p>Aucune règle de validation n’est violée sur la sélection.</p>`}`;
 }
 
 async function lancerAberrantes(d) {
@@ -227,11 +266,15 @@ async function lancerAberrantes(d) {
     zone.innerHTML = `<p class="live-erreur">La recherche de valeurs aberrantes nécessite DHIS2 2.36 ou plus récent (version actuelle : ${echapper(d.meta.sante.version || "inconnue")}).</p>`;
     return;
   }
-  zone.innerHTML = chargementHtml("Recherche des valeurs aberrantes…");
+  if (!(d.etat.niveau === "district" && d.etat.unites.length === 1)) {
+    zone.innerHTML = `<p class="live-erreur" role="status">Pour les valeurs aberrantes, choisissez le niveau « District » et cochez un seul district dans les filtres, puis un formulaire : ce calcul est très long pour DHIS2 (jusqu’à 1 min 30 pour un district et un formulaire), il ne peut pas être fait sur tout le pays.</p>`;
+    return;
+  }
+  const formulaire = d.formulaires.find((f) => f.uid === formulaireAberrantes) || d.formulaires[0];
+  zone.innerHTML = chargementHtml(`Recherche des valeurs aberrantes (${formulaire.nom}) : DHIS2 peut mettre 1 à 2 minutes…`);
   const bornes = bornesPeriodes(d.periodes);
-  const unites = d.etat.unites.length ? d.etat.unites : [d.meta.racine.id];
   try {
-    const r = await lireDhis2("outlierDetection", { ds: d.formulaires.map((f) => f.uid), ou: unites, startDate: bornes.debut, endDate: bornes.fin, algorithm: "Z_SCORE", threshold: 3, maxResults: 200, orderBy: "Z_SCORE" });
+    const r = await lireDhis2("outlierDetection", { ds: formulaire.uid, ou: d.etat.unites[0], startDate: bornes.debut, endDate: bornes.fin, algorithm: "MOD_Z_SCORE", maxResults: 200 }, { delaiMs: 150000 });
     const valeurs = r.donnees?.outlierValues || [];
     const lien = (v) => lienSaisieDhis2(d.meta.sante.lienDhis2, d.meta.sante.version, { ou: v.ou, pe: v.pe });
     zone.innerHTML = `${enteteMiseAJour(r.misAJour)}<p><span class="status-chip ${valeurs.length ? "surveiller" : "conforme"}">${valeurs.length} valeur${valeurs.length > 1 ? "s" : ""} aberrante${valeurs.length > 1 ? "s" : ""}</span> (écart à la moyenne supérieur à 3 écarts-types)</p>
@@ -294,7 +337,7 @@ function surClic(e, racine) {
     const filtres = resumeFiltres(dernier.etat);
     if (bouton.dataset.format === "csv") exporterCsv(nom, enTetesExport(), lignesExport(dernier), filtres);
     else exporterXlsx(nom, enTetesExport(), lignesExport(dernier), filtres).catch((erreur) => alert(erreur.message));
-  } else if (bouton.dataset.action === "validation") lancerValidation(dernier);
+  } else if (bouton.dataset.action === "validation") lancerValidation(dernier, generation, { actualiser: true });
   else if (bouton.dataset.action === "aberrantes") lancerAberrantes(dernier);
   else if (bouton.dataset.action === "negatives") lancerNegatives(dernier);
 }

@@ -9,6 +9,7 @@ import { chargerBibliothequeTableur, imprimerPdf, telechargerConversation, telec
 import { grapheBarres, grapheDoughnut, grapheLigne } from "./charts.js";
 import { interrogerLLM, llmDisponible, segmentsDepuisTexteIA } from "./sokhnaci-llm.js";
 import { commandeNavigation, executerNavigation } from "./sokhnaci-navigation.js";
+import { estQuestionTempsReel, repondreTempsReel } from "./sokhnaci-direct.js";
 import { avatar3dAutorise, lire3D, obtenir3D } from "./sokhnaci-3d.js";
 
 const CLE_HISTORIQUE = "sokhna-ci-ai-historique-v1";
@@ -147,6 +148,8 @@ const COMPETENCES = [
   { titre: "Meilleurs districts", texte: "Classement et félicitations.", q: "fais un tableau des meilleurs districts" },
   { titre: "Évolution", texte: "Courbe par extraction et par mois.", q: "fais une courbe d'évolution" },
   { titre: "Statistiques", texte: "Moyenne, médiane, quartiles, dispersion.", q: "statistiques" },
+  { titre: "Qualité des données", texte: "Complétude, promptitude, règles de validation (DHIS2 en direct).", q: "analyse la qualité des données" },
+  { titre: "Indicateurs FARS", texte: "Cibles atteintes, indicateurs en retard, par programme.", q: "situation des indicateurs FARS" },
   { titre: "Comparaisons", texte: "Régions, districts ou mois côte à côte.", q: "__comparer__" },
   { titre: "Rapports", texte: "Word, PDF et Excel en un clic.", q: "__rapports__" },
   { titre: "Historique", texte: "Évolution du taux à chaque extraction.", q: "__historique__" },
@@ -236,7 +239,7 @@ function message_accueil() {
     points.length ? `Voici ce qui mérite votre attention : ${points.map((p) => versAffichage(p.titre)).join(" ; ")}.` : "Aucune anomalie majeure à signaler pour cette sélection.",
     "Que voulez-vous savoir ?",
   ];
-  etat.messages.push({ role: "assistante", t: Date.now(), phrases, segments: phrases.map((texte, i) => ({ langue: "fr", texte, geste: i === 0 ? "salut_main" : i === 2 ? "inclinaison_ecoute" : "pointer_ecran", audio: null })), sources: sourcesPour(etat.model), suggestions: ["fais une analyse des résultats", "fais un graphique des régions", "les meilleurs districts", "statistiques"], salutation: true });
+  etat.messages.push({ role: "assistante", t: Date.now(), phrases, segments: phrases.map((texte, i) => ({ langue: "fr", texte, geste: i === 0 ? "salut_main" : i === 2 ? "inclinaison_ecoute" : "pointer_ecran", audio: null })), sources: sourcesPour(etat.model), suggestions: ["fais une analyse des résultats", "situation des indicateurs FARS", "analyse la qualité des données", "fais un graphique des régions"], salutation: true });
   void situation;
 }
 
@@ -396,6 +399,11 @@ async function envoyer(question) {
     const dialogue = await executerNavigation(navigation);
     repondre({ ...dialogue, sources: [], suggestions: [] });
     return;
+  }
+  // Qualité des données et indicateurs FARS : analyse des données DHIS2 en temps réel.
+  if (estQuestionTempsReel(question)) {
+    const dialogue = await repondreTempsReel(question);
+    if (dialogue) { repondre(dialogue); return; }
   }
   const entree = interpreterEntree(question, etat.model);
   if (entree.commande) {

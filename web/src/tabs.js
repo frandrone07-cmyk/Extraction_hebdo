@@ -329,12 +329,13 @@ function cellulesManquantesParFormulaire(modele) {
     for (const periode of formulaire.historiquePeriodes) periodes.set(periode.periode_code, periode.periode);
   }
   const toutesLesPeriodes = modele.selection.periode === "Toutes les périodes";
-  const codeSelectionne = [...periodes].find(([, label]) => label === modele.selection.periode)?.[0];
+  const libellesChoisis = new Set(String(modele.selection.periode).split(", ")); // un ou plusieurs mois choisis
+  const codesSelectionnes = [...periodes].filter(([, label]) => libellesChoisis.has(label)).map(([code]) => code);
   return modele.formulaires.map(({ nom }) => {
     const codes = toutesLesPeriodes
       ? [...periodes.keys()].filter((code) => modele.districts.some((district) => district.formulaires
         .some((formulaire) => formulaire.nom === nom && formulaire.historiquePeriodes.some((periode) => periode.periode_code === code))))
-      : codeSelectionne ? [codeSelectionne] : [];
+      : codesSelectionnes;
     const manquantes = [];
     for (const code of codes) for (const district of modele.districts) {
       const formulaire = district.formulaires.find((item) => item.nom === nom);

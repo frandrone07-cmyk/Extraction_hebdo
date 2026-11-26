@@ -29,14 +29,23 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate(() => document.fonts.ready);
 });
 
+// Filtres à cases à cocher : ouvre la liste, ne garde que les valeurs demandées (toutes si liste vide), applique.
+async function choisir(page, id, valeurs) {
+  await page.locator(`#${id} .mc-bouton`).click();
+  await page.locator(`#${id} [data-mc="${valeurs.length ? "rien" : "tout"}"]`).click();
+  for (const valeur of valeurs) await page.locator(`#${id} .mc-liste input[value="${valeur}"]`).check();
+  await page.locator(`#${id} [data-mc="appliquer"]`).click();
+}
+const valeurFiltre = (page, id) => page.locator(`#${id}`).evaluate((element) => element.value);
+
 test("charge les données, relie les filtres à l’URL et ouvre une fiche district", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Complétude des rapports" })).toBeVisible();
   await expect.poll(() => page.locator("#sel-extraction option").count()).toBeGreaterThanOrEqual(6);
 
-  const region = await page.locator("#sel-region option").nth(1).getAttribute("value");
-  await page.locator("#sel-region").selectOption(region);
+  const region = await page.locator("#sel-region .mc-liste input").first().getAttribute("value");
+  await choisir(page, "sel-region", [region]);
   await expect(page).toHaveURL(/region=/);
-  await page.locator("#sel-region").selectOption("");
+  await choisir(page, "sel-region", []);
 
   await page.getByRole("tab", { name: /Districts/ }).click();
   await expect(page.locator("#table-districts tbody tr")).toHaveCount(79);
@@ -49,14 +58,14 @@ test("charge les données, relie les filtres à l’URL et ouvre une fiche distr
 test("réinitialise la vue sur F5 tout en conservant les liens de partage directs", async ({ page }) => {
   await page.goto("/#tab=regions&periode=202609");
   await expect(page.getByRole("tab", { name: /Régions et formulaires/ })).toHaveAttribute("aria-selected", "true");
-  const dernierePeriode = await page.locator("#sel-periode option").last().getAttribute("value");
+  const dernierePeriode = await page.locator("#sel-periode .mc-liste input").last().getAttribute("value");
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
   await expect(page.getByRole("tab", { name: /Vue d’ensemble/ })).toHaveAttribute("aria-selected", "true");
-  await expect(page.locator("#sel-periode")).toHaveValue(dernierePeriode);
-  await expect(page.locator("#sel-region")).toHaveValue("");
+  await expect.poll(() => valeurFiltre(page, "sel-periode")).toBe(dernierePeriode);
+  await expect.poll(() => valeurFiltre(page, "sel-region")).toBe("");
   await expect(page.locator("body")).not.toHaveClass(/tv/);
   await expect(page).toHaveURL(/#tab=vue$/);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
@@ -133,8 +142,7 @@ test("identifie une région par point et utilise une couleur distincte par régi
 });
 
 test("garde les 14 régions dans l’évolution et zoome les cartes sur la région choisie", async ({ page }) => {
-  const regionSelect = page.locator("#sel-region");
-  const region = await regionSelect.locator("option").nth(1).getAttribute("value");
+  const region = await page.locator("#sel-region .mc-liste input").first().getAttribute("value");
   await page.evaluate(() => {
     window.__mapFitBoundsCalls = [];
     const fitBounds = L.Map.prototype.fitBounds;
@@ -144,7 +152,7 @@ test("garde les 14 régions dans l’évolution et zoome les cartes sur la régi
     };
   });
 
-  await regionSelect.selectOption(region);
+  await choisir(page, "sel-region", [region]);
   await expect(page.locator("#carte-regions .region-rate-label strong")).toHaveCount(14);
   const districtLabels = await page.locator("#carte .carte-etiquette-nom span").evaluateAll((labels, selectedRegion) => (
     labels.filter((label) => label.dataset.region === selectedRegion).length
@@ -166,7 +174,7 @@ test("garde les 14 régions dans l’évolution et zoome les cartes sur la régi
 
 test("permet le thème et le mode TV au clavier", async ({ page }) => {
   const extraction = (await page.locator("#sous-titre").textContent()).trim();
-  const period = (await page.locator("#sel-periode option:checked").textContent()).trim();
+  const period = (await page.locator("#sel-periode .mc-bouton").textContent()).trim();
   await page.locator("#btn-theme").click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.locator("#btn-tv").click();
@@ -597,4 +605,18 @@ test("avatar 3D en buste dans la carte flottante, qui voyage vers l'espace puis 
 
   await page.getByRole("tab", { name: /Vue d’ensemble/ }).click();
   await expect(page.locator(".sokhnaci-character.trois-d canvas.sna-canvas-3d")).toHaveCount(1, { timeout: 30_000 });
+});
+
+test("compare plusieurs régions et plusieurs mois cochés, conservés dans le lien", async ({ page }) => {
+  const regions = await page.locator("#sel-region .mc-liste input").evaluateAll((cases) => cases.slice(0, 2).map((c) => c.value));
+  await choisir(page, "sel-region", regions);
+  await expect(page.locator("#sel-region .mc-bouton")).toContainText(regions[0].replace(/^DRS[_ ]/, ""));
+  await expect.poll(() => valeurFiltre(page, "sel-region")).toBe(regions.join("|"));
+  await page.getByRole("tab", { name: /Districts/ }).click();
+  const regionsAffichees = await page.locator("#table-districts tbody tr").evaluateAll((lignes) => [...new Set(lignes.map((l) => l.dataset.region))]);
+  expect(regionsAffichees.sort()).toEqual([...regions].sort());
+  const mois = await page.locator("#sel-periode .mc-liste input").evaluateAll((cases) => cases.slice(-2).map((c) => c.value));
+  await choisir(page, "sel-periode", mois);
+  await expect(page).toHaveURL(new RegExp(`periode=${mois[0]}`));
+  await expect(page.locator("#sel-periode .mc-bouton")).not.toHaveText("Toutes les périodes");
 });

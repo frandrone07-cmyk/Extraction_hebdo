@@ -1168,3 +1168,22 @@ body.sokhnaci-reduite .map-card #carte, body.sokhnaci-reduite .map-card #carte-r
 /* Détail formulaire × unité : hauteur limitée, défilement interne avec en-tête fixe. */
 #ql-vue > .table-scroll, .ql-districts-table { max-height: 640px; overflow: auto; }
 #ql-vue thead th, .ql-districts-table thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+/* Filtres « Explorer les données » à cases à cocher (régions, périodes, formulaires). */
+.filters .filtre-mc { display: grid; min-width: 0; gap: 5px; position: relative; }
+.filters .filtre-mc > span { color: var(--muted); font-size: 10px; font-weight: 650; }
+.mc { position: relative; min-width: 0; }
+.mc-bouton { width: 100%; min-width: 0; height: 37px; padding: 0 31px 0 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23717f77' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 11px center; color: var(--text); font: inherit; font-size: 11px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.mc-bouton[aria-expanded="true"], .mc-bouton:focus-visible { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent); outline: none; }
+.mc-panneau { position: absolute; z-index: 1200; top: calc(100% + 4px); left: 0; min-width: max(100%, 260px); max-width: min(420px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow-md); padding: 8px; display: grid; gap: 6px; }
+.mc-panneau[hidden] { display: none; }
+.mc-recherche { width: 100%; height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-soft); color: var(--text); font: inherit; font-size: 12px; }
+.mc-actions { display: flex; gap: 12px; }
+.mc-actions button { background: none; border: 0; padding: 2px 0; color: var(--primary-strong); text-decoration: underline; font: inherit; font-size: 11px; cursor: pointer; }
+.mc-liste { max-height: 280px; overflow: auto; display: grid; gap: 1px; }
+.mc-liste label { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.mc-liste label:hover { background: var(--primary-soft); }
+.mc-liste label[hidden] { display: none; }
+.mc-pied { display: flex; justify-content: flex-end; }
+.mc-appliquer { font: inherit; font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 7px; border: 0; background: var(--primary); color: var(--primary-contrast); cursor: pointer; }
+/* Liste ouverte : le panneau des filtres passe au-dessus de la barre d'onglets fixe. */
+.filter-panel:has(.mc-panneau:not([hidden])) { position: relative; z-index: 1300; }

@@ -117,3 +117,17 @@ test("FARS : par défaut, les indicateurs du canevas par programme, sans chiffre
   await expect(tableau).toContainText("Donnée non disponible"); // valeurs absentes du DHIS2 simulé : jamais de faux chiffre
   await expect(page.getByRole("button", { name: /Ajouter un indicateur/ })).toBeVisible();
 });
+
+test("Sokhna Ci analyse les indicateurs FARS en direct et montre le tableau du canevas", async ({ page }) => {
+  await simulerProxy(page, { formulaires: [], fars: { indicateurs: [], cibles: {} } });
+  await page.addInitScript((liste) => { localStorage.setItem("suivi-fars-v1", JSON.stringify(liste)); }, LISTE);
+  await page.goto("/#fa=2026&fm=9,10");
+  await expect(page.locator("#contenu")).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await page.getByRole("tab", { name: "Sokhna Ci AI" }).click();
+  await page.locator("#sna-question").fill("situation des indicateurs FARS");
+  await page.locator("#sna-question").press("Enter");
+  const reponse = page.locator("#sna").getByText(/indicateurs FARS suivis, sur Septembre 2026 à Octobre 2026/);
+  await expect(reponse).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("#sna .sna-tableau").last()).toContainText("Taux de couverture en CPN1");
+  await expect(page.locator("#sna .sna-tableau").last()).toContainText("proche de la cible");
+});

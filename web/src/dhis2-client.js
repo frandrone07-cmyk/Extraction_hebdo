@@ -28,7 +28,8 @@ async function appel(chemin, { params = null, methode = "GET", corps = null, act
       body: corps ? JSON.stringify(corps) : undefined,
       signal: controle.signal,
     });
-  } catch {
+  } catch (erreur) {
+    if (erreur?.name === "AbortError") throw new ErreurDhis2(`DHIS2 met trop de temps à répondre (plus de ${Math.round(delaiMs / 1000)} secondes). Réduisez la sélection (une région ou un district, moins de mois) puis réessayez.`);
     throw new ErreurDhis2("Connexion impossible au serveur DHIS2. Vérifiez votre connexion Internet puis réessayez.");
   } finally {
     clearTimeout(minuterie);
@@ -41,7 +42,8 @@ async function appel(chemin, { params = null, methode = "GET", corps = null, act
 
 export const etatService = () => appel("sante", { delaiMs: 20000 }).then((r) => r.donnees);
 export const lireDhis2 = (chemin, params, options = {}) => appel(`api/${chemin}`, { params, ...options });
-export const analyserDhis2 = (chemin, corps) => appel(`api/${chemin}`, { methode: "POST", corps });
+// Analyses longues côté DHIS2 (règles de validation, valeurs aberrantes) : jusqu'à 2 min 30 d'attente.
+export const analyserDhis2 = (chemin, corps, options = {}) => appel(`api/${chemin}`, { methode: "POST", corps, delaiMs: 150000, ...options });
 export const lireConfiguration = () => appel("config").then((r) => r.donnees);
 export const enregistrerConfiguration = (config, pin) => appel("config", { methode: "PUT", corps: config, pin }).then((r) => r.donnees);
 

@@ -6,6 +6,7 @@ import { demarrerDiaporama } from "./slideshow.js";
 import { assistanteTVAutorisee, creerAssistanteTV } from "./sokhnaci-tv.js";
 import { annoncerNouvelleExtraction, initSokhnaci, majPresentatrice, mettreAJourSokhnaci, replierSokhnaci, rattacherAvatarWidget } from "./sokhnaci.js";
 import { initTrigger } from "./trigger.js";
+import { remplirMultiChoix, SEP, valeursDe } from "./multi-choix.js";
 import {
   renderVue, apresRenduVue,
   renderRegions, apresRenduRegions,
@@ -66,14 +67,16 @@ function weeksBefore(week) {
 }
 function filtresValides(week, requested) {
   const available = optionsPour(donnees.snapshot, week);
-  const period = requested.periode === "*" ? "*"
-    : available.periodes.some((item) => item.value === requested.periode) ? requested.periode : available.periodes.at(-1)?.value || "*";
+  // Plusieurs valeurs possibles par filtre (séparées par « | ») : on garde celles qui existent dans l'extraction.
+  const garder = (texte, liste, tous = "") => valeursDe(texte, tous).filter((v) => liste.some((item) => item.value === v)).join(SEP);
+  const periodes = garder(requested.periode, available.periodes, "*");
+  const period = requested.periode === "*" ? "*" : periodes || available.periodes.at(-1)?.value || "*";
   return {
     extraction: week,
     comparaison: requested.comparaison === "none" ? "none" : weeksBefore(week).includes(requested.comparaison) ? requested.comparaison : weeksBefore(week)[0] || "none",
-    region: available.regions.some((item) => item.value === requested.region) ? requested.region : "",
+    region: garder(requested.region, available.regions),
     periode: period,
-    formulaire: available.formulaires.some((item) => item.value === requested.formulaire) ? requested.formulaire : "",
+    formulaire: garder(requested.formulaire, available.formulaires),
   };
 }
 function remplirFiltres(filters) {
@@ -83,9 +86,11 @@ function remplirFiltres(filters) {
   const comparisons = [{ value: "none", label: "Aucune comparaison" }, ...weeksBefore(filters.extraction).map((week) => ({ value: week, label: formaterDate(week) }))];
   optionsSelect(document.getElementById(SELECTORS.comparaison), comparisons, filters.comparaison);
   const options = optionsPour(snapshot, filters.extraction);
-  optionsSelect(document.getElementById(SELECTORS.region), [{ value: "", label: "Toutes les régions" }, ...options.regions], filters.region);
-  optionsSelect(document.getElementById(SELECTORS.periode), [{ value: "*", label: "Toutes les périodes" }, ...options.periodes], filters.periode);
-  optionsSelect(document.getElementById(SELECTORS.formulaire), [{ value: "", label: "Tous les formulaires" }, ...options.formulaires], filters.formulaire);
+  // Cases à cocher : plusieurs régions, mois ou formulaires à comparer ou afficher.
+  remplirMultiChoix(document.getElementById(SELECTORS.region), options.regions, filters.region, { tous: "Toutes les régions", unite: "régions", etiquette: "Régions" });
+  const periodesTriees = [...options.periodes].sort((a, b) => a.value.localeCompare(b.value));
+  remplirMultiChoix(document.getElementById(SELECTORS.periode), periodesTriees, filters.periode, { tous: "Toutes les périodes", valeurTous: "*", unite: "mois", etiquette: "Périodes DHIS2" });
+  remplirMultiChoix(document.getElementById(SELECTORS.formulaire), options.formulaires, filters.formulaire, { tous: "Tous les formulaires", unite: "formulaires", etiquette: "Formulaires" });
 }
 function afficherOnglet(name) {
   const content = document.getElementById("contenu");

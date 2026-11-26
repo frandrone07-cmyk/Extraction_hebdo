@@ -5,6 +5,7 @@ import { avatar3dAutorise, obtenir3D } from "./sokhnaci-3d.js";
 import { gesteA, humeurPhrase, planifierGestes } from "./sokhnaci-gestes.js";
 import { creerMarcheur } from "./marche.js";
 import { commandeNavigation, executerNavigation } from "./sokhnaci-navigation.js";
+import { estQuestionTempsReel } from "./sokhnaci-direct.js";
 import { effacerMiseEnAvant, mettreEnAvant } from "./mise-en-avant.js";
 
 const CLE_VOIX = "completude-sokhnaci-voice";
@@ -664,6 +665,11 @@ function poserQuestion(texte) {
   const navigation = commandeNavigation(texte, modeleCourant);
   if (navigation) {
     executerNavigation(navigation).then((dialogue) => afficherDialogue(dialogue, null, { speak: voiceEnabled }));
+    return;
+  }
+  // Qualité des données et indicateurs FARS : réponse détaillée (avec tableau) dans l'espace Sokhna Ci AI.
+  if (estQuestionTempsReel(texte)) {
+    document.dispatchEvent(new CustomEvent("sokhnaci:ouvrir-espace", { detail: { question: texte } }));
     return;
   }
   const entree = interpreterEntree(texte, modeleCourant);
