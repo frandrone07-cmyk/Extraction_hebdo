@@ -12,6 +12,8 @@ import {
 import { appliquerRealisation, categoriesDisponibles, elementsDeLExpression, statutCible, tableauIndicateurs } from "./fars-calculs.js";
 import { ouvrirAjoutIndicateur } from "./fars-config.js";
 import { PROGRAMMES_ORDRE } from "./fars-defaut.js";
+import { barreCellule, brancherTableaux, carteChiffre, carteLecture, faireCommenter, miniCourbe, pucesStatut, rechercheTableau } from "./live-ui.js";
+import { commentaireFars } from "./sokhnaci-direct.js";
 import { enregistrerIndicateurs, indicateursPersonnalises, indicateursSuivis, reinitialiserIndicateurs } from "./suivi-local.js";
 
 const TOUS = "Tous les programmes";
@@ -44,6 +46,11 @@ export function monterFars(racine) {
   racine.innerHTML = `<div id="fa-filtres"></div><div id="fa-corps">${chargementHtml()}</div>`;
   racine.addEventListener("click", (e) => surClic(e, racine));
   racine.addEventListener("change", (e) => surChangement(e, racine));
+  brancherTableaux(racine);
+  racine.addEventListener("keydown", (e) => {
+    const ligne = e.target.closest?.("tr[data-focus]");
+    if (ligne && e.target === ligne && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); choisirFocus(ligne.dataset.focus); }
+  });
   charger(racine);
 }
 
@@ -141,6 +148,7 @@ async function charger(racine, { actualiser = false } = {}) {
     if (!lignes.some((t) => t.uid && t.uid === focus)) focus = (lignes.find((t) => t.uid && t.valeur !== null) || lignes.find((t) => t.uid))?.uid || null;
     dernier = { meta, etat, periodes, tableau: lignes, programme: programmeChoisi, misAJour, categories };
     corps.innerHTML = rendu(dernier, outils);
+    majLecture(dernier);
     dessinerEvolution(dernier);
     dessinerComparaison(dernier, ma);
     dessinerDesagregation(dernier, ma);
@@ -162,27 +170,73 @@ function rendu(d, outils) {
   const ind = associes.find((t) => t.uid === focus) || associes[0];
   const periodeTexte = `${libellePeriode(d.periodes[0])}${d.periodes.length > 1 ? ` à ${libellePeriode(d.periodes.at(-1))}` : ""}`;
   const groupes = programmesOrdonnes(d.tableau).map((p) => [p, d.tableau.filter((t) => t.programme === p)]);
-  const lignesHtml = groupes.map(([programme, items]) => items.map((t, n) => `<tr data-id="${echapper(t.id)}">
-      ${n === 0 ? `<th scope="rowgroup" rowspan="${items.length}" class="fa-programme">${echapper(programme)}</th>` : ""}
+  const lignesHtml = groupes.map(([programme, items]) => items.map((t, n) => `<tr data-id="${echapper(t.id)}" data-groupe="${echapper(programme)}" data-statut="${statutLigne(t)}"${t.uid ? ` data-focus="${t.uid}" tabindex="0" title="Cliquer pour analyser cet indicateur"` : ""} class="${t.uid && t.uid === focus ? "fa-ligne-active" : ""}">
+      ${n === 0 ? `<th scope="rowgroup" rowspan="${items.length}" class="fa-programme" data-entete-groupe>${echapper(programme)}</th>` : ""}
       <td>${echapper(t.nom)}${t.uid ? "" : ` <span class="status-chip inconnu">à associer</span>`}</td>
       <td>${libelleCible(t)}</td>
-      ${t.uid ? (t.valeur === null ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td>${nombre(t.valeur)}${t.trimestriel ? ` <small class="note" title="Rapport trimestriel : valeur calculée sur les trimestres couvrant la période">(trim.)</small>` : ""}</td>`) : `<td class="live-nd">${NON_DISPONIBLE}</td>`}
+      ${t.uid ? (t.valeur === null ? `<td class="live-nd">${NON_DISPONIBLE}</td>` : `<td class="fa-realisation">${barreCellule(progresCible(t), t.statut, { libelle: `${nombre(t.valeur)}${t.trimestriel ? ` <small class="note" title="Rapport trimestriel : valeur calculée sur les trimestres couvrant la période">(trim.)</small>` : ""}` })}</td>`) : `<td class="live-nd">${NON_DISPONIBLE}</td>`}
       ${t.ecart === null || t.ecart === undefined ? `<td class="live-nd">—</td>` : `<td>${t.ecart > 0 ? "+" : ""}${nombre(t.ecart)}</td>`}
       ${t.uid ? valeurCellule(t.numerateur, 0) : "<td>—</td>"}${t.uid ? valeurCellule(t.denominateur, 0) : "<td>—</td>"}
-      <td>${t.variation?.sens ? `<span class="fa-variation ${t.variation.sens}" title="Dernier mois par rapport au précédent">${t.variation.fleche} ${t.variation.ecart > 0 ? "+" : ""}${nombre(t.variation.ecart)}</span>` : "—"}</td>
+      <td class="fa-tendance">${t.uid ? miniCourbe(t.serie, { cible: t.cible }) : ""}${t.variation?.sens ? `<span class="fa-variation ${t.variation.sens}" title="Dernier mois par rapport au précédent">${t.variation.fleche} ${t.variation.ecart > 0 ? "+" : ""}${nombre(t.variation.ecart)}</span>` : t.uid ? "" : "—"}</td>
       <td><span class="status-chip ${t.statut}">${libelleStatut(t)}</span></td>
       <td class="fa-actions">${t.uid ? "" : `<button type="button" data-associer="${echapper(t.id)}">Associer</button>`}<button type="button" data-retirer="${echapper(t.id)}" aria-label="Retirer ${echapper(t.nom)} du suivi">Retirer</button></td>
     </tr>`).join("")).join("");
+  const n = (s) => d.tableau.filter((t) => statutLigne(t) === s).length;
+  const mesures = n("conforme") + n("surveiller") + n("critique");
+  const part = mesures ? (n("conforme") / mesures) * 100 : null;
+  const chiffres = `<section class="grid grid-kpi lv-kpis" aria-label="Chiffres clés des indicateurs FARS">
+    ${carteChiffre({ titre: "Cible atteinte", valeur: mesures ? `${n("conforme")} <small>/ ${mesures}</small>` : NON_DISPONIBLE, note: part === null ? "Aucune valeur mesurée" : `${nombre(part, 0)} % des indicateurs mesurés`, statut: part === null ? "inconnu" : part >= 60 ? "conforme" : part >= 35 ? "surveiller" : "critique", pourJauge: part })}
+    ${carteChiffre({ titre: "Proches de la cible", valeur: String(n("surveiller")), note: "au moins 80 % de la cible", statut: "surveiller", icone: "◐" })}
+    ${carteChiffre({ titre: "Loin de la cible", valeur: String(n("critique")), note: "à accompagner en priorité", statut: n("critique") ? "critique" : "conforme", icone: "▼" })}
+    ${carteChiffre({ titre: "Sans donnée", valeur: String(n("nd")), note: `dont ${d.tableau.filter((t) => !t.uid).length} à associer à DHIS2`, statut: "inconnu", icone: "?" })}
+  </section>`;
+  const puces = pucesStatut("fars", [["tous", "Tous", d.tableau.length], ["conforme", "Cible atteinte", n("conforme")], ["surveiller", "Proches", n("surveiller")], ["critique", "Loin", n("critique")], ["nd", "Sans donnée", n("nd")], ["sanscible", "Sans cible", n("sanscible")]].filter(([s, , x]) => s === "tous" || x));
   return `${enteteMiseAJour(d.misAJour)}${outils}
     <p class="note">Sélection : ${echapper(resumeFiltres(d.etat))}. Réalisation calculée par DHIS2 sur toute la période choisie (${echapper(periodeTexte)}). Statut : vert si la cible est atteinte, jaune si proche (au moins 80 % de la cible, ou au plus 125 % pour une cible maximale « ≤ »), rouge sinon.</p>
-    <section class="card"><div class="card-head"><div><h2>Situation des indicateurs de performance${d.programme === TOUS ? "" : ` — ${echapper(d.programme)}`}</h2><p class="card-subtitle">${echapper(periodeTexte)}</p></div>${boutonsExport("fars")}</div>
-      <div class="table-scroll"><table id="fa-tableau" class="fa-tableau"><thead><tr><th>Programme</th><th>Indicateur</th><th>Cible</th><th>Réalisation</th><th>Écart</th><th>Numérateur</th><th>Dénominateur</th><th>Tendance</th><th>Statut</th><th><span class="fa-actions-titre">Suivi</span></th></tr></thead><tbody>
+    ${chiffres}
+    <div id="fa-lecture"></div>
+    <section class="card"><div class="card-head"><div><h2>Situation des indicateurs de performance${d.programme === TOUS ? "" : ` — ${echapper(d.programme)}`}</h2><p class="card-subtitle">${echapper(periodeTexte)} · cliquez sur une ligne pour l’analyser.</p></div><div class="ql-outils">${rechercheTableau("fars", "Rechercher un indicateur…")}${boutonsExport("fars")}</div></div>
+      ${puces}
+      <div class="table-scroll"><table id="fa-tableau" class="fa-tableau" data-table="fars"><thead><tr><th>Programme</th><th>Indicateur</th><th>Cible</th><th>Réalisation</th><th>Écart</th><th>Numérateur</th><th>Dénominateur</th><th>Tendance</th><th>Statut</th><th><span class="fa-actions-titre">Suivi</span></th></tr></thead><tbody>
       ${lignesHtml || `<tr><td colspan="10" class="note">Aucun indicateur suivi : cliquez sur « Ajouter un indicateur ».</td></tr>`}
       </tbody></table></div></section>
-    ${ind ? `<section class="card"><div class="card-head"><div><h2>Analyse détaillée</h2><p class="card-subtitle">Indicateur : <select data-fa="focus" aria-label="Indicateur analysé">${associes.map((t) => `<option value="${t.uid}" ${t.uid === ind.uid ? "selected" : ""}>${echapper(t.programme)} · ${echapper(t.nom)}</option>`).join("")}</select></p></div></div>
+    ${ind ? `<section class="card" id="fa-analyse"><div class="card-head"><div><h2>Analyse détaillée</h2><p class="card-subtitle">Indicateur : <select data-fa="focus" aria-label="Indicateur analysé">${associes.map((t) => `<option value="${t.uid}" ${t.uid === ind.uid ? "selected" : ""}>${echapper(t.programme)} · ${echapper(t.nom)}</option>`).join("")}</select></p></div></div>
       <h3 class="ql-sous-titre">Évolution par période</h3><div class="chartbox"><canvas id="fa-evolution" role="img" aria-label="Évolution de l’indicateur par période"></canvas></div>
       <h3 class="ql-sous-titre">Comparaison par ${echapper(niveau)} (${echapper(periodeTexte)})</h3><div id="fa-comparaison">${chargementHtml()}</div>
       <h3 class="ql-sous-titre">Désagrégation</h3><div id="fa-desagregation">${chargementHtml()}</div></section>` : ""}`;
+}
+
+// Statut d'une ligne pour les filtres : statut de cible, ou « nd » (pas de valeur / à associer), « sanscible ».
+function statutLigne(t) {
+  if (!t.uid || t.valeur === null || t.valeur === undefined) return "nd";
+  if (t.cible === null || t.cible === undefined) return "sanscible";
+  return t.statut;
+}
+// Avancement vers la cible en % (100 = cible atteinte) ; pour une cible maximale « ≤ », cible / valeur.
+function progresCible(t) {
+  if (t.cible === null || t.cible === undefined || t.valeur === null) return 100;
+  if (t.sens === "bas") return t.valeur <= 0 ? 100 : (t.cible / t.valeur) * 100;
+  return t.cible ? (t.valeur / t.cible) * 100 : 100;
+}
+
+function cleCommentaire(d) { return `fars|${d.periodes.join(",")}|${d.etat.niveau}|${d.etat.unites.join(",")}|${d.programme}|${d.tableau.map((t) => t.id).join(",")}`; }
+function majLecture(d) {
+  const zone = document.getElementById("fa-lecture");
+  if (!zone) return;
+  d.commentaire = commentaireFars(d);
+  zone.innerHTML = carteLecture("fars", d.commentaire);
+  if (document.getElementById("fars-live")?.offsetParent !== null) faireCommenter(cleCommentaire(d), d.commentaire);
+}
+
+function choisirFocus(uid) {
+  if (!dernier || !uid) return;
+  focus = uid;
+  document.querySelectorAll("#fa-tableau tr[data-focus]").forEach((tr) => tr.classList.toggle("fa-ligne-active", tr.dataset.focus === uid));
+  const select = document.querySelector('[data-fa="focus"]');
+  if (select) select.value = uid;
+  const ma = generation;
+  dessinerEvolution(dernier); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma);
+  document.getElementById("fa-analyse")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function indicateurFocus(d) { const a = d.tableau.filter((t) => t.uid); return a.find((t) => t.uid === focus) || a[0]; }
@@ -243,12 +297,21 @@ function surChangement(e, racine) {
   if (!champ) return;
   e.stopPropagation();
   if (champ === "programme") { programmeChoisi = e.target.value; focus = null; charger(racine); }
-  else if (champ === "focus" && dernier) { focus = e.target.value; const ma = generation; dessinerEvolution(dernier); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma); }
+  else if (champ === "focus" && dernier) {
+    focus = e.target.value;
+    document.querySelectorAll("#fa-tableau tr[data-focus]").forEach((tr) => tr.classList.toggle("fa-ligne-active", tr.dataset.focus === focus));
+    const ma = generation; dessinerEvolution(dernier); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma);
+  }
 }
 
 function surClic(e, racine) {
   const b = e.target.closest("button");
-  if (!b) return;
+  if (!b) {
+    const ligne = e.target.closest("tr[data-focus]");
+    if (ligne && !e.target.closest("a")) choisirFocus(ligne.dataset.focus);
+    return;
+  }
+  if (b.dataset.commenter && dernier) { faireCommenter(cleCommentaire(dernier), commentaireFars(dernier), { force: true }); return; }
   const liste = indicateursSuivis();
   const programmes = programmesOrdonnes(liste);
   if (b.dataset.action === "actualiser") charger(racine, { actualiser: true });

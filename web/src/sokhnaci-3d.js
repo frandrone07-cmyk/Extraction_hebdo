@@ -274,6 +274,13 @@ async function creer(tenueInitiale) {
     else if (G === "geste_ouvert") { pose("leftUpperArm", -0.25, 0, 0.55 + Math.sin(t * 3) * 0.06); pose("rightUpperArm", -0.25, 0, -0.55 - Math.sin(t * 3) * 0.06); pose("leftLowerArm", 0, 0.55, 0); pose("rightLowerArm", 0, -0.55, 0); }
     else if (G === "geste_rassurant") { pose("leftUpperArm", -0.35, 0, 0.95); pose("rightUpperArm", -0.35, 0, -0.95); pose("leftLowerArm", 0, 1.0 + Math.sin(t * 3) * 0.12, 0); pose("rightLowerArm", 0, -1.0 - Math.sin(t * 3) * 0.12, 0); }
     else if (G === "mains_jointes") { pose("leftUpperArm", -0.45, 0, 0.95); pose("rightUpperArm", -0.45, 0, -0.95); pose("leftLowerArm", 0, 1.5, 0); pose("rightLowerArm", 0, -1.5, 0); }
+    else if (G === "doigt_leve") { pose("rightUpperArm", -0.2, 0, 0.25); pose("rightLowerArm", 0, -1.65 + Math.sin(t * 4) * 0.06, 0); pose("head", 0.06, -0.05, 0); }
+    else if (G === "balance_mains") {
+      // Comparer : les deux paumes ouvertes montent et descendent en alternance, comme une balance.
+      const b = Math.sin(t * 3.2) * 0.22;
+      pose("leftUpperArm", -0.35, 0, 0.9 + b); pose("rightUpperArm", -0.35, 0, -0.9 + b);
+      pose("leftLowerArm", 0, 1.05, 0); pose("rightLowerArm", 0, -1.05, 0); pose("head", 0, 0, b * 0.25);
+    }
     if (G === "hochement_tete") pose("head", 0.16 * Math.sin(t * 6), 0.05 * Math.sin(t * 0.8), 0);
     if (s.ecoute || G === "inclinaison_ecoute") { pose("head", 0.04, 0, 0.17); pose("neck", 0.05, 0, 0.04); }
     if (s.parle) {
@@ -334,7 +341,8 @@ async function creer(tenueInitiale) {
     if (G === "pointer_ecran") doigts("right", [0, 1.2, 1.25, 1.3]); // index tendu vers l'écran
     else if (G === "pouce_leve") doigts("right", [1.3, 1.35, 1.35, 1.35]); // poing fermé, pouce levé
     else if (G === "compter_doigts") doigts("right", [0, 0.05, 1.2, 1.3]); // deux doigts pour énumérer
-    else if (["geste_ouvert", "salut_main", "geste_rassurant"].includes(G)) { doigts("left", OUVERT); doigts("right", OUVERT); }
+    else if (G === "doigt_leve") doigts("right", [0, 1.3, 1.35, 1.35]); // index levé : point important
+    else if (["geste_ouvert", "salut_main", "geste_rassurant", "balance_mains"].includes(G)) { doigts("left", OUVERT); doigts("right", OUVERT); }
     else if (G === "mains_jointes" || s.applaudit || s.incline) { doigts("left", [0.1, 0.1, 0.12, 0.14]); doigts("right", [0.1, 0.1, 0.12, 0.14]); }
     else if (s.parle && !G) { const ouverture = 0.25 * accent; doigts(s.mainGauche ? "left" : "right", DETENDU.map((k) => Math.max(0, k - ouverture))); }
     // ----- marche -----

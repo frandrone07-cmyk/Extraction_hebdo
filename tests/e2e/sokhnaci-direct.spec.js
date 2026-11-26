@@ -63,3 +63,27 @@ test("Sokhna Ci : analyse de la qualité (complétude, promptitude, plus faibles
   expect(texte(v)).toContain("Kolda (9)");
   expect(texte(reponseQualite("règles de validation", { ...donnees, violationsDetail: null }))).toContain("se lance automatiquement");
 });
+
+test("Sokhna Ci : commentaires automatiques variés (jamais la même tournure deux fois de suite), gestes adaptés", async () => {
+  const { commentaireFars, commentaireQualite, varier } = await import("../../web/src/sokhnaci-direct.js");
+  const { planifierGestes } = await import("../../web/src/sokhnaci-gestes.js");
+  // Même tirage au sort deux fois de suite : la seconde tournure change quand même.
+  const zero = () => 0;
+  expect(varier("essai", ["a", "b", "c"], zero)).toBe("a");
+  expect(varier("essai", ["a", "b", "c"], zero)).toBe("b");
+  const f1 = commentaireFars(FARS, zero);
+  const f2 = commentaireFars(FARS, zero);
+  expect(texte(f1)).not.toBe(texte(f2));
+  expect(texte(f1)).toContain("Taux de décès"); // indicateur le plus loin de la cible
+  expect(f1.points.map((p) => p.texte).join(" ")).toContain("1 indicateur sur 3 à la cible");
+  expect(f1.segments.map((s) => s.geste)).toContain("doigt_leve");
+  const lignes = [["DRS_Dakar", 100, 95, 90], ["DRS_Kolda", 100, 50, 20], ["DRS_Thies", 100, 99, 99]].map(([unite, attendus, recus, aTemps]) => ({ unite, formulaire: "Paludisme", attendus, recus, aTemps }));
+  const q = commentaireQualite({ periodes: ["202610"], lignes, synthese: [{ formulaire: "Paludisme", attendus: 300, recus: 244, aTemps: 209, promptitude: 69.7 }] }, zero);
+  expect(texte(q)).toContain("81,3 %");
+  expect(texte(q)).toContain("Kolda");
+  expect(q.points.some((p) => p.ton === "alerte" && p.texte.includes("Kolda"))).toBe(true);
+  expect(q.points.some((p) => p.ton === "bien" && p.texte.includes("Thies"))).toBe(true);
+  // Nouveaux gestes : index levé pour un conseil, balance des mains pour une comparaison.
+  expect(planifierGestes("Je vous conseille de relancer Kolda.").map((g) => g.geste)).toContain("doigt_leve");
+  expect(planifierGestes("Dakar progresse, alors que Kolda recule nettement.").map((g) => g.geste)).toContain("balance_mains");
+});

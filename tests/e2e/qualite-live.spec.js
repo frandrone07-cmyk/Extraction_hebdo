@@ -107,3 +107,33 @@ test("qualité des données : connexion non configurée → message clair, aucun
   await expect(erreur).toContainText("pas encore configurée", { timeout: 20_000 });
   await expect(page.locator("#qualite-live table")).toHaveCount(0);
 });
+
+test("qualité des données : chiffres clés avec jauges, lecture de Sokhna Ci, tri et filtre par statut", async ({ page }) => {
+  await simulerProxy(page);
+  await page.addInitScript(() => { window.__commentaires = []; document.addEventListener("sokhnaci:commenter", (e) => window.__commentaires.push(e.detail)); });
+  await page.goto("/#tab=qualite");
+  const live = page.locator("#qualite-live");
+  const kpis = live.locator(".lv-kpis");
+  await expect(kpis).toContainText("Complétude", { timeout: 20_000 });
+  await expect(kpis).toContainText("73,1 %"); // 95 reçus sur 130 attendus
+  await expect(kpis.locator(".lv-jauge")).toHaveCount(2);
+  // Le contrôle de validation, une fois terminé, met à jour la carte « Règles de validation ».
+  await expect(live.locator("#ql-kpi-violations")).toHaveText("2", { timeout: 20_000 });
+  await expect(live.locator(".lv-lecture")).toContainText("Complétude 73,1 %");
+  await expect(live.locator(".lv-lecture")).toContainText("violations");
+  await expect.poll(() => page.evaluate(() => window.__commentaires.length)).toBe(1);
+  const texte = await page.evaluate(() => window.__commentaires[0].dialogue.segments.map((s) => s.texte).join(" "));
+  expect(texte).toContain("73,1 %");
+  // Filtre par statut dans le détail (Kolda : aucun rapport → complétude 0 %, critique).
+  await live.locator('[data-puces="detail"] [data-filtre-statut="critique"]').click();
+  await expect(live.locator("#ql-detail tbody tr:visible")).toHaveCount(1);
+  await expect(live.locator("#ql-detail tbody tr:visible")).toContainText("Kolda");
+  await live.locator('[data-puces="detail"] [data-filtre-statut="tous"]').click();
+  // Tri par complétude (clic sur l'en-tête) : ordre croissant puis décroissant.
+  const entete = live.locator("#ql-detail thead th", { hasText: "Complétude" });
+  await entete.click();
+  await expect(entete).toHaveAttribute("aria-sort", "ascending");
+  await expect(live.locator("#ql-detail tbody tr").first()).toContainText("Kolda");
+  await entete.click();
+  await expect(live.locator("#ql-detail tbody tr").first()).toContainText("Dakar");
+});

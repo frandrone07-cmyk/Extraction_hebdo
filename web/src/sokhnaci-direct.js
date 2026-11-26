@@ -155,3 +155,175 @@ export async function repondreTempsReel(question) {
     return { emotion: "neutre", segments: [seg(`Je n’arrive pas à lire DHIS2 pour le moment : ${erreur?.message || "connexion impossible"}. Je ne donne aucun chiffre tant que la connexion ne fonctionne pas.`)], sources: [], suggestions: ["réessayer plus tard"] };
   }
 }
+
+// ---------------------------------------------------------------- commentaires automatiques des pages
+// Quand une page finit de charger, Sokhna Ci la commente : phrases variées (jamais deux fois la même tournure
+// d'affilée), gestes choisis selon le sens (pouce levé, index levé, balance pour comparer…), et une liste de
+// points clés affichée dans la carte « Lecture de Sokhna Ci ». Tout vient des données reçues ; rien n'est inventé.
+const dejaDit = new Map();
+export function varier(cle, options, alea = Math.random) {
+  let i = Math.floor(alea() * options.length);
+  if (options.length > 1 && i === dejaDit.get(cle)) i = (i + 1) % options.length;
+  dejaDit.set(cle, i);
+  return options[i];
+}
+const remplir = (modele, valeurs) => modele.replace(/\{(\w+)\}/g, (_, k) => valeurs[k] ?? "");
+const point = (ton, texte) => ({ ton, texte });
+
+export function indicateursQualite(donnees) {
+  const total = donnees.synthese.reduce((s, f) => ({ a: s.a + (f.attendus ?? 0), r: s.r + (f.recus ?? 0), t: s.t + (f.aTemps ?? 0) }), { a: 0, r: 0, t: 0 });
+  const parUnite = new Map();
+  for (const l of donnees.lignes) {
+    if (l.attendus === null || l.recus === null || l.attendus === undefined) continue;
+    const u = parUnite.get(l.unite) || { a: 0, r: 0, t: 0 };
+    u.a += l.attendus; u.r += l.recus; u.t += l.aTemps ?? 0;
+    parUnite.set(l.unite, u);
+  }
+  return {
+    attendus: total.a,
+    manquants: total.a - total.r,
+    completude: total.a ? Math.round((total.r / total.a) * 1000) / 10 : null,
+    promptitude: total.a ? Math.round((total.t / total.a) * 1000) / 10 : null,
+    unites: [...parUnite].filter(([, u]) => u.a > 0).map(([nom, u]) => ({ nom: regionCourte(nom), completude: Math.round((u.r / u.a) * 1000) / 10, promptitude: Math.round((u.t / u.a) * 1000) / 10 })).sort((a, b) => a.completude - b.completude),
+    formulaires: donnees.synthese.filter((f) => f.promptitude !== null && f.promptitude !== undefined).sort((a, b) => a.promptitude - b.promptitude),
+  };
+}
+
+export function commentaireQualite(donnees, alea = Math.random) {
+  const k = indicateursQualite(donnees);
+  const p = periodeTexte(donnees.periodes);
+  const segments = [];
+  const points = [];
+  segments.push(seg(remplir(varier("q-ouv", [
+    "Voici ma lecture de la qualité des données sur {p}.",
+    "Faisons le point sur la qualité des données, {p}.",
+    "J’ai passé en revue les rapports DHIS2 de {p}.",
+    "Petit tour d’horizon de la qualité des rapports pour {p}.",
+  ], alea), { p }), "geste_ouvert"));
+  if (k.completude === null) {
+    segments.push(seg("Aucun rapport n’est attendu sur cette sélection : la complétude n’est pas disponible.", "geste_rassurant"));
+    points.push(point("info", "Complétude non disponible : aucun rapport attendu sur la sélection."));
+    return { emotion: "neutre", segments, points };
+  }
+  const v = { c: pc(k.completude), t: pc(k.promptitude), m: nb(k.manquants, 0), a: nb(k.attendus, 0) };
+  const niveauC = k.completude >= 90 ? "bien" : k.completude >= 70 ? "moyen" : "faible";
+  segments.push(seg(remplir(varier(`q-c-${niveauC}`, {
+    bien: ["Bonne nouvelle : la complétude atteint {c}, au-dessus de l’objectif de 90 %.", "La complétude est solide, à {c} : bravo aux équipes.", "Avec {c} de complétude, l’objectif de 90 % est atteint."],
+    moyen: ["La complétude est de {c} : correcte, mais encore sous l’objectif de 90 %.", "On est à {c} de complétude ; il reste un effort à faire pour passer la barre des 90 %.", "Complétude à {c} : la dynamique est là, il faut la consolider."],
+    faible: ["Attention : la complétude n’est que de {c}, sous le seuil critique de 70 %.", "La complétude reste faible, à {c} : c’est la priorité du moment.", "Point d’alerte : {c} de complétude seulement, avec {m} rapports manquants."],
+  }[niveauC], alea), v)));
+  points.push(point(niveauC === "bien" ? "bien" : niveauC === "faible" ? "alerte" : "info", `Complétude ${v.c} : ${v.m} rapports manquants sur ${v.a} attendus.`));
+  if (k.promptitude !== null) {
+    const ecart = Math.round((k.completude - k.promptitude) * 10) / 10;
+    segments.push(seg(remplir(ecart >= 10
+      ? varier("q-p-ecart", ["En revanche, seulement {t} des rapports arrivent à temps : beaucoup sont saisis en retard.", "La promptitude, à {t}, est nettement en dessous de la complétude : les rapports arrivent, mais tard."], alea)
+      : varier("q-p", ["Côté promptitude, {t} des rapports sont arrivés dans les délais.", "La promptitude suit, à {t}."], alea), v)));
+    points.push(point(k.promptitude >= 90 ? "bien" : k.promptitude < 70 ? "alerte" : "info", `Promptitude ${v.t}${ecart >= 10 ? ` (${nb(ecart)} points sous la complétude : saisies tardives)` : ""}.`));
+  }
+  if (k.unites.length >= 2) {
+    const faibles = k.unites.slice(0, Math.min(2, k.unites.length - 1));
+    const meilleure = k.unites.at(-1);
+    segments.push(seg(remplir(varier("q-faibles", [
+      "Je vous conseille d’accompagner en priorité {f}.",
+      "Les unités à relancer d’abord : {f}.",
+      "Surtout, gardons un œil sur {f}.",
+    ], alea), { f: faibles.map((u) => `${u.nom} (${pc(u.completude)})`).join(" et ") }), "doigt_leve"));
+    segments.push(seg(remplir(varier("q-meilleure", ["À saluer : {n}, en tête avec {c}.", "Mention spéciale pour {n}, à {c}.", "{n} montre l’exemple, avec {c}."], alea), { n: meilleure.nom, c: pc(meilleure.completude) }), "pouce_leve"));
+    points.push(point("alerte", `Plus faibles : ${faibles.map((u) => `${u.nom} (${pc(u.completude)})`).join(", ")}.`));
+    points.push(point("bien", `Meilleure : ${meilleure.nom} (${pc(meilleure.completude)}).`));
+  }
+  if (k.formulaires.length >= 2) {
+    const f = k.formulaires[0];
+    segments.push(seg(`Le formulaire le plus en retard est « ${f.formulaire} », avec ${pc(f.promptitude)} de rapports à temps.`));
+    points.push(point(f.promptitude < 70 ? "alerte" : "info", `Formulaire le plus en retard : ${f.formulaire} (${pc(f.promptitude)} à temps).`));
+  }
+  const vd = donnees.violationsDetail;
+  if (vd) {
+    segments.push(seg(vd.total
+      ? `Le contrôle des règles de validation relève ${nb(vd.total, 0)} violation${vd.total > 1 ? "s" : ""}${vd.parRegle[0] ? `, surtout « ${vd.parRegle[0].nom} »` : ""}.`
+      : "Aucune règle de validation n’est violée : c’est remarquable.", vd.total ? "geste_rassurant" : "pouce_leve"));
+    points.push(point(vd.total ? "alerte" : "bien", vd.total ? `${nb(vd.total, 0)} violation${vd.total > 1 ? "s" : ""} des règles de validation${vd.parRegion[0] ? ` (surtout ${regionCourte(vd.parRegion[0].nom)})` : ""}.` : "Aucune violation des règles de validation."));
+  }
+  segments.push(seg(varier("q-fin", [
+    "Posez-moi une question sur un district ou un formulaire pour aller plus loin.",
+    "Je reste à votre disposition pour le détail d’une région.",
+    "Vous pouvez cliquer sur « Ouvrir dans DHIS2 » pour corriger directement.",
+  ], alea), "mains_jointes"));
+  return { emotion: niveauC === "faible" ? "preoccupee" : niveauC === "bien" ? "felicitations" : "encourageante", segments, points };
+}
+
+const ratioCible = (t) => (t.sens === "bas" ? t.cible / Math.max(t.valeur, 0.0001) : t.valeur / t.cible);
+const valeurSuspecte = (t) => /\b(taux|pourcentage|proportion|couverture)\b/i.test(t.nom) && t.valeur > 105;
+const progresse = (t) => t.variation?.sens && t.variation.sens !== "stable" && ((t.sens !== "bas" && t.variation.sens === "hausse") || (t.sens === "bas" && t.variation.sens === "baisse"));
+
+export function commentaireFars(donnees, alea = Math.random) {
+  const p = periodeTexte(donnees.periodes);
+  const mesures = donnees.tableau.filter((t) => t.valeur !== null && t.valeur !== undefined && t.cible);
+  const compte = (s) => mesures.filter((t) => t.statut === s).length;
+  const segments = [seg(remplir(varier("f-ouv", [
+    "Voici où en sont les indicateurs FARS sur {p}.",
+    "Regardons ensemble la performance des programmes, {p}.",
+    "J’ai comparé chaque indicateur à sa cible, sur {p}.",
+    "Faisons le bilan des indicateurs de performance pour {p}.",
+  ], alea), { p }), "geste_ouvert")];
+  const points = [];
+  if (!mesures.length) {
+    segments.push(seg("Aucun indicateur suivi n’a encore de valeur DHIS2 sur cette période.", "geste_rassurant"));
+    points.push(point("info", "Aucune valeur DHIS2 sur la période pour les indicateurs suivis."));
+    return { emotion: "neutre", segments, points };
+  }
+  const a = compte("conforme");
+  const part = Math.round((a / mesures.length) * 100);
+  const valeurs = { a: String(a), n: String(mesures.length), s: String(compte("surveiller")), c: String(compte("critique")), pc: `${part} %` };
+  const modeles = part >= 60
+    ? ["Bravo : {a} indicateurs sur {n} atteignent leur cible, soit {pc}.", "Belle performance : {pc} des indicateurs mesurés sont à la cible ({a} sur {n})."]
+    : part >= 35
+      ? ["{a} indicateurs sur {n} atteignent leur cible ; {s} s’en approchent et {c} en sont encore loin.", "Le bilan est mitigé : {a} sur {n} à la cible, {c} loin derrière."]
+      : ["Attention : seulement {a} indicateurs sur {n} atteignent leur cible, alors que {c} en sont loin.", "Le chemin est encore long : {c} indicateurs sur {n} sont loin de la cible."];
+  segments.push(seg(remplir(varier(`f-bilan-${part >= 60 ? "bien" : part >= 35 ? "moyen" : "faible"}`, modeles, alea), valeurs)));
+  points.push(point(part >= 60 ? "bien" : part < 35 ? "alerte" : "info", `${a} indicateur${a > 1 ? "s" : ""} sur ${mesures.length} à la cible (${part} %) · ${compte("surveiller")} proche${compte("surveiller") > 1 ? "s" : ""} · ${compte("critique")} loin.`));
+  // Programmes : le plus avancé et le plus en retard (part d'indicateurs à la cible).
+  const parProgramme = [...new Set(mesures.map((t) => t.programme))].map((nom) => {
+    const l = mesures.filter((t) => t.programme === nom);
+    return { nom, part: l.filter((t) => t.statut === "conforme").length / l.length, n: l.length };
+  }).filter((x) => x.n >= 2);
+  if (parProgramme.length >= 2) {
+    parProgramme.sort((x, y) => y.part - x.part);
+    const haut = parProgramme[0];
+    const bas = parProgramme.at(-1);
+    if (haut.part > bas.part) {
+      segments.push(seg(remplir(varier("f-prog", ["Le programme {h} est le plus avancé, alors que {b} a le plus de retard.", "En comparant les programmes : {h} tient ses cibles, tandis que {b} doit accélérer."], alea), { h: haut.nom, b: bas.nom }), "balance_mains"));
+      points.push(point("info", `Programme le plus avancé : ${haut.nom} (${Math.round(haut.part * 100)} % à la cible) ; le plus en retard : ${bas.nom} (${Math.round(bas.part * 100)} %).`));
+    }
+  }
+  const retard = mesures.filter((t) => t.statut === "critique").sort((x, y) => ratioCible(x) - ratioCible(y));
+  if (retard[0]) {
+    const t = retard[0];
+    segments.push(seg(remplir(varier("f-retard", ["Je vous conseille de suivre de près « {n} » : {v} pour une cible {c}.", "Point d’attention : « {n} », à {v} pour une cible {c}.", "Surtout, « {n} » reste loin du compte : {v} contre une cible {c}."], alea), { n: t.nom, v: nb(t.valeur), c: cibleTexte(t) }), "doigt_leve"));
+    points.push(point("alerte", `Le plus loin de la cible : ${t.nom} (${nb(t.valeur)} pour une cible ${cibleTexte(t)}).`));
+  }
+  // Pourcentages au-delà de 100 % (souvent un dénominateur sous-estimé) : signalés, jamais présentés comme exploit.
+  const suspects = mesures.filter(valeurSuspecte);
+  if (suspects.length) {
+    segments.push(seg(`Attention : ${suspects.length} indicateur${suspects.length > 1 ? "s dépassent" : " dépasse"} 100 %, à vérifier dans DHIS2, par exemple « ${suspects[0].nom} » à ${nb(suspects[0].valeur)} %.`, "doigt_leve"));
+    points.push(point("alerte", `À vérifier (au-delà de 100 %) : ${suspects.slice(0, 3).map((t) => `${t.nom} (${nb(t.valeur)})`).join(", ")}.`));
+  }
+  const reussi = mesures.filter((t) => t.statut === "conforme" && !valeurSuspecte(t)).sort((x, y) => ratioCible(y) - ratioCible(x));
+  if (reussi[0]) {
+    segments.push(seg(remplir(varier("f-reussi", ["À saluer : « {n} », à {v} pour une cible {c}.", "Excellent résultat pour « {n} » : {v}, pour une cible {c}."], alea), { n: reussi[0].nom, v: nb(reussi[0].valeur), c: cibleTexte(reussi[0]) }), "pouce_leve"));
+    points.push(point("bien", `Meilleur résultat : ${reussi[0].nom} (${nb(reussi[0].valeur)}, cible ${cibleTexte(reussi[0])}).`));
+  }
+  const enProgres = donnees.tableau.filter(progresse);
+  if (enProgres.length) {
+    segments.push(seg(`D’un mois sur l’autre, ${enProgres.length} indicateur${enProgres.length > 1 ? "s progressent" : " progresse"}, dont « ${enProgres[0].nom} ».`, "pouce_leve"));
+    points.push(point("bien", `En progrès sur le dernier mois : ${enProgres.slice(0, 3).map((t) => t.nom).join(", ")}.`));
+  }
+  const sansDonnee = donnees.tableau.length - donnees.tableau.filter((t) => t.valeur !== null && t.valeur !== undefined).length;
+  if (sansDonnee) points.push(point("info", `${sansDonnee} indicateur${sansDonnee > 1 ? "s" : ""} sans donnée DHIS2 ou à associer.`));
+  segments.push(seg(varier("f-fin", [
+    "Demandez-moi un indicateur précis, par exemple la CPN1, pour le détail.",
+    "Je peux aussi vous détailler un programme : il suffit de me le demander.",
+    "Cliquez sur une ligne du tableau pour voir son évolution et la comparaison par région.",
+  ], alea), "mains_jointes"));
+  return { emotion: retard.length > a ? "preoccupee" : part >= 60 ? "felicitations" : "encourageante", segments, points };
+}

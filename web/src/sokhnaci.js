@@ -887,6 +887,18 @@ export function initSokhnaci(model) {
   marcheur = creerMarcheur(widget);
   ECRAN_PRESENTATRICE.addEventListener?.("change", majPresentatrice);
   widget.querySelector(".sokhnaci-speak").addEventListener("click", () => parler());
+  // Pages « Qualité des données » et « Indicateurs FARS » : à la fin du chargement, Sokhna Ci commente d'elle-même
+  // (une fois par sélection) ; le bouton « Écouter Sokhna Ci » de la page relance le commentaire à la demande.
+  const commentairesDits = new Set();
+  document.addEventListener("sokhnaci:commenter", (evenement) => {
+    const { cle, force, dialogue } = evenement.detail || {};
+    if (!widget || !dialogue?.segments?.length) return;
+    if (!force && (commentairesDits.has(cle) || widget.classList.contains("fermee"))) return;
+    commentairesDits.add(cle);
+    if (force) ouvrirSokhnaci();
+    arreterLecture();
+    afficherDialogue(dialogue, null, { speak: voiceEnabled && (force || !widget.classList.contains("collapsed")) });
+  });
   const reprendreLaMain = () => { if (suiviPage) { suiviPage = false; effacerMiseEnAvant(); } };
   for (const nom of ["wheel", "touchmove"]) window.addEventListener(nom, reprendreLaMain, { passive: true });
   window.addEventListener("keydown", (evenement) => { if (["PageDown", "PageUp", "ArrowDown", "ArrowUp", "Home", "End", " "].includes(evenement.key) && evenement.target === document.body) reprendreLaMain(); });

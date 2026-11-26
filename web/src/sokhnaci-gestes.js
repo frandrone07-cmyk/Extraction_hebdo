@@ -8,6 +8,8 @@ const REGLES = [
   { geste: "mains_jointes", motif: /\b(s'il vous plait|je vous en prie|a votre service|a votre disposition)\b/g },
   { geste: "main_sur_coeur", motif: /\b(merci|desolee?|heureuse|ravie|sincere\w*)\b/g },
   { geste: "pouce_leve", motif: /\b(bravo|felicitation\w*|excellent\w*|conforme\w*|meilleur\w*|progress\w*|amelior\w*|bonne dynamique|de mieux|en hausse|reussi\w*|stable)\b/g },
+  { geste: "doigt_leve", motif: /\b(attention|important\w*|retenez|je vous conseille|je recommande|surtout|en priorite|a surveiller de pres)\b/g },
+  { geste: "balance_mains", motif: /\b(alors que|tandis que|par rapport|en revanche|d'un cote|de l'autre|compar\w*|contre|entre)\b/g },
   { geste: "geste_rassurant", motif: /\b(critique\w*|retard\w*|alerte\w*|faible\w*|baisse|recule\w*|tombe\w*|probleme\w*|inquiet\w*|difficulte\w*|manque\w*|relanc\w*|accompagn\w*|prioritaire\w*|zero)\b/g },
   { geste: "compter_doigts", motif: /\b(premier|premiere|deuxieme|troisieme|d'abord|ensuite|enfin|d'une part|d'autre part)\b/g },
   { geste: "pointer_ecran", motif: /(\d+(?:[.,]\d+)?\s?(?:%|points?|districts?|regions?|formulaires?)|\bsur l'ecran\b|\bregardez\b|\bvoici\b|\bvoila\b|\bextraction\b|\bselon\b|\bles donnees\b)/g },
@@ -15,7 +17,7 @@ const REGLES = [
   { geste: "hochement_tete", motif: /\b(oui|exactement|bien sur|d'accord|c'est cela)\b/g },
 ];
 // Gestes d'un script qu'on conserve quand le texte n'en déclenche aucun (les autres étaient trop génériques).
-const GESTES_SCRIPT_UTILES = new Set(["salut_main", "sourire", "inclinaison_ecoute", "hochement_tete", "geste_ouvert", "mains_jointes", "main_sur_coeur"]);
+const GESTES_SCRIPT_UTILES = new Set(["salut_main", "sourire", "inclinaison_ecoute", "hochement_tete", "geste_ouvert", "mains_jointes", "main_sur_coeur", "doigt_leve", "balance_mains"]);
 const ECART_MIN = 0.17;
 const DUREE = 0.24;
 const ANTICIPATION = 0.05;

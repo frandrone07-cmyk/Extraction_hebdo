@@ -131,3 +131,38 @@ test("Sokhna Ci analyse les indicateurs FARS en direct et montre le tableau du c
   await expect(page.locator("#sna .sna-tableau").last()).toContainText("Taux de couverture en CPN1");
   await expect(page.locator("#sna .sna-tableau").last()).toContainText("proche de la cible");
 });
+
+test("FARS : chiffres clés, lecture de Sokhna Ci, filtre par statut et clic sur une ligne pour l'analyser", async ({ page }) => {
+  await simulerProxy(page, { formulaires: [], fars: { indicateurs: [], cibles: {} } });
+  await page.addInitScript((liste) => {
+    localStorage.setItem("suivi-fars-v1", JSON.stringify(liste));
+    window.__commentaires = [];
+    document.addEventListener("sokhnaci:commenter", (e) => window.__commentaires.push(e.detail));
+  }, LISTE);
+  await page.goto("/#tab=fars&fa=2026&fm=9,10");
+  const live = page.locator("#fars-live");
+  await expect(live.locator(".lv-kpis")).toContainText("Proches de la cible", { timeout: 20_000 });
+  await expect(live.locator(".lv-kpis")).toContainText("Sans donnée");
+  // Lecture automatique : points clés affichés et commentaire envoyé à Sokhna Ci une seule fois.
+  await expect(live.locator(".lv-lecture")).toContainText("Lecture de Sokhna Ci");
+  await expect(live.locator(".lv-points li").first()).toContainText("à la cible");
+  await expect.poll(() => page.evaluate(() => window.__commentaires.length)).toBe(1);
+  // Filtre « Sans donnée » : seule la ligne à associer reste visible, la cellule Programme suit.
+  await live.locator('[data-filtre-statut="nd"]').click();
+  await expect(live.locator("#fa-tableau tbody tr:visible")).toHaveCount(1);
+  await expect(live.locator("#fa-tableau tbody tr:visible")).toContainText("Espace ado-jeune");
+  await expect(live.locator("#fa-tableau tbody tr:visible th.fa-programme")).toHaveCount(1);
+  await live.locator('[data-filtre-statut="tous"]').click();
+  await expect(live.locator("#fa-tableau tbody tr:visible")).toHaveCount(2);
+  // Recherche
+  await live.locator('[data-recherche="fars"]').fill("cpn1");
+  await expect(live.locator("#fa-tableau tbody tr:visible")).toHaveCount(1);
+  await live.locator('[data-recherche="fars"]').fill("");
+  // Mini-courbe de tendance et clic sur une ligne : l'analyse détaillée suit.
+  await expect(live.locator("#fa-tableau .lv-spark")).toHaveCount(1);
+  await live.locator("#fa-tableau tr[data-focus]").first().click();
+  await expect(live.locator("#fa-tableau tr.fa-ligne-active")).toHaveCount(1);
+  // Bouton « Écouter » : nouveau commentaire forcé.
+  await live.getByRole("button", { name: /Écouter Sokhna Ci/ }).click();
+  await expect.poll(() => page.evaluate(() => window.__commentaires.at(-1)?.force)).toBe(true);
+});
