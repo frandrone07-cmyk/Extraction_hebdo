@@ -139,7 +139,7 @@ test("qualité des données : chiffres clés avec jauges, lecture de Sokhna Ci, 
   await page.goto("/#tab=qualite");
   const live = page.locator("#qualite-live");
   const kpis = live.locator(".lv-kpis");
-  await expect(kpis).toContainText("Complétude", { timeout: 20_000 });
+  await expect(kpis).toContainText("Exhaustivité des rapports (complétude)", { timeout: 20_000 });
   await expect(kpis).toContainText("73,1 %"); // 95 reçus sur 130 attendus
   await expect(kpis.locator(".lv-jauge")).toHaveCount(3);
   // Exhaustivité : 5 cases numériques par rapport ; structure 1 : 8 valeurs pour 2 rapports (10 cases),
@@ -176,7 +176,7 @@ test("qualité des données : clic sur un formulaire → tiroir d'exhaustivité 
   await live.locator("#ql-synthese tbody tr").first().click();
   const tiroir = page.locator("#drawer");
   await expect(tiroir).toBeVisible();
-  await expect(tiroir).toContainText("EXHAUSTIVITÉ DU FORMULAIRE");
+  await expect(tiroir).toContainText("EXHAUSTIVITÉ DES DONNÉES (CHAMPS)");
   await expect(tiroir).toContainText("Formulaire entier", { timeout: 20_000 });
   // 3 rapports reçus : DeElement01 (4 cases) → 8 / 12 ; DeElement02 (1 case) → 0 / 3, jamais rempli.
   await expect(tiroir.locator(".drawer-kpis")).toContainText("1 / 2");

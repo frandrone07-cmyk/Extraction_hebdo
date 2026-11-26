@@ -207,7 +207,7 @@ function reponseExhaustivite(donnees, k, periode, sources) {
     return { emotion: "neutre", segments: [seg("L’exhaustivité se calcule automatiquement dans l’onglet « Qualité des données », formulaire par formulaire (quelques secondes chacun). Ouvrez cet onglet, attendez la fin du calcul, puis reposez-moi la question.")], sources, suggestions: ["comment est calculée l’exhaustivité ?", "qualité des données"] };
   }
   const l = k.exhaustiviteParFormulaire;
-  const phrases = [`L’exhaustivité moyenne des ${l.length} formulaires est de ${pc(k.exhaustivite)} : c’est la part des cases numériques remplies dans les rapports reçus.`];
+  const phrases = [`L’exhaustivité moyenne des ${l.length} formulaires est de ${pc(k.exhaustivite)} : c’est l’exhaustivité des données, au niveau des champs : la part des cases remplies dans les rapports reçus. Au niveau du formulaire, l’exhaustivité des rapports correspond à la complétude.`];
   if (l.length >= 2) {
     phrases.push(`Le moins bien rempli : « ${l[0].formulaire} » (${pc(l[0].taux)}), alors que le mieux rempli est « ${l.at(-1).formulaire} » (${pc(l.at(-1).taux)}).`);
   }
@@ -227,7 +227,7 @@ function explicationCalculs(q, donnees, k, periode, sources) {
   const tous = !/\b(promptitude|exhaustivite|completude)\b/.test(q);
   if (tous || /\bcompletude\b/.test(q)) phrases.push(`La complétude d’un formulaire, c’est le nombre de rapports reçus divisé par le nombre de rapports attendus. Sur ${periode}, tous formulaires confondus : ${nb(k.recus, 0)} reçus pour ${nb(k.attendus, 0)} attendus.`);
   if (tous || /\bpromptitude\b/.test(q)) phrases.push(`La promptitude, c’est le nombre de rapports reçus à temps divisé par le nombre de rapports attendus, comme le « Reporting rate on time » de DHIS2 : ici ${nb(k.aTemps, 0)} à temps pour ${nb(k.attendus, 0)} attendus.`);
-  if (tous || /\bexhaustivite\b/.test(q)) phrases.push(`L’exhaustivité, c’est le nombre de cases numériques remplies divisé par le nombre de cases des rapports reçus, en ne comptant que les structures qui ont envoyé le formulaire${k.exhaustivite !== null ? ` : ${pc(k.exhaustivite)} en moyenne` : ""}. DHIS2 n’enregistrant pas les zéros, c’est un minimum.`);
+  if (tous || /\bexhaustivite\b/.test(q)) phrases.push(`L’exhaustivité se mesure à deux niveaux. Au niveau du formulaire, c’est l’exhaustivité des rapports, autrement dit la complétude : rapports reçus divisés par rapports attendus. Au niveau des champs, c’est l’exhaustivité des données : le nombre de cases remplies divisé par le nombre de cases des rapports reçus, en ne comptant que les structures qui ont envoyé le formulaire${k.exhaustivite !== null ? ` : ${pc(k.exhaustivite)} en moyenne` : ""}. DHIS2 n’enregistrant pas les zéros, c’est un minimum.`);
   phrases.push(`Les taux moyens affichés sont des moyennes simples des ${k.nbFormulaires} formulaires : chaque formulaire compte pour un, comme le taux moyen de l’extraction du lundi. Résultat : complétude ${pc(k.completude)}, promptitude ${pc(k.promptitude)}${k.exhaustivite !== null ? `, exhaustivité ${pc(k.exhaustivite)}` : ""}.`);
   return { emotion: "souriante", segments: phrases.map((p) => seg(p, "geste_ouvert")), sources, suggestions: ["analyse la qualité des données", "exhaustivité par formulaire", "règles de validation"] };
 }
@@ -276,7 +276,7 @@ export function commentaireQualite(donnees, alea = Math.random) {
     points.push(point("bien", `Meilleure : ${meilleure.nom} (${pc(meilleure.completude)}).`));
   }
   if (k.exhaustivite !== null) {
-    segments.push(seg(`L’exhaustivité moyenne, c’est-à-dire la part des cases remplies, est de ${pc(k.exhaustivite)}${k.moinsExhaustif ? ` ; « ${k.moinsExhaustif.formulaire} » est le moins bien rempli` : ""}.`, k.exhaustivite < 70 ? "geste_rassurant" : "pointer_ecran"));
+    segments.push(seg(`L’exhaustivité des données, c’est-à-dire la part des cases remplies, est de ${pc(k.exhaustivite)}${k.moinsExhaustif ? ` ; « ${k.moinsExhaustif.formulaire} » est le moins bien rempli` : ""}.`, k.exhaustivite < 70 ? "geste_rassurant" : "pointer_ecran"));
     points.push(point(k.exhaustivite >= 90 ? "bien" : k.exhaustivite < 70 ? "alerte" : "info", `Exhaustivité ${pc(k.exhaustivite)}.`));
   }
   if (k.formulaires.length >= 2) {
