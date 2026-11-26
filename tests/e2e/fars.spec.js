@@ -59,6 +59,7 @@ async function simulerProxy(page, config) {
     if (url.pathname === "/api/analytics.json") {
       const dims = url.searchParams.getAll("dimension").join("|");
       if (dims.includes("CaTAge00001")) return json({ headers: [{ name: "dx" }, { name: "CaTAge00001" }, { name: "value" }], rows: [["InDiCaTeUr1", "OpT00000001", "40"], ["InDiCaTeUr1", "OpT00000002", "88"]] });
+      if (/pe:2026(\||$)/.test(dims)) return json({ headers: [{ name: "dx" }, { name: "pe" }, { name: "value" }], rows: [["InDiCaTeUr1", "2026", "71.4"]] });
       if (dims.includes("LEVEL-3")) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "value" }], rows: [] });
       if (dims.includes("LEVEL-2") && dims.includes("pe:")) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "pe" }, { name: "value" }], rows: [["InDiCaTeUr1", "ReGiOn00001", "202609", "81"], ["InDiCaTeUr1", "ReGiOn00001", "202610", "83"], ["InDiCaTeUr1", "ReGiOn00002", "202609", "50"]] });
       if (dims.includes("LEVEL-2")) return json({ headers: [{ name: "dx" }, { name: "ou" }, { name: "value" }, { name: "numerator" }, { name: "denominator" }], rows: [["InDiCaTeUr1", "ReGiOn00001", "82", "82", "100"], ["InDiCaTeUr1", "ReGiOn00002", "55", "55", "100"]], metaData: { items: { ReGiOn00001: { name: "Dakar" }, ReGiOn00002: { name: "Kolda" } } } });
@@ -100,6 +101,20 @@ test("FARS : situation des indicateurs (cible, réalisation, écart, statut), co
   const aAssocier = live.locator("#fa-tableau tbody tr").nth(1);
   await expect(aAssocier).toContainText("à associer");
   await expect(aAssocier.getByRole("button", { name: "Associer" })).toBeVisible();
+  // Évolution : une vignette par indicateur associé (dernière valeur, tendance, courbe), cliquable.
+  const vignette = live.locator("#fa-evol-grille .fa-evol-carte").first();
+  await expect(vignette).toContainText("Taux de couverture en CPN1");
+  await expect(vignette).toContainText("75,3");
+  await expect(vignette).toContainText("▲ +5,3");
+  await expect(vignette).toContainText("cible 80");
+  await expect(vignette.locator("canvas")).toBeVisible();
+  await live.getByRole("button", { name: "Par année" }).click();
+  await expect(live.locator("#fa-evol-grille .fa-evol-carte").first()).toContainText("71,4");
+  await expect(live.locator("#fa-evol-grille")).toContainText("année entière");
+  // Analyse détaillée : évolution par région (une courbe par région, expliquée).
+  await expect(live.locator("#fa-evolution-lecture")).toContainText("Première valeur : 70");
+  await live.getByRole("button", { name: "Par région / district" }).click();
+  await expect(live.locator("#fa-evolution-lecture")).toContainText("2 régions");
   const comparaison = live.locator("#fa-comparaison");
   await expect(comparaison).toContainText("Kolda");
   // Lecture expliquée : régions classées, cible, nombre d'unités qui l'atteignent, plus haute et plus basse.

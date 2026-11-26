@@ -3,7 +3,7 @@
 // canevas ; chacun peut ajouter, associer ou retirer des indicateurs (choix gardé dans son navigateur).
 // Toutes les valeurs viennent de /api/analytics (dx / pe / ou) via le serveur intermédiaire ; rien n'est inventé.
 import { lireDhis2 } from "./dhis2-client.js";
-import { grapheBarres, grapheBarresGroupees, grapheLigne } from "./charts.js";
+import { grapheBarres, grapheBarresGroupees, grapheLigne, grapheMini } from "./charts.js";
 import { dimensionOu, libellePeriode, NIVEAUX, periodePrecedente, periodesDhis2, resumeFiltres } from "./filtres-globaux.js";
 import {
   anneesDisponibles, barreFiltres, boutonsExport, chargementHtml, echapper, enteteMiseAJour, erreurHtml, exporterCsv,
@@ -23,6 +23,8 @@ let generation = 0;
 let dernier = null;
 let comparerPar = null; // « region » ou « district » ; null = selon le niveau des filtres
 let presentation = "total"; // « total » : toute la période ; « mois » : mois par mois
+let pasEvolution = "mois"; // vignettes d'évolution : « mois », « trimestre » ou « annee »
+let evolutionPar = "ensemble"; // analyse détaillée : « ensemble » (toute la sélection) ou « unites » (une courbe par unité)
 
 export function dernieresDonneesFars() { return dernier; }
 
@@ -50,7 +52,7 @@ export function monterFars(racine) {
   racine.addEventListener("change", (e) => surChangement(e, racine));
   brancherTableaux(racine);
   racine.addEventListener("keydown", (e) => {
-    const ligne = e.target.closest?.("tr[data-focus]");
+    const ligne = e.target.closest?.("tr[data-focus], .fa-evol-carte[data-focus]");
     if (ligne && e.target === ligne && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); choisirFocus(ligne.dataset.focus); }
   });
   charger(racine);
@@ -151,7 +153,8 @@ async function charger(racine, { actualiser = false } = {}) {
     dernier = { meta, etat, periodes, tableau: lignes, programme: programmeChoisi, misAJour, categories };
     corps.innerHTML = rendu(dernier, outils);
     majLecture(dernier);
-    dessinerEvolution(dernier);
+    dessinerEvolutions(dernier, ma);
+    dessinerEvolution(dernier, ma);
     dessinerComparaison(dernier, ma);
     dessinerDesagregation(dernier, ma);
   } catch (erreur) {
@@ -200,8 +203,12 @@ function rendu(d, outils) {
       <div class="table-scroll"><table id="fa-tableau" class="fa-tableau" data-table="fars"><thead><tr><th>Programme</th><th>Indicateur</th><th>Cible</th><th>Réalisation</th><th>Écart</th><th>Numérateur</th><th>Dénominateur</th><th>Tendance</th><th>Statut</th><th><span class="fa-actions-titre">Suivi</span></th></tr></thead><tbody>
       ${lignesHtml || `<tr><td colspan="10" class="note">Aucun indicateur suivi : cliquez sur « Ajouter un indicateur ».</td></tr>`}
       </tbody></table></div></section>
+    ${associes.length ? `<section class="card" id="fa-evolutions"><div class="card-head"><div><h2>Évolution des indicateurs</h2><p class="card-subtitle">Une courbe par indicateur sur la sélection (${echapper(resumeFiltres(d.etat))}) ; ligne en pointillés : cible. Couleur selon la dernière valeur : vert atteinte, jaune proche, rouge loin. Cliquez sur une courbe pour l’analyser en détail.</p></div>
+      <div class="ql-outils"><span class="segmented" role="group" aria-label="Pas de temps de l’évolution">${[["mois", "Par mois"], ["trimestre", "Par trimestre"], ["annee", "Par année"]].map(([k, v]) => `<button type="button" data-evol="${k}" aria-pressed="${pasEvolution === k}">${v}</button>`).join("")}</span></div></div>
+      <div id="fa-evol-grille">${chargementHtml()}</div></section>` : ""}
     ${ind ? `<section class="card" id="fa-analyse"><div class="card-head"><div><h2>Analyse détaillée</h2><p class="card-subtitle">Indicateur : <select data-fa="focus" aria-label="Indicateur analysé">${associes.map((t) => `<option value="${t.uid}" ${t.uid === ind.uid ? "selected" : ""}>${echapper(t.programme)} · ${echapper(t.nom)}</option>`).join("")}</select></p></div></div>
-      <h3 class="ql-sous-titre">Évolution par période</h3><div class="chartbox"><canvas id="fa-evolution" role="img" aria-label="Évolution de l’indicateur par période"></canvas></div>
+      <div class="fa-comp-tete"><h3 class="ql-sous-titre">Évolution par période</h3><div class="fa-comp-outils"><span class="segmented" role="group" aria-label="Évolution de l’ensemble ou par unité">${[["ensemble", "Toute la sélection"], ["unites", "Par région / district"]].map(([k, v]) => `<button type="button" data-evol-par="${k}" aria-pressed="${evolutionPar === k}">${v}</button>`).join("")}</span></div></div>
+      <p class="note fa-comp-lecture" id="fa-evolution-lecture"></p><div class="chartbox fa-evol-grande"><canvas id="fa-evolution" role="img" aria-label="Évolution de l’indicateur par période"></canvas></div>
       <div class="fa-comp-tete"><h3 class="ql-sous-titre">Comparaison géographique (${echapper(periodeTexte)})</h3>${outilsComparaison(d)}</div><div id="fa-comparaison">${chargementHtml()}</div>
       <h3 class="ql-sous-titre">Désagrégation</h3><div id="fa-desagregation">${chargementHtml()}</div></section>` : ""}`;
 }
@@ -232,18 +239,92 @@ function choisirFocus(uid) {
   const select = document.querySelector('[data-fa="focus"]');
   if (select) select.value = uid;
   const ma = generation;
-  dessinerEvolution(dernier); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma);
+  dessinerEvolution(dernier, ma); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma);
+  document.querySelectorAll("#fa-evol-grille [data-focus]").forEach((c) => c.classList.toggle("fa-evol-active", c.dataset.focus === uid));
   document.getElementById("fa-analyse")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function indicateurFocus(d) { const a = d.tableau.filter((t) => t.uid); return a.find((t) => t.uid === focus) || a[0]; }
 
-function dessinerEvolution(d) {
+// Périodes de l'évolution selon le pas choisi : les mois de la sélection, les trimestres ou les années qui les
+// couvrent (valeurs recalculées par DHIS2 sur chaque trimestre ou année, jamais additionnées ici).
+function periodesEvolution(d) {
+  if (pasEvolution === "annee") return [...new Set(d.periodes.map((p) => p.slice(0, 4)))].sort();
+  if (pasEvolution === "trimestre") { const t = trimestresCouvrant(d.periodes); return t.length ? t : d.periodes; }
+  return d.periodes;
+}
+const cacheEvolution = new Map();
+function seriesEvolution(d, uids, periodes, ou) {
+  const cle = `${uids.join(",")}|${periodes.join(",")}|${ou}`;
+  if (!cacheEvolution.has(cle)) {
+    cacheEvolution.set(cle, lireDhis2("analytics.json", { dimension: [`dx:${uids.join(";")}`, `pe:${periodes.join(";")}`], filter: ou, skipMeta: "true" })
+      .then((r) => { const m = new Map(); for (const l of lignesAnalytics(r.donnees)) m.set(`${l.dx}|${l.pe}`, Math.round(l.valeur * 10) / 10); return m; })
+      .catch((e) => { cacheEvolution.delete(cle); throw e; }));
+  }
+  return cacheEvolution.get(cle);
+}
+function tendance(serie) {
+  const v = serie.filter((x) => x !== null && x !== undefined);
+  if (v.length < 2) return null;
+  const ecart = Math.round((v.at(-1) - v.at(-2)) * 10) / 10;
+  return { ecart, sens: ecart > 0 ? "hausse" : ecart < 0 ? "baisse" : "stable", fleche: ecart > 0 ? "▲" : ecart < 0 ? "▼" : "▶" };
+}
+const couleurStatut = (s) => getComputedStyle(document.documentElement).getPropertyValue(`--${s === "inconnu" ? "primary" : s}`).trim() || "#087f5b";
+
+// Vignettes : une petite courbe par indicateur suivi (programme choisi), au pas mensuel, trimestriel ou annuel.
+async function dessinerEvolutions(d, ma) {
+  const zone = document.getElementById("fa-evol-grille");
+  const inds = d.tableau.filter((t) => t.uid);
+  if (!zone || !inds.length) return;
+  const periodes = periodesEvolution(d);
+  let valeurs;
+  try {
+    if (pasEvolution === "mois") valeurs = new Map(inds.flatMap((t) => d.periodes.map((p, i) => [`${t.uid}|${p}`, t.serie[i]])));
+    else { zone.innerHTML = chargementHtml(); valeurs = await seriesEvolution(d, inds.map((t) => t.uid), periodes, ouDeLaSelection(d.etat, d.meta)); }
+  } catch (erreur) { if (zone.isConnected) zone.innerHTML = erreurHtml(erreur); return; }
+  if (ma !== generation || !zone.isConnected) return;
+  const cartes = inds.map((t, i) => {
+    const serie = periodes.map((p) => valeurs.get(`${t.uid}|${p}`) ?? null);
+    const derniere = [...serie].reverse().find((x) => x !== null) ?? null;
+    const statut = derniere === null ? "inconnu" : statutCible(derniere, t.cible, t.sens);
+    const tend = tendance(serie);
+    return { t, i, serie, derniere, statut, tend };
+  });
+  const note = pasEvolution === "annee" && d.periodes.some((p) => /^\d{6}$/.test(p)) ? `<p class="note">Par année : valeur DHIS2 sur l’année entière (tous les mois disponibles), même si seuls certains mois sont cochés.</p>` : pasEvolution === "trimestre" ? `<p class="note">Par trimestre : valeur DHIS2 sur chaque trimestre entier couvrant les mois choisis.</p>` : "";
+  zone.innerHTML = `${note}<div class="fa-evol-grille">${cartes.map(({ t, i, derniere, statut, tend }) => `<article class="fa-evol-carte ${statut}${t.uid === focus ? " fa-evol-active" : ""}" data-focus="${t.uid}" tabindex="0" role="button" aria-label="Analyser ${echapper(t.nom)}">
+      <header><span class="fa-evol-prog">${echapper(t.programme)}</span><h3>${echapper(t.nom)}</h3></header>
+      <div class="fa-evol-chiffres"><strong>${derniere === null ? `<span class="live-nd">${NON_DISPONIBLE}</span>` : nombre(derniere)}</strong>${tend ? `<span class="fa-variation ${tend.sens}" title="Par rapport à la période précédente">${tend.fleche} ${tend.ecart > 0 ? "+" : ""}${nombre(tend.ecart)}</span>` : ""}<small>${t.cible === null || t.cible === undefined ? "sans cible" : `cible ${echapper(libelleCible(t))}`}</small></div>
+      <div class="fa-evol-courbe"><canvas id="fa-mini-${i}" role="img" aria-label="Évolution de ${echapper(t.nom)}"></canvas></div></article>`).join("")}</div>`;
+  const labels = periodes.map(libellePeriode);
+  for (const { t, i, serie, statut } of cartes) if (serie.some((x) => x !== null)) grapheMini(`fa-mini-${i}`, labels, serie, { couleur: couleurStatut(statut), cible: t.cible });
+}
+
+// Analyse détaillée : courbe de l'indicateur sur toute la sélection, ou une courbe par région / district.
+async function dessinerEvolution(d, ma = generation) {
   const ind = indicateurFocus(d);
+  const lecture = document.getElementById("fa-evolution-lecture");
   if (!ind) return;
-  const series = [{ label: ind.nom, data: ind.serie }];
-  if (ind.cible !== null && ind.cible !== undefined) series.push({ label: `Cible (${libelleCible(ind)})`, data: d.periodes.map(() => ind.cible) });
-  grapheLigne("fa-evolution", d.periodes.map(libellePeriode), series, { percent: false });
+  const labels = d.periodes.map(libellePeriode);
+  const optionsCible = { percent: false, cible: ind.cible ?? null, libelleCible: ind.cible === null || ind.cible === undefined ? "" : `Cible ${libelleCible(ind)}` };
+  if (evolutionPar === "ensemble") {
+    const v = ind.serie.filter((x) => x !== null);
+    if (lecture) lecture.innerHTML = v.length ? `<b>Comment lire :</b> réalisation de « ${echapper(ind.nom)} » mois par mois sur toute la sélection${ind.cible !== null && ind.cible !== undefined ? ` ; la ligne en pointillés marque la cible (${echapper(libelleCible(ind))})` : ""}. Première valeur : ${nombre(v[0])}, dernière : ${nombre(v.at(-1))}, plus haute : ${nombre(Math.max(...v))}, plus basse : ${nombre(Math.min(...v))}.` : `Aucune valeur sur la période pour « ${echapper(ind.nom)} ».`;
+    grapheLigne("fa-evolution", labels, [{ label: ind.nom, data: ind.serie }], { ...optionsCible, filled: true });
+    return;
+  }
+  const ou = ouComparaison(d);
+  const [, nomPluriel] = NOMS_COMPARAISON[niveauComparaison(d)];
+  if (lecture) lecture.textContent = "Chargement des courbes par unité…";
+  try {
+    const r = await lireDhis2("analytics.json", { dimension: [`dx:${ind.uid}`, ou, `pe:${d.periodes.join(";")}`] });
+    if (ma !== generation || !document.getElementById("fa-evolution")) return;
+    const valeurs = new Map(lignesAnalytics(r.donnees).map((l) => [`${l.ou}|${l.pe}`, Math.round(l.valeur * 10) / 10]));
+    const unites = [...new Set(lignesAnalytics(r.donnees).map((l) => l.ou))].map((u) => ({ u, nom: nomUnite(r.donnees, u), serie: d.periodes.map((p) => valeurs.get(`${u}|${p}`) ?? null) }));
+    const derniere = (s) => [...s].reverse().find((x) => x !== null) ?? -Infinity;
+    unites.sort((a, b) => derniere(b.serie) - derniere(a.serie));
+    if (lecture) lecture.innerHTML = unites.length ? `<b>Comment lire :</b> une courbe par ${nomPluriel === "régions" ? "région" : "district"} (${unites.length} ${nomPluriel}), classées dans la légende de la plus haute à la plus basse dernière valeur. Cliquez sur un nom dans la légende pour masquer ou afficher sa courbe.${ind.cible !== null && ind.cible !== undefined ? ` Ligne en pointillés : cible (${echapper(libelleCible(ind))}).` : ""}` : `Aucune valeur par ${nomPluriel === "régions" ? "région" : "district"} sur la période.`;
+    grapheLigne("fa-evolution", labels, unites.map((x) => ({ label: x.nom, data: x.serie })), { ...optionsCible, pointOnlyTooltip: true });
+  } catch (erreur) { if (lecture) lecture.innerHTML = erreurHtml(erreur); }
 }
 
 // ---------------------------------------------------------------- comparaison géographique
@@ -364,16 +445,28 @@ function surChangement(e, racine) {
   if (!champ) return;
   e.stopPropagation();
   if (champ === "programme") { programmeChoisi = e.target.value; focus = null; charger(racine); }
-  else if (champ === "comparer-par" && dernier) { comparerPar = e.target.value; dessinerComparaison(dernier, generation); }
+  else if (champ === "comparer-par" && dernier) { comparerPar = e.target.value; dessinerComparaison(dernier, generation); if (evolutionPar === "unites") dessinerEvolution(dernier, generation); }
   else if (champ === "focus" && dernier) {
     focus = e.target.value;
     document.querySelectorAll("#fa-tableau tr[data-focus]").forEach((tr) => tr.classList.toggle("fa-ligne-active", tr.dataset.focus === focus));
-    const ma = generation; dessinerEvolution(dernier); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma);
+    const ma = generation; dessinerEvolution(dernier, ma); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma);
   }
 }
 
 function surClic(e, racine) {
   const b = e.target.closest("button");
+  if (b?.dataset.evol && dernier) {
+    pasEvolution = b.dataset.evol;
+    b.parentElement.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    dessinerEvolutions(dernier, generation);
+    return;
+  }
+  if (b?.dataset.evolPar && dernier) {
+    evolutionPar = b.dataset.evolPar;
+    b.parentElement.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    dessinerEvolution(dernier, generation);
+    return;
+  }
   if (b?.dataset.comp && dernier) {
     presentation = b.dataset.comp;
     b.parentElement.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
@@ -381,7 +474,7 @@ function surClic(e, racine) {
     return;
   }
   if (!b) {
-    const ligne = e.target.closest("tr[data-focus]");
+    const ligne = e.target.closest("tr[data-focus], .fa-evol-carte[data-focus]");
     if (ligne && !e.target.closest("a")) choisirFocus(ligne.dataset.focus);
     return;
   }

@@ -1371,3 +1371,20 @@ tr[hidden] { display: none; }
 .fa-chaud.critique { background: color-mix(in srgb, var(--critique) 24%, transparent); }
 .fa-chaud.inconnu { background: color-mix(in srgb, var(--primary) 12%, transparent); }
 .fa-chaud.nd { color: var(--muted); font-weight: 400; }
+
+/* FARS : vignettes d'évolution des indicateurs */
+.fa-evol-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.fa-evol-carte { border: 1px solid var(--border); border-top: 4px solid var(--primary); border-radius: 10px; padding: 10px 12px 6px; background: var(--surface); cursor: pointer; display: flex; flex-direction: column; gap: 4px; transition: box-shadow .15s, transform .15s; }
+.fa-evol-carte:hover, .fa-evol-carte:focus-visible { box-shadow: 0 6px 18px rgb(0 0 0 / .12); transform: translateY(-1px); }
+.fa-evol-carte.conforme { border-top-color: var(--conforme); }
+.fa-evol-carte.surveiller { border-top-color: var(--surveiller); }
+.fa-evol-carte.critique { border-top-color: var(--critique); }
+.fa-evol-carte.fa-evol-active { outline: 2px solid var(--primary); outline-offset: 1px; }
+.fa-evol-carte h3 { font-size: .86rem; line-height: 1.25; margin: 2px 0 0; min-height: 2.5em; }
+.fa-evol-prog { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+.fa-evol-chiffres { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.fa-evol-chiffres strong { font-size: 1.35rem; }
+.fa-evol-chiffres small { color: var(--muted); margin-left: auto; }
+.fa-evol-courbe { height: 92px; position: relative; }
+.fa-evol-grande { height: 320px; }
+@media (max-width: 560px) { .fa-evol-grille { grid-template-columns: 1fr; } }

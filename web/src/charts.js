@@ -164,7 +164,7 @@ export function grapheBarres(id, labels, values, { horizontal = false, couleurPa
   }));
 }
 
-export function grapheLigne(id, labels, series, { filled = false, percent = true, etiquettes = false, pointOnlyTooltip = false } = {}) {
+export function grapheLigne(id, labels, series, { filled = false, percent = true, etiquettes = false, pointOnlyTooltip = false, cible = null, libelleCible = "Cible" } = {}) {
   if (!disponible()) return;
   detruire(id);
   const canvas = document.getElementById(id);
@@ -180,6 +180,8 @@ export function grapheLigne(id, labels, series, { filled = false, percent = true
     options.plugins.tooltip.intersect = true;
   }
   options.plugins.legend.display = series.length > 1;
+  if (!percent) options.plugins.tooltip.callbacks.label = (context) => ` ${context.dataset.label ? `${context.dataset.label} : ` : ""}${formaterValeur(valeurSurvolee(context), false)}`;
+  if (cible !== null && cible !== undefined) options.layout = { padding: { top: 18, right: 8 } };
   // Une seule serie : etiquette possible sans surcharger le graphe. Avec
   // plusieurs series (ex. evolution par region), les etiquettes se
   // chevaucheraient trop pour rester lisibles - on les desactive alors.
@@ -188,10 +190,11 @@ export function grapheLigne(id, labels, series, { filled = false, percent = true
   options.plugins.datalabels.anchor = "end";
   options.scales = {
     x: { ...axisOptions(), grid: { display: false } },
-    y: { ...axisOptions(), beginAtZero: true, max: percent ? 100 : undefined, ticks: { ...axisOptions().ticks, callback: (value) => percent ? `${value}%` : value } },
+    y: { ...axisOptions(), beginAtZero: true, max: percent ? 100 : undefined, ...(cible !== null && cible !== undefined && !percent ? { suggestedMax: cible * 1.1 } : {}), ticks: { ...axisOptions().ticks, callback: (value) => percent ? `${value}%` : value } },
   };
   INSTANCES.set(id, new Chart(canvas, {
     type: "line",
+    plugins: cible !== null && cible !== undefined ? [pluginCible(id, cible, false, libelleCible)] : [],
     data: {
       labels,
       datasets: series.map((item, index) => ({
@@ -233,6 +236,30 @@ export function grapheBarresGroupees(id, labels, series, { horizontal = true, po
     type: "bar",
     data: { labels, datasets: series.map((s, i) => ({ label: s.label, data: s.data, backgroundColor: palette[i % palette.length], borderRadius: 3, borderSkipped: false, maxBarThickness: 12, categoryPercentage: 0.82, barPercentage: 0.92 })) },
     plugins: cible !== null && cible !== undefined ? [pluginCible(id, cible, horizontal, libelleCible)] : [],
+    options,
+  }));
+}
+
+// Petite courbe d'évolution d'un indicateur (vignette) : aire colorée selon le statut, cible en pointillés,
+// valeur au survol. Axes discrets pour rester lisible à petite taille.
+export function grapheMini(id, labels, data, { couleur = null, cible = null } = {}) {
+  if (!disponible()) return;
+  detruire(id);
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const trait = couleur || color("primaire");
+  const options = commonOptions();
+  options.plugins.legend.display = false;
+  options.plugins.tooltip.callbacks.label = (context) => ` ${formaterValeur(valeurSurvolee(context), false)}`;
+  options.layout = { padding: { top: 6, right: 4 } };
+  options.scales = {
+    x: { ...axisOptions(), grid: { display: false }, ticks: { ...axisOptions().ticks, maxRotation: 0, autoSkip: true, maxTicksLimit: 4, font: { family: "DM Sans", size: 9 } } },
+    y: { ...axisOptions(), beginAtZero: true, ...(cible !== null && cible !== undefined ? { suggestedMax: cible * 1.1 } : {}), ticks: { ...axisOptions().ticks, maxTicksLimit: 3, font: { family: "DM Sans", size: 9 } } },
+  };
+  INSTANCES.set(id, new Chart(canvas, {
+    type: "line",
+    plugins: cible !== null && cible !== undefined ? [pluginCible(id, cible, false, "")] : [],
+    data: { labels, datasets: [{ data, borderColor: trait, backgroundColor: `${trait}22`, fill: "origin", tension: .3, spanGaps: true, borderWidth: 2, pointRadius: labels.length > 12 ? 0 : 2.5, pointHoverRadius: 5, pointBackgroundColor: trait }] },
     options,
   }));
 }
