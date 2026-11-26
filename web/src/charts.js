@@ -169,7 +169,8 @@ export function grapheLigne(id, labels, series, { filled = false, percent = true
   detruire(id);
   const canvas = document.getElementById(id);
   if (!canvas) return;
-  const basePalette = [color("primaire"), color("secondaire"), color("conforme"), color("surveiller"), color("critique"), "#7b71d1", "#e48644", "#4ba7ad"];
+  // Couleurs bien distinctes (pas de vert « cible atteinte » ni de rouge « loin » qui feraient croire à un statut).
+  const basePalette = [color("primaire"), "#e48644", "#7b71d1", color("secondaire"), "#c2185b", "#4ba7ad", "#8d6e00", "#5c6bc0"];
   const palette = series.length > basePalette.length
     ? series.map((_, index) => `hsl(${Math.round((index * 360) / series.length)} 68% 42%)`)
     : basePalette;
