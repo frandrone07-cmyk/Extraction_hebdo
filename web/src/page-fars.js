@@ -3,7 +3,7 @@
 // canevas ; chacun peut ajouter, associer ou retirer des indicateurs (choix gardé dans son navigateur).
 // Toutes les valeurs viennent de /api/analytics (dx / pe / ou) via le serveur intermédiaire ; rien n'est inventé.
 import { lireDhis2 } from "./dhis2-client.js";
-import { grapheBarres, grapheBarresGroupees, grapheLigne, grapheMini } from "./charts.js";
+import { grapheBarres, grapheBarresGroupees, grapheLigne } from "./charts.js";
 import { dimensionOu, libellePeriode, NIVEAUX, periodePrecedente, periodesDhis2, resumeFiltres } from "./filtres-globaux.js";
 import {
   anneesDisponibles, barreFiltres, boutonsExport, chargementHtml, echapper, enteteMiseAJour, erreurHtml, exporterCsv,
@@ -23,7 +23,8 @@ let generation = 0;
 let dernier = null;
 let comparerPar = null; // « region » ou « district » ; null = selon le niveau des filtres
 let presentation = "total"; // « total » : toute la période ; « mois » : mois par mois
-let pasEvolution = "mois"; // vignettes d'évolution : « mois », « trimestre » ou « annee »
+let indicateursEvolution = []; // indicateurs cochés pour comparer leur évolution (vide = indicateur analysé)
+const MAX_EVOLUTION = 6;
 let evolutionPar = "ensemble"; // analyse détaillée : « ensemble » (toute la sélection) ou « unites » (une courbe par unité)
 
 export function dernieresDonneesFars() { return dernier; }
@@ -52,7 +53,7 @@ export function monterFars(racine) {
   racine.addEventListener("change", (e) => surChangement(e, racine));
   brancherTableaux(racine);
   racine.addEventListener("keydown", (e) => {
-    const ligne = e.target.closest?.("tr[data-focus], .fa-evol-carte[data-focus]");
+    const ligne = e.target.closest?.("tr[data-focus]");
     if (ligne && e.target === ligne && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); choisirFocus(ligne.dataset.focus); }
   });
   charger(racine);
@@ -153,7 +154,7 @@ async function charger(racine, { actualiser = false } = {}) {
     dernier = { meta, etat, periodes, tableau: lignes, programme: programmeChoisi, misAJour, categories };
     corps.innerHTML = rendu(dernier, outils);
     majLecture(dernier);
-    dessinerEvolutions(dernier, ma);
+    dessinerEvolutions(dernier);
     dessinerEvolution(dernier, ma);
     dessinerComparaison(dernier, ma);
     dessinerDesagregation(dernier, ma);
@@ -203,9 +204,9 @@ function rendu(d, outils) {
       <div class="table-scroll"><table id="fa-tableau" class="fa-tableau" data-table="fars"><thead><tr><th>Programme</th><th>Indicateur</th><th>Cible</th><th>Réalisation</th><th>Écart</th><th>Numérateur</th><th>Dénominateur</th><th>Tendance</th><th>Statut</th><th><span class="fa-actions-titre">Suivi</span></th></tr></thead><tbody>
       ${lignesHtml || `<tr><td colspan="10" class="note">Aucun indicateur suivi : cliquez sur « Ajouter un indicateur ».</td></tr>`}
       </tbody></table></div></section>
-    ${associes.length ? `<section class="card" id="fa-evolutions"><div class="card-head"><div><h2>Évolution des indicateurs</h2><p class="card-subtitle">Une courbe par indicateur sur la sélection (${echapper(resumeFiltres(d.etat))}) ; ligne en pointillés : cible. Couleur selon la dernière valeur : vert atteinte, jaune proche, rouge loin. Cliquez sur une courbe pour l’analyser en détail.</p></div>
-      <div class="ql-outils"><span class="segmented" role="group" aria-label="Pas de temps de l’évolution">${[["mois", "Par mois"], ["trimestre", "Par trimestre"], ["annee", "Par année"]].map(([k, v]) => `<button type="button" data-evol="${k}" aria-pressed="${pasEvolution === k}">${v}</button>`).join("")}</span></div></div>
-      <div id="fa-evol-grille">${chargementHtml()}</div></section>` : ""}
+    ${associes.length ? `<section class="card" id="fa-evolutions"><div class="card-head"><div><h2>Évolution des indicateurs</h2><p class="card-subtitle">Cochez les indicateurs à comparer (jusqu’à ${MAX_EVOLUTION}). Une seule année choisie : les indicateurs sont superposés mois par mois. Plusieurs années : un graphique par indicateur, une couleur par année, pour comparer les mêmes mois d’une année à l’autre.</p></div>
+      <div class="ql-outils">${choixIndicateursEvolution(d)}</div></div>
+      <div id="fa-evol-corps"></div></section>` : ""}
     ${ind ? `<section class="card" id="fa-analyse"><div class="card-head"><div><h2>Analyse détaillée</h2><p class="card-subtitle">Indicateur : <select data-fa="focus" aria-label="Indicateur analysé">${associes.map((t) => `<option value="${t.uid}" ${t.uid === ind.uid ? "selected" : ""}>${echapper(t.programme)} · ${echapper(t.nom)}</option>`).join("")}</select></p></div></div>
       <div class="fa-comp-tete"><h3 class="ql-sous-titre">Évolution par période</h3><div class="fa-comp-outils"><span class="segmented" role="group" aria-label="Évolution de l’ensemble ou par unité">${[["ensemble", "Toute la sélection"], ["unites", "Par région / district"]].map(([k, v]) => `<button type="button" data-evol-par="${k}" aria-pressed="${evolutionPar === k}">${v}</button>`).join("")}</span></div></div>
       <p class="note fa-comp-lecture" id="fa-evolution-lecture"></p><div class="chartbox fa-evol-grande"><canvas id="fa-evolution" role="img" aria-label="Évolution de l’indicateur par période"></canvas></div>
@@ -239,64 +240,72 @@ function choisirFocus(uid) {
   const select = document.querySelector('[data-fa="focus"]');
   if (select) select.value = uid;
   const ma = generation;
-  dessinerEvolution(dernier, ma); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma);
-  document.querySelectorAll("#fa-evol-grille [data-focus]").forEach((c) => c.classList.toggle("fa-evol-active", c.dataset.focus === uid));
+  dessinerEvolution(dernier, ma); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma); suivreFocusEvolution();
   document.getElementById("fa-analyse")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function indicateurFocus(d) { const a = d.tableau.filter((t) => t.uid); return a.find((t) => t.uid === focus) || a[0]; }
 
-// Périodes de l'évolution selon le pas choisi : les mois de la sélection, les trimestres ou les années qui les
-// couvrent (valeurs recalculées par DHIS2 sur chaque trimestre ou année, jamais additionnées ici).
-function periodesEvolution(d) {
-  if (pasEvolution === "annee") return [...new Set(d.periodes.map((p) => p.slice(0, 4)))].sort();
-  if (pasEvolution === "trimestre") { const t = trimestresCouvrant(d.periodes); return t.length ? t : d.periodes; }
-  return d.periodes;
+// ---------------------------------------------------------------- évolution comparée des indicateurs
+const sansAnnee = (pe) => libellePeriode(pe).replace(/\s*\d{4}$/, "");
+function uidsEvolution(d) {
+  const associes = d.tableau.filter((t) => t.uid);
+  const choisis = indicateursEvolution.filter((u) => associes.some((t) => t.uid === u));
+  return choisis.length ? choisis : [indicateurFocus(d)?.uid].filter(Boolean);
 }
-const cacheEvolution = new Map();
-function seriesEvolution(d, uids, periodes, ou) {
-  const cle = `${uids.join(",")}|${periodes.join(",")}|${ou}`;
-  if (!cacheEvolution.has(cle)) {
-    cacheEvolution.set(cle, lireDhis2("analytics.json", { dimension: [`dx:${uids.join(";")}`, `pe:${periodes.join(";")}`], filter: ou, skipMeta: "true" })
-      .then((r) => { const m = new Map(); for (const l of lignesAnalytics(r.donnees)) m.set(`${l.dx}|${l.pe}`, Math.round(l.valeur * 10) / 10); return m; })
-      .catch((e) => { cacheEvolution.delete(cle); throw e; }));
-  }
-  return cacheEvolution.get(cle);
+function choixIndicateursEvolution(d) {
+  const choisis = uidsEvolution(d);
+  const associes = d.tableau.filter((t) => t.uid);
+  const groupes = programmesOrdonnes(associes).map((p) => [p, associes.filter((t) => t.programme === p)]);
+  return `<details class="fa-evol-choix"><summary>Indicateurs comparés (${choisis.length})</summary><div class="fa-evol-liste">
+    ${groupes.map(([p, items]) => `<fieldset><legend>${echapper(p)}</legend>${items.map((t) => `<label><input type="checkbox" data-evol-ind="${t.uid}" ${choisis.includes(t.uid) ? "checked" : ""}> ${echapper(t.nom)}</label>`).join("")}</fieldset>`).join("")}
+  </div></details>`;
 }
-function tendance(serie) {
-  const v = serie.filter((x) => x !== null && x !== undefined);
-  if (v.length < 2) return null;
-  const ecart = Math.round((v.at(-1) - v.at(-2)) * 10) / 10;
-  return { ecart, sens: ecart > 0 ? "hausse" : ecart < 0 ? "baisse" : "stable", fleche: ecart > 0 ? "▲" : ecart < 0 ? "▼" : "▶" };
-}
-const couleurStatut = (s) => getComputedStyle(document.documentElement).getPropertyValue(`--${s === "inconnu" ? "primary" : s}`).trim() || "#087f5b";
 
-// Vignettes : une petite courbe par indicateur suivi (programme choisi), au pas mensuel, trimestriel ou annuel.
-async function dessinerEvolutions(d, ma) {
-  const zone = document.getElementById("fa-evol-grille");
-  const inds = d.tableau.filter((t) => t.uid);
-  if (!zone || !inds.length) return;
-  const periodes = periodesEvolution(d);
-  let valeurs;
-  try {
-    if (pasEvolution === "mois") valeurs = new Map(inds.flatMap((t) => d.periodes.map((p, i) => [`${t.uid}|${p}`, t.serie[i]])));
-    else { zone.innerHTML = chargementHtml(); valeurs = await seriesEvolution(d, inds.map((t) => t.uid), periodes, ouDeLaSelection(d.etat, d.meta)); }
-  } catch (erreur) { if (zone.isConnected) zone.innerHTML = erreurHtml(erreur); return; }
-  if (ma !== generation || !zone.isConnected) return;
-  const cartes = inds.map((t, i) => {
-    const serie = periodes.map((p) => valeurs.get(`${t.uid}|${p}`) ?? null);
-    const derniere = [...serie].reverse().find((x) => x !== null) ?? null;
-    const statut = derniere === null ? "inconnu" : statutCible(derniere, t.cible, t.sens);
-    const tend = tendance(serie);
-    return { t, i, serie, derniere, statut, tend };
+// Une année : un graphique, une courbe par indicateur. Plusieurs années : un graphique par indicateur, une courbe
+// par année sur les mêmes mois (ou trimestres), pour distinguer clairement les années.
+function dessinerEvolutions(d) {
+  const zone = document.getElementById("fa-evol-corps");
+  if (!zone) return;
+  const inds = uidsEvolution(d).map((u) => d.tableau.find((t) => t.uid === u)).filter(Boolean);
+  if (!inds.length) { zone.innerHTML = `<p class="note">Cochez au moins un indicateur.</p>`; return; }
+  const annees = [...new Set(d.periodes.map((p) => p.slice(0, 4)))].sort();
+  const cibleTxt = (t) => (t.cible === null || t.cible === undefined ? "sans cible" : `cible ${libelleCible(t)}`);
+  if (annees.length === 1) {
+    const echelles = inds.length > 1 && new Set(inds.map((t) => (Math.max(...t.serie.filter((x) => x !== null), 0) > 150 ? "grand" : "petit"))).size > 1;
+    zone.innerHTML = `<p class="note fa-comp-lecture"><b>Comment lire :</b> ${inds.length > 1 ? `${inds.length} indicateurs comparés sur ${annees[0]}, une couleur par indicateur (${inds.map((t) => `${echapper(t.nom)} : ${echapper(cibleTxt(t))}`).join(" ; ")}).${echelles ? " <b>Attention :</b> ces indicateurs n’ont pas la même échelle (nombres et taux) ; comparez surtout leur tendance." : ""}` : `évolution de « ${echapper(inds[0].nom)} » sur ${annees[0]}${inds[0].cible !== null && inds[0].cible !== undefined ? ` ; la ligne en pointillés marque la cible (${echapper(libelleCible(inds[0]))})` : ""}.`} Cliquez sur un nom dans la légende pour masquer ou afficher sa courbe.</p>
+      <div class="chartbox fa-evol-grande"><canvas id="fa-evol-0" role="img" aria-label="Évolution comparée des indicateurs en ${annees[0]}"></canvas></div>
+      ${tableauEvolution(d, inds, annees)}`;
+    const un = inds.length === 1 ? inds[0] : null;
+    grapheLigne("fa-evol-0", d.periodes.map(libellePeriode), inds.map((t) => ({ label: t.nom, data: t.serie })), { percent: false, pointOnlyTooltip: inds.length > 1, cible: un?.cible ?? null, libelleCible: un && un.cible !== null && un.cible !== undefined ? `Cible ${libelleCible(un)}` : "" });
+    return;
+  }
+  // Plusieurs années : mêmes mois (ou trimestres) en abscisse, une courbe par année.
+  const pas = [...new Set(d.periodes.map((p) => p.slice(4)))].sort();
+  const labels = pas.map((x) => sansAnnee(`${annees[0]}${x}`));
+  zone.innerHTML = `<p class="note fa-comp-lecture"><b>Comment lire :</b> un graphique par indicateur ; chaque couleur est une année (${annees.join(", ")}), sur les mêmes ${/^\d{2}$/.test(pas[0]) ? "mois" : "périodes"}. Une courbe au-dessus d’une autre indique une valeur plus élevée que l’autre année pour le même mois. Ligne en pointillés : cible.</p>
+    <div class="fa-evol-annees">${inds.map((t, i) => `<figure class="fa-evol-fig"><figcaption><b>${echapper(t.nom)}</b><small>${echapper(t.programme)} · ${echapper(cibleTxt(t))}</small></figcaption><div class="chartbox"><canvas id="fa-evol-${i}" role="img" aria-label="${echapper(t.nom)} : comparaison des années ${annees.join(", ")}"></canvas></div></figure>`).join("")}</div>
+    ${tableauEvolution(d, inds, annees)}`;
+  inds.forEach((t, i) => {
+    const parPeriode = new Map(d.periodes.map((p, k) => [p, t.serie[k]]));
+    grapheLigne(`fa-evol-${i}`, labels, annees.map((a) => ({ label: a, data: pas.map((x) => parPeriode.get(`${a}${x}`) ?? null) })), { percent: false, cible: t.cible ?? null, libelleCible: t.cible === null || t.cible === undefined ? "" : `Cible ${libelleCible(t)}` });
   });
-  const note = pasEvolution === "annee" && d.periodes.some((p) => /^\d{6}$/.test(p)) ? `<p class="note">Par année : valeur DHIS2 sur l’année entière (tous les mois disponibles), même si seuls certains mois sont cochés.</p>` : pasEvolution === "trimestre" ? `<p class="note">Par trimestre : valeur DHIS2 sur chaque trimestre entier couvrant les mois choisis.</p>` : "";
-  zone.innerHTML = `${note}<div class="fa-evol-grille">${cartes.map(({ t, i, derniere, statut, tend }) => `<article class="fa-evol-carte ${statut}${t.uid === focus ? " fa-evol-active" : ""}" data-focus="${t.uid}" tabindex="0" role="button" aria-label="Analyser ${echapper(t.nom)}">
-      <header><span class="fa-evol-prog">${echapper(t.programme)}</span><h3>${echapper(t.nom)}</h3></header>
-      <div class="fa-evol-chiffres"><strong>${derniere === null ? `<span class="live-nd">${NON_DISPONIBLE}</span>` : nombre(derniere)}</strong>${tend ? `<span class="fa-variation ${tend.sens}" title="Par rapport à la période précédente">${tend.fleche} ${tend.ecart > 0 ? "+" : ""}${nombre(tend.ecart)}</span>` : ""}<small>${t.cible === null || t.cible === undefined ? "sans cible" : `cible ${echapper(libelleCible(t))}`}</small></div>
-      <div class="fa-evol-courbe"><canvas id="fa-mini-${i}" role="img" aria-label="Évolution de ${echapper(t.nom)}"></canvas></div></article>`).join("")}</div>`;
-  const labels = periodes.map(libellePeriode);
-  for (const { t, i, serie, statut } of cartes) if (serie.some((x) => x !== null)) grapheMini(`fa-mini-${i}`, labels, serie, { couleur: couleurStatut(statut), cible: t.cible });
+}
+// Sans indicateur coché, la comparaison suit l'indicateur analysé.
+function suivreFocusEvolution() {
+  if (!dernier || indicateursEvolution.length) return;
+  const outils = document.querySelector("#fa-evolutions .ql-outils");
+  if (outils) outils.innerHTML = choixIndicateursEvolution(dernier);
+  dessinerEvolutions(dernier);
+}
+// Tableau des valeurs (indicateur × année × période), replié sous les graphiques.
+function tableauEvolution(d, inds, annees) {
+  const pas = [...new Set(d.periodes.map((p) => p.slice(4)))].sort();
+  const lignes = inds.flatMap((t) => annees.map((a) => {
+    const parPeriode = new Map(d.periodes.map((p, k) => [p, t.serie[k]]));
+    return `<tr><th scope="row">${echapper(t.nom)}</th><td>${a}</td>${pas.map((x) => { const v = d.periodes.includes(`${a}${x}`) ? parPeriode.get(`${a}${x}`) : undefined; return v === undefined ? "<td>—</td>" : v === null ? `<td class="live-nd">—</td>` : `<td>${nombre(v)}</td>`; }).join("")}</tr>`;
+  }));
+  return `<details><summary>Voir les valeurs</summary><div class="table-scroll"><table class="fa-table-chaude"><thead><tr><th>Indicateur</th><th>Année</th>${pas.map((x) => `<th>${echapper(sansAnnee(`${annees[0]}${x}`))}</th>`).join("")}</tr></thead><tbody>${lignes.join("")}</tbody></table></div></details>`;
 }
 
 // Analyse détaillée : courbe de l'indicateur sur toute la sélection, ou une courbe par région / district.
@@ -441,6 +450,17 @@ function lignesExport(d) {
 }
 
 function surChangement(e, racine) {
+  if (e.target.dataset?.evolInd && dernier) {
+    e.stopPropagation();
+    const cases = [...document.querySelectorAll("#fa-evolutions [data-evol-ind]")];
+    let choisis = cases.filter((c) => c.checked).map((c) => c.dataset.evolInd);
+    if (choisis.length > MAX_EVOLUTION) { e.target.checked = false; choisis = choisis.filter((u) => u !== e.target.dataset.evolInd); alert(`Au plus ${MAX_EVOLUTION} indicateurs à la fois, pour que le graphique reste lisible.`); }
+    indicateursEvolution = choisis;
+    const resume = document.querySelector("#fa-evolutions .fa-evol-choix summary");
+    if (resume) resume.textContent = `Indicateurs comparés (${uidsEvolution(dernier).length})`;
+    dessinerEvolutions(dernier);
+    return;
+  }
   const champ = e.target.dataset?.fa;
   if (!champ) return;
   e.stopPropagation();
@@ -449,18 +469,12 @@ function surChangement(e, racine) {
   else if (champ === "focus" && dernier) {
     focus = e.target.value;
     document.querySelectorAll("#fa-tableau tr[data-focus]").forEach((tr) => tr.classList.toggle("fa-ligne-active", tr.dataset.focus === focus));
-    const ma = generation; dessinerEvolution(dernier, ma); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma);
+    const ma = generation; suivreFocusEvolution(); dessinerEvolution(dernier, ma); dessinerComparaison(dernier, ma); dessinerDesagregation(dernier, ma);
   }
 }
 
 function surClic(e, racine) {
   const b = e.target.closest("button");
-  if (b?.dataset.evol && dernier) {
-    pasEvolution = b.dataset.evol;
-    b.parentElement.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-    dessinerEvolutions(dernier, generation);
-    return;
-  }
   if (b?.dataset.evolPar && dernier) {
     evolutionPar = b.dataset.evolPar;
     b.parentElement.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
@@ -474,7 +488,7 @@ function surClic(e, racine) {
     return;
   }
   if (!b) {
-    const ligne = e.target.closest("tr[data-focus], .fa-evol-carte[data-focus]");
+    const ligne = e.target.closest("tr[data-focus]");
     if (ligne && !e.target.closest("a")) choisirFocus(ligne.dataset.focus);
     return;
   }

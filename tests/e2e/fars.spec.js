@@ -101,16 +101,13 @@ test("FARS : situation des indicateurs (cible, réalisation, écart, statut), co
   const aAssocier = live.locator("#fa-tableau tbody tr").nth(1);
   await expect(aAssocier).toContainText("à associer");
   await expect(aAssocier.getByRole("button", { name: "Associer" })).toBeVisible();
-  // Évolution : une vignette par indicateur associé (dernière valeur, tendance, courbe), cliquable.
-  const vignette = live.locator("#fa-evol-grille .fa-evol-carte").first();
-  await expect(vignette).toContainText("Taux de couverture en CPN1");
-  await expect(vignette).toContainText("75,3");
-  await expect(vignette).toContainText("▲ +5,3");
-  await expect(vignette).toContainText("cible 80");
-  await expect(vignette.locator("canvas")).toBeVisible();
-  await live.getByRole("button", { name: "Par année" }).click();
-  await expect(live.locator("#fa-evol-grille .fa-evol-carte").first()).toContainText("71,4");
-  await expect(live.locator("#fa-evol-grille")).toContainText("année entière");
+  // Évolution : une seule année → indicateurs superposés mois par mois ; par défaut l'indicateur analysé.
+  const evol = live.locator("#fa-evolutions");
+  await expect(evol.locator(".fa-evol-choix summary")).toContainText("Indicateurs comparés (1)");
+  await expect(evol.locator(".fa-comp-lecture")).toContainText("évolution de « Taux de couverture en CPN1 » sur 2026");
+  await expect(evol.locator("canvas#fa-evol-0")).toBeVisible();
+  await evol.locator("summary", { hasText: "Voir les valeurs" }).click();
+  await expect(evol.locator("table tbody tr").first()).toContainText("75,3");
   // Analyse détaillée : évolution par région (une courbe par région, expliquée).
   await expect(live.locator("#fa-evolution-lecture")).toContainText("Première valeur : 70");
   await live.getByRole("button", { name: "Par région / district" }).click();
@@ -139,6 +136,22 @@ test("FARS : situation des indicateurs (cible, réalisation, écart, statut), co
   await expect(live.locator("#fa-tableau tbody tr")).toHaveCount(1);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("suivi-fars-v1")).length)).toBe(1);
   await expect(live.getByRole("button", { name: /Rétablir la liste par défaut/ })).toBeVisible();
+});
+
+test("FARS : plusieurs années → un graphique par indicateur, une courbe par année", async ({ page }) => {
+  await simulerProxy(page, { formulaires: [], fars: { indicateurs: [], cibles: {} } });
+  await page.addInitScript((liste) => { localStorage.setItem("suivi-fars-v1", JSON.stringify(liste)); }, LISTE);
+  await page.goto("/#tab=fars&fa=2025,2026&fm=9,10");
+  const evol = page.locator("#fa-evolutions");
+  await expect(evol.locator(".fa-comp-lecture")).toContainText("chaque couleur est une année (2025, 2026)", { timeout: 20_000 });
+  await expect(evol.locator(".fa-evol-fig")).toHaveCount(1);
+  await expect(evol.locator(".fa-evol-fig figcaption")).toContainText("Taux de couverture en CPN1");
+  await expect(evol.locator(".fa-evol-fig figcaption")).toContainText("cible 80");
+  await evol.locator("summary", { hasText: "Voir les valeurs" }).click();
+  const lignes = evol.locator("table tbody tr");
+  await expect(lignes).toHaveCount(2);
+  await expect(lignes.nth(0)).toContainText("2025");
+  await expect(lignes.nth(1)).toContainText("75,3");
 });
 
 test("FARS : par défaut, les indicateurs du canevas par programme, sans chiffre inventé", async ({ page }) => {

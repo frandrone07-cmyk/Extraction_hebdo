@@ -240,30 +240,6 @@ export function grapheBarresGroupees(id, labels, series, { horizontal = true, po
   }));
 }
 
-// Petite courbe d'évolution d'un indicateur (vignette) : aire colorée selon le statut, cible en pointillés,
-// valeur au survol. Axes discrets pour rester lisible à petite taille.
-export function grapheMini(id, labels, data, { couleur = null, cible = null } = {}) {
-  if (!disponible()) return;
-  detruire(id);
-  const canvas = document.getElementById(id);
-  if (!canvas) return;
-  const trait = couleur || color("primaire");
-  const options = commonOptions();
-  options.plugins.legend.display = false;
-  options.plugins.tooltip.callbacks.label = (context) => ` ${formaterValeur(valeurSurvolee(context), false)}`;
-  options.layout = { padding: { top: 6, right: 4 } };
-  options.scales = {
-    x: { ...axisOptions(), grid: { display: false }, ticks: { ...axisOptions().ticks, maxRotation: 0, autoSkip: true, maxTicksLimit: 4, font: { family: "DM Sans", size: 9 } } },
-    y: { ...axisOptions(), beginAtZero: true, ...(cible !== null && cible !== undefined ? { suggestedMax: cible * 1.1 } : {}), ticks: { ...axisOptions().ticks, maxTicksLimit: 3, font: { family: "DM Sans", size: 9 } } },
-  };
-  INSTANCES.set(id, new Chart(canvas, {
-    type: "line",
-    plugins: cible !== null && cible !== undefined ? [pluginCible(id, cible, false, "")] : [],
-    data: { labels, datasets: [{ data, borderColor: trait, backgroundColor: `${trait}22`, fill: "origin", tension: .3, spanGaps: true, borderWidth: 2, pointRadius: labels.length > 12 ? 0 : 2.5, pointHoverRadius: 5, pointBackgroundColor: trait }] },
-    options,
-  }));
-}
-
 export function grapheBarresEmpilees(id, labels, series, { etiquettes = false } = {}) {
   if (!disponible()) return;
   detruire(id);
